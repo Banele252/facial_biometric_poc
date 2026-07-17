@@ -31,33 +31,39 @@ The project objectives are targets that must be reached for the project to be co
 \section{Requirements}
 \subsection{Functional requirements}
 \begin{itemize}
- \item Data quality checks
+ \item Facial biometric: 
     \begin{itemize}
-        \item Data accuracy should be measured using the following methods:
+        \item Facial biometric initiation
         \begin{itemize}
-            \item Compare two sources with the same data (if applicable)
-            \item Check if the cost or charge values are justified by the unit volume or quantity.
-            \item Ingest the current day's data (must have a unique identifier) into an isolated storage and compare with tomorrow's version of the same data (use ID to trace the records).
+            \item A user must select or press a buttton to start the facial biometric process.
+            \item An information page should be displayed to a user briefly explaining the process and the information required.
+            \item Information that is required should be an ID number, a device with a camera and environment with lighting.
         \end{itemize}
-        \item Data completeness must be measured in the following methods:
+        \item Facial biometric link 
         \begin{itemize}
-            \item Compare the latest record count and value (if applicable) to the previous day's record count and value. Acceptable thresholds can be established after reviewing outcomes
-            \item Compare the latest record count and value to the previous month's same weekday record count and value. 
+            \item Once a user proceeds from the initiation phase, a link should be generated that is sent to the user. The link should be sent via email or SMS.
+            \item The link that is generated should expire with 3 minutes. 
+            \item When the link is clicked, it should direct the user to the facial biometric site on the web.
         \end{itemize}
-        \item Data consistency should be measured by comparing the data field types of the current day with those of the previous day.
-        \item Data uniqueness should be measured using the following methods:
+        \item Facial image capturing process 
         \begin{itemize}
-            \item Check if there is a record ID with more than one record.
-            \item Check if there is a record ID with different information from two or more records.
+            \item The system should inform the user of any user hardware or environment negatively affecting the image capturing.
+            \item The system should capture multiple images that can be used for validation.
+            \item The system should request a re-try when the captured images do not meet the image standards
         \end{itemize}
-        \item Data timeliness should be measured using the following methods:
+        \item Facial image processing
         \begin{itemize}
-            \item Check if there are recent records ingested for the data source. Use the latest expected transaction date.
+            \item The system should inform the customer that the images have been captured and validation is underway.
+            \item The system should re-direct the user to the home-page and an indicator show that an validation is ongoing.
+            \item The system should inform the customer when the validation is complete via Email and SMS. 
+            Depending on the outcome, the system should send a successful or failed authentication to internal systems. 
+            \item The system should not allow a user reperform facial biometric with an hour from the last attempt. 
         \end{itemize}
     \end{itemize}
-    \item Artificial intelligence agent
+    \item Facial biometric audit and tracing 
     \begin{itemize}
-        \item Create an agent that provides details about the data quality report. The agent should be able to provide an analysis that goes back in time (historical analysis).
+        \item The system should record transaction event using date and time.
+        \item The system should generated a report for a single transaction and multiple transactions within a specific period. 
     \end{itemize}
 \end{itemize}
 \subsection{Non functional requirements}
@@ -65,15 +71,12 @@ The project objectives are targets that must be reached for the project to be co
     \item Performance-based requirements
     \begin{itemize}
         \item The API should provide feedback within 5-7 secs. Or provide reasons for the delay.
-        \item For multilingual text, translate it into English while maintaining context.
-        \item A.I interactions with users must be logged as they are created while maintaining low latency.
-        \item An agent must admit when they do not know how to respond to a user's question and log the question in another table.
     \end{itemize}
     \item Scalability requirements 
     \begin{itemize}
         \item The application should be packaged using containers and Kubernetes.
-        \item During high peak traffic, the application should increase the number of running instances.
-        \item During low trough traffic, the application should decrease the number of running instances.
+        \item During high peak traffic, the application should increase the number of running instances (VM).
+        \item During low trough traffic, the application should decrease the number of running instances (VM).
     \end{itemize}
     \item Reliability requirements 
     \begin{itemize}
@@ -83,8 +86,8 @@ The project objectives are targets that must be reached for the project to be co
     \item Maintainability requirements
     \begin{itemize}
         \item The application must have a production, development and testing(pre-production) environment.
-        \item The application should use version control and a semantic versioning process (API not backwards-compatible feature: API backwards-compatible feature: API backwards-compatible bugfix).
-        \item the application should have automated tests using Azure DevOps or GitHub Actions.
+        \item The application should use version control and a semantic versioning process.
+        \item the application should have automated tests using continuous deployment pipeline.
     \end{itemize}
     \end{itemize}
 \subsection{Technical requirement}

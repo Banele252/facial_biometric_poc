@@ -14,3 +14,4 @@ wheels/
 *.fdb_latexmk
 RDS.log
 *.synctex.gz
+IRS.log
