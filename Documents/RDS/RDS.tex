@@ -1,0 +1,164 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+
+\title{Data quality check report}
+\author{banele mdluli}
+\date{February 2026}
+
+\begin{document}
+
+\maketitle
+\newpage
+\section{Summary}
+The data used to perform business activities should be accurate and complete. Therefore, monitoring data quality is a critical process to ensure accuracy and completeness of the data used. The data quality check report is a project that will ensure data standards are monitored and evaluated continuously.
+
+\section{Introduction}
+Data underpins every modern digital process. The correct use of data can drive positive business value. Incorrect use can lead to misleading indicators that result in losses. Therefore, it is expected to implement measures to continuously monitor data quality.
+
+\section{Problem statement}
+The current methods for monitoring data quality are handled by external systems. An internal independent monitoring is required to either challenge the external systems' report or improve the internal team's understanding of the data used.
+
+\section{Objectives}
+The project objectives are targets that must be reached for the project to be considered a success. These objectives aim to improve internal monitoring of data quality across all sources used in BAU (Business As Usual) activities. The objectives are:
+\begin{itemize}
+    \item To create a report that monitors data accuracy and completeness.
+    \item To create an artificial intelligence agent that handles queries concerning the data quality.
+\end{itemize}
+
+\section{Requirements}
+\subsection{Functional requirements}
+\begin{itemize}
+ \item Data quality checks
+    \begin{itemize}
+        \item Data accuracy should be measured using the following methods:
+        \begin{itemize}
+            \item Compare two sources with the same data (if applicable)
+            \item Check if the cost or charge values are justified by the unit volume or quantity.
+            \item Ingest the current day's data (must have a unique identifier) into an isolated storage and compare with tomorrow's version of the same data (use ID to trace the records).
+        \end{itemize}
+        \item Data completeness must be measured in the following methods:
+        \begin{itemize}
+            \item Compare the latest record count and value (if applicable) to the previous day's record count and value. Acceptable thresholds can be established after reviewing outcomes
+            \item Compare the latest record count and value to the previous month's same weekday record count and value. 
+        \end{itemize}
+        \item Data consistency should be measured by comparing the data field types of the current day with those of the previous day.
+        \item Data uniqueness should be measured using the following methods:
+        \begin{itemize}
+            \item Check if there is a record ID with more than one record.
+            \item Check if there is a record ID with different information from two or more records.
+        \end{itemize}
+        \item Data timeliness should be measured using the following methods:
+        \begin{itemize}
+            \item Check if there are recent records ingested for the data source. Use the latest expected transaction date.
+        \end{itemize}
+    \end{itemize}
+    \item Artificial intelligence agent
+    \begin{itemize}
+        \item Create an agent that provides details about the data quality report. The agent should be able to provide an analysis that goes back in time (historical analysis).
+    \end{itemize}
+\end{itemize}
+\subsection{Non functional requirements}
+\begin{itemize}
+    \item Performance-based requirements
+    \begin{itemize}
+        \item The API should provide feedback within 5-7 secs. Or provide reasons for the delay.
+        \item For multilingual text, translate it into English while maintaining context.
+        \item A.I interactions with users must be logged as they are created while maintaining low latency.
+        \item An agent must admit when they do not know how to respond to a user's question and log the question in another table.
+    \end{itemize}
+    \item Scalability requirements 
+    \begin{itemize}
+        \item The application should be packaged using containers and Kubernetes.
+        \item During high peak traffic, the application should increase the number of running instances.
+        \item During low trough traffic, the application should decrease the number of running instances.
+    \end{itemize}
+    \item Reliability requirements 
+    \begin{itemize}
+        \item The application should automatically restart itself when it encounters an issue that leads to downtime.
+        \item The application should meet an 80.00\% uptime (calculated daily).
+    \end{itemize}
+    \item Maintainability requirements
+    \begin{itemize}
+        \item The application must have a production, development and testing(pre-production) environment.
+        \item The application should use version control and a semantic versioning process (API not backwards-compatible feature: API backwards-compatible feature: API backwards-compatible bugfix).
+        \item the application should have automated tests using Azure DevOps or GitHub Actions.
+    \end{itemize}
+    \end{itemize}
+\subsection{Technical requirement}
+    \begin{itemize}
+        \item A.I agent framework (\textbf{To be confirmed})
+        \item API dev framework
+        \begin{itemize}
+            \item Fast API and documentation OpenAPI (Swagger)
+        \end{itemize}
+        \item Frontend 
+        \begin{itemize}
+            \item React
+            \item Streamlit
+        \end{itemize}
+        \item Environment packaging 
+        \begin{itemize}
+            \item docker
+            \item Kubernetes
+        \end{itemize}
+        \item Deployment platform, code repo and CI/CD
+        \begin{itemize}
+            \item Azure
+            \item Github
+            \item Github actions  (switch to Azure DevOps later)
+    \end{itemize}
+ \end{itemize}
+ 
+\section{Design}
+\subsection{High level design}
+  HLD will show how each unit of a component interacts with another unit. The HLD will be divided into the following groups: Data storage, Cloud services, Communication tool and User interface.
+ \begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1.0\textwidth]{data_quality_checks_HLD.pdf}
+    \caption{HLD for control automation}
+    \label{HLD: Data quality checks HLD (incorrect image).}
+\end{figure}
+\subsection{Low-level design (lld)}
+
+The low-level design shows the structure and make-up of individual units. The LLD is a platform divided; units generated or developed on the same platform are part of the same LLD design.\\
+ \textbf{TO BE UPDATED DURING DEVELOPMENT!!!!!!}
+
+\section{High technical requirements}
+\subsection{Fast API integrations}
+\subsubsection{Postgres, Agent and Fast API}
+ A PostgreSQL database should be used to store information analysed in Databricks. The information stored in the database will vary from data accuracy to validity checks.
+ \begin{itemize}
+     \item  Create an Azure Postgres table to store data quality outcomes. Depending on the outcome size, one table can be used, or multiple tables (one check per table: if required).
+     \item  Create a Fast API parent endpoint that will interact with an agent or agents that will create a data quality check PDF report.
+     \item Create a Decision matrix that should assist the agent in compiling the report to give a certain outcome.
+ \end{itemize}
+ \subsubsection{Gradio, React and Fast API}
+    \begin{itemize}
+        \item Create an agent that should interact with an external user and provide the desired outcome based on the information available on the PostgreSQL database. The agent should
+        interact with the database using Fast API.
+        \item Create a Gradio chat interface that is connected to the AI agent. Link the Gradio chat app to a React Interface using Fast API.
+        \item Create a React platform that has the following:
+            \begin{itemize}
+                \item Log in page with an option to sign up.
+                \item A page that shows operation indicators.
+                \item A page that shows KPI based performance indicators.
+                \item A page that allows users to interact with agents.
+            \end{itemize}
+        \item Report data should be downloadable in various formats (csv, tsv, etc,...).
+    \end{itemize}
+\subsection{Databricks integrations}
+\begin{itemize}
+    \item Create a service principal in Azure and provide it Azure blob storage role.
+    \item Assign the same service principal a role in the Azure Databricks workspace (contributor).
+    \item Create tables and schemas that adhere to the data engineering architecture.
+    \item Create an API that should be used to push data from the gold layer to an external PostgreSQL.
+\end{itemize}
+
+\section{Discussion}
+
+\section{Conclusion}
+
+\section{Appendix}
+\subsection{Code}
+
+\end{document}
