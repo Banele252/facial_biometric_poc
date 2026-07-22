@@ -1,8 +1,8 @@
 \documentclass{article}
 \usepackage{graphicx} % Required for inserting images
 
-\title{Facial Biometric Verification System}
-\author{banele mdluli}
+\title{Facial Biometric Verification System - IRS}
+\author{Banele Mdluli}
 \date{February 2026}
 
 \begin{document}
@@ -114,12 +114,56 @@ The project objectives are targets that must be reached for the project to be co
             \item Github actions  (switch to Azure DevOps later)
     \end{itemize}
  \end{itemize}
- 
-\section{Design}
 
+ \section{User acceptance criteria}
+ \begin{table}[h]
+    \caption{User story acceptance criteria}
+    \centering
+    \begin{tabular}{|p{3cm}|p{5cm}|p{5cm}|}
+        \hline
+        \textbf{Acceptance Criterion} & \textbf{Given} & \textbf{When} \\
+        \hline
+        The system should provide a link to the user to perform facial biometric & 
+        A user has selected to perform facial biometric &
+         The system should generate a link and send it to the user via email or SMS.\\
+        \hline
+        The system should capture multiple images of the user for validation &
+        A user has clicked the link and is on the facial biometric site &
+        The system should capture multiple images of the user and inform the user of any hardware or environment negatively affecting the image capturing.\\
+        \hline
+        The system should inform the user of the validation outcome &
+        The system has completed the validation process &
+        The system should inform the user of the validation outcome via email or SMS. Depending on the outcome, the system should send a successful or failed authentication to internal systems.\\
+        \hline
+        The system should not allow a user to reperform facial biometric within an hour from the last attempt &
+        A user has attempted to perform facial biometric within an hour from the last attempt &
+        The system should inform the user that they cannot reperform facial biometric within an hour from the last attempt.\\
+        \hline
+        The system should record transaction events using date and time &
+        A user has performed facial biometric &
+        The system should record transaction events using date and time and generate a report for a single transaction and multiple transactions within a specific period.\\
+        \hline 
+        The system should provide feedback within 5-7 seconds or provide reasons for the delay &
+        A user has performed facial biometric &
+        The system should provide feedback within 5-7 seconds or provide reasons for the delay.\\
+        \hline
+        The application should automatically restart itself when it encounters an issue that leads to downtime &
+        The application has encountered an issue that leads to downtime &
+        The application should automatically restart itself when it encounters an issue that leads to downtime.\\
+        \hline
+        The application should meet an 80.00\% uptime (calculated daily) &
+        The application is running &
+        The application should meet an 80.00\% uptime (calculated daily).\\
+        \hline
+        The application should have a production, development and testing(pre-production) environment &
+        The application is being developed &
+        The application should have a production, development and testing(pre-production) environment.\\
+        \hline
+    \end{tabular}
+ \end{table}
 
+ \section{Design}
 The low-level design shows the structure and make-up of individual units. The LLD is a platform divided; units generated or developed on the same platform are part of the same LLD design.\\
- \textbf{TO BE UPDATED DURING DEVELOPMENT!!!!!!}
 
 \section{High technical requirements}
 \subsection{Fast API integrations}
