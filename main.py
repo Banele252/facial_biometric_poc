@@ -27,7 +27,7 @@ def main():
         },
     json={
         "reportType": "said_verification",
-        "idNumber": "9801315140089",
+        "idNumber": "",
         "mode": "production"
         }
     )
