@@ -90,10 +90,10 @@ class id_validation:
         
 
 
-id_validator = id_validation(id='')
-print(id_validator.is_valid_luhn())
-print(id_validator.is_11th_digit_zero_or_one())
-print(id_validator.is_12th_digit_zero_or_one())
-print(id_validator.is_id_numeric())
-print(id_validator.is_id_length_valid())
-print(id_validator.is_id_length_valid())
+#id_validator = id_validation(id='')
+#print(id_validator.is_valid_luhn())
+#print(id_validator.is_11th_digit_zero_or_one())
+#print(id_validator.is_12th_digit_zero_or_one())
+#print(id_validator.is_id_numeric())
+#print(id_validator.is_id_length_valid())
+#print(id_validator.is_id_length_valid())
