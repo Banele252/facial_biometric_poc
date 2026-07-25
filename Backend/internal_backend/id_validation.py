@@ -36,18 +36,24 @@ class id_validation:
             return False
             
     def is_11th_digit_zero_or_one(self)->bool:
-        eleventh_digit = self.id[10]
-        if eleventh_digit =='0' or eleventh_digit == '1':
-            return True
-        else:
+        try:
+            eleventh_digit = self.id[10]
+            if eleventh_digit =='0' or eleventh_digit == '1':
+                return True
+            else:
+                return False
+        except:
             return False
         
     def is_12th_digit_zero_or_one(self)->bool:
-            twelenth_digit = self.id[11]
-            if twelenth_digit =='8' or twelenth_digit == '9':
-                return True
-            else:
-                return False 
+            try:
+                twelenth_digit = self.id[11]
+                if twelenth_digit =='8' or twelenth_digit == '9':
+                    return True
+                else:
+                    return False
+            except:
+                return False
 
 
     
