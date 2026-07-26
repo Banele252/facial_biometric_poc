@@ -27,12 +27,15 @@ class id_validation:
         return self.id.isnumeric()
 
     def is_first_six_digit_valid_month(self)->bool:
-        yy = int(self.id[:2])
-        mm = int(self.id[2:4])
-        dd = int(self.id[4:6])
-        if (yy>=1 and yy<=99) and (mm>=1 and mm<=12) and (dd>=1 and dd<=31):
-            return True
-        else:
+        try:
+            yy = int(self.id[:2])
+            mm = int(self.id[2:4])
+            dd = int(self.id[4:6])
+            if (yy>=1 and yy<=99) and (mm>=1 and mm<=12) and (dd>=1 and dd<=31):
+                return True
+            else:
+                return False
+        except:
             return False
             
     def is_11th_digit_zero_or_one(self)->bool:
@@ -45,7 +48,7 @@ class id_validation:
         except:
             return False
         
-    def is_12th_digit_zero_or_one(self)->bool:
+    def is_12th_digit_eight_or_nine(self)->bool:
             try:
                 twelenth_digit = self.id[11]
                 if twelenth_digit =='8' or twelenth_digit == '9':
@@ -85,12 +88,25 @@ class id_validation:
         except:
             return False
 
-    def senati_excutor(self):
-        pass
+    def senaty_excutor(self):
+        final_outcome =  "Invalid South African ID" 
+        checks= [self.is_id_length_valid(),self.is_first_six_digit_valid_month(),self.is_11th_digit_zero_or_one(),self.is_12th_digit_eight_or_nine(), self.is_valid_luhn(), self.is_id_numeric()]
+        if all(checks):
+            final_outcome =  "Valid South African ID" 
+
+        return {"ID_length_valid":self.is_id_length_valid(),
+                "ID_numeric_valid":self.is_id_numeric(),
+                "ID_birth_date_numeric":self.is_first_six_digit_valid_month(),
+                "11th_digit_zero_or_one":self.is_11th_digit_zero_or_one(),
+                "12th_digit_8_or_9":self.is_12th_digit_eight_or_nine(),
+                "ID_valid_luhn":self.is_valid_luhn(),
+                "final_outcome":final_outcome}
+        
         
 
 
-#id_validator = id_validation(id='')
+id_validator = id_validation(id='')
+print(id_validator.senaty_excutor())
 #print(id_validator.is_valid_luhn())
 #print(id_validator.is_11th_digit_zero_or_one())
 #print(id_validator.is_12th_digit_zero_or_one())
