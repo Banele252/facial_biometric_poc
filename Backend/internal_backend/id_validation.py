@@ -2,9 +2,10 @@
 # Objective: To build a validation script based on the rules listed on the subtask: HT2-27
 
 class id_validation:
-    def __init__(self, id:str):
+    def __init__(self, id:str, process:str='id-precheck'):
         self.id = id
         self.id_list = list(id)
+        self.process = process
       
 
     def is_id_length_valid(self)->bool:
@@ -100,7 +101,9 @@ class id_validation:
                 "11th_digit_zero_or_one":self.is_11th_digit_zero_or_one(),
                 "12th_digit_8_or_9":self.is_12th_digit_eight_or_nine(),
                 "ID_valid_luhn":self.is_valid_luhn(),
-                "final_outcome":final_outcome}
+                "process":self.process,
+                "final_outcome":final_outcome,
+                "identity_number":self.id}
         
         
 
