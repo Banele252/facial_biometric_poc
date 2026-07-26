@@ -7,4 +7,15 @@ requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
     "requests>=2.34.2",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+    "azure-ai-documentintelligence>=1.0.0",
+    "azure-ai-vision-face>=1.0.0b2",
+    "azure-core>=1.30.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
 ]
