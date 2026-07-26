@@ -105,8 +105,8 @@ class id_validation:
         
 
 
-id_validator = id_validation(id='')
-print(id_validator.senaty_excutor())
+#id_validator = id_validation(id='')
+#print(id_validator.senaty_excutor())
 #print(id_validator.is_valid_luhn())
 #print(id_validator.is_11th_digit_zero_or_one())
 #print(id_validator.is_12th_digit_zero_or_one())
