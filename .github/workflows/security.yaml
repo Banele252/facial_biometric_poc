@@ -51,7 +51,7 @@ jobs:
         run: rm -rf "$HOME/.cache/trivy/policy"
 
       - name: Trivy filesystem scan (SARIF)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -59,6 +59,8 @@ jobs:
           format: sarif
           output: trivy-fs.sarif
           severity: CRITICAL,HIGH,MEDIUM
+          # Without this, SARIF output ignores `severity` and reports everything.
+          limit-severities-for-sarif: true
         env:
           TRIVY_SKIP_DB_UPDATE: false
 
@@ -75,7 +77,7 @@ jobs:
       # an unfixed CRITICAL/HIGH is a decision to make (pin, replace, accept via
       # .trivyignore), not something to hide.
       - name: Trivy gate — fail on CRITICAL/HIGH
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -109,13 +111,14 @@ jobs:
         run: rm -rf "$HOME/.cache/trivy/policy"
 
       - name: Trivy image scan (SARIF)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: facial-biometric-poc:scan
           format: sarif
           output: trivy-image.sarif
           severity: CRITICAL,HIGH,MEDIUM
+          limit-severities-for-sarif: true
 
       - name: Upload SARIF
         if: always()
@@ -125,7 +128,7 @@ jobs:
           category: trivy-image
 
       - name: Trivy gate — fail on CRITICAL/HIGH
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: facial-biometric-poc:scan

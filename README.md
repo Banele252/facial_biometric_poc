@@ -69,7 +69,7 @@ uv run pytest                # tests
 |---|---|---|
 | `ci.yaml` | PR to `main`, push to `main` | ruff, pytest + coverage, ESLint, `tsc`, Vite build, image build and smoke test |
 | `security.yaml` | PR, push, weekly Monday | Gitleaks, Trivy fs + image (CRITICAL/HIGH blocking), CodeQL (python + TS), CycloneDX SBOM |
-| `cd.yaml` | push to `main` → dev; `workflow_dispatch` → chosen env | Build, scan-before-push, push to ACR, roll the Container App, smoke test, auto-rollback |
+| `cd.yaml` | push to `main`, release tags, `workflow_dispatch` | Build, scan-before-push, push to ACR, roll the Container App, smoke test, auto-rollback |
 
 Security findings land in the repository **Security → Code scanning** tab as SARIF.
 The Trivy gate in `cd.yaml` runs *before* `docker push`, so an image that fails the
@@ -79,6 +79,42 @@ The dependency gate blocks on any CRITICAL/HIGH in our own Python and npm
 packages, fixed or not — accept one deliberately via `.trivyignore` rather than
 by loosening the gate. The image gate additionally sets `ignore-unfixed`, since
 base-image OS CVEs with no released patch are not actionable in this repo.
+
+## Releasing
+
+Deployment is tag-driven beyond dev:
+
+| Trigger | Environment | Image tag |
+|---|---|---|
+| Push to `main` | `dev` | commit SHA |
+| Tag `v1.2.3-rc.1` (prerelease) | `uat` | `v1.2.3-rc.1` |
+| Tag `v1.2.3` | `prod` | `v1.2.3` |
+| `workflow_dispatch` | chosen | chosen ref, or SHA |
+
+```bash
+git tag -a v1.2.3 -m "Release v1.2.3"
+git push origin v1.2.3
+```
+
+That builds from the tag, pushes `…/facial-biometric-poc:v1.2.3` to ACR, deploys
+to prod (subject to the environment's approval rule), smoke-tests it, and then
+publishes a GitHub Release with generated notes. A prerelease tag goes to `uat`
+and is marked as a prerelease.
+
+Release tags are **immutable**: cutting a tag whose image is already in ACR fails
+the build rather than overwriting it, so a version always identifies one exact
+image. Releases are also pushed under their commit SHA, and each environment
+keeps a moving `<env>-latest` pointer.
+
+`workflow_dispatch` accepts an optional `ref` to deploy a specific tag or SHA.
+If that image is already in ACR it is **reused, not rebuilt** — the artifact that
+was scanned is the artifact that ships, and the `<env>-latest` pointer is retagged
+server-side. That is the promotion path:
+
+```bash
+# promote the exact uat-tested build to prod
+gh workflow run cd.yaml -f environment=prod -f ref=v1.2.3
+```
 
 ## Deployment
 
