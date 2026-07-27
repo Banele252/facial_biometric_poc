@@ -75,6 +75,11 @@ Security findings land in the repository **Security → Code scanning** tab as S
 The Trivy gate in `cd.yaml` runs *before* `docker push`, so an image that fails the
 scan never reaches the registry.
 
+The dependency gate blocks on any CRITICAL/HIGH in our own Python and npm
+packages, fixed or not — accept one deliberately via `.trivyignore` rather than
+by loosening the gate. The image gate additionally sets `ignore-unfixed`, since
+base-image OS CVEs with no released patch are not actionable in this repo.
+
 ## Deployment
 
 Target is **Azure Container Apps**. Infrastructure lives in a separate IaC repo —

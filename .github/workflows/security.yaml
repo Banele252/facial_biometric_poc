@@ -71,6 +71,9 @@ jobs:
 
       # Separate gating pass: SARIF upload above is for visibility, this fails
       # the build. exit-code 1 on CRITICAL/HIGH only — MEDIUM is reported, not blocking.
+      # No ignore-unfixed here: these are our own Python and npm dependencies, so
+      # an unfixed CRITICAL/HIGH is a decision to make (pin, replace, accept via
+      # .trivyignore), not something to hide.
       - name: Trivy gate — fail on CRITICAL/HIGH
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -80,7 +83,6 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           exit-code: '1'
-          ignore-unfixed: true  # no patched version available = not actionable here
 
   image:
     name: Container image scan (Trivy)

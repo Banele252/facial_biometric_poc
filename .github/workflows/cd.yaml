@@ -147,27 +147,38 @@ jobs:
             exit 1
           fi
 
-      - name: Capture current revision (for rollback)
+      # Capture the image currently serving traffic. Rolling back is then just
+      # setting it again — no revision activation, which does not apply in
+      # single-revision mode.
+      - name: Capture current image (for rollback)
         id: current
         run: |
-          ACTIVE=$(az containerapp revision list \
+          CURRENT=$(az containerapp show \
             --name "${{ vars.CONTAINER_APP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query "sort_by([?properties.active], &properties.createdTime)[-1].name" \
-            -o tsv 2>/dev/null || true)
-          echo "revision=${ACTIVE}" >> "$GITHUB_OUTPUT"
-          echo "Current active revision: ${ACTIVE:-none}"
+            --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true)
+          echo "image=${CURRENT}" >> "$GITHUB_OUTPUT"
+          echo "Current image: ${CURRENT:-none}"
 
       - name: Roll new image onto the Container App
-        id: deployed
         run: |
-          FQDN=$(az containerapp update \
+          az containerapp update \
             --name "${{ vars.CONTAINER_APP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --image "${{ needs.build.outputs.image }}" \
+            --output none
+
+      # Read the FQDN from `show` rather than the `update` response, whose shape
+      # is not guaranteed to carry the ingress block.
+      - name: Resolve ingress URL
+        id: deployed
+        run: |
+          FQDN=$(az containerapp show \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --query 'properties.configuration.ingress.fqdn' -o tsv)
 
-          if [ -z "$FQDN" ]; then
+          if [ -z "$FQDN" ] || [ "$FQDN" = "null" ]; then
             echo "::error::Container App has no ingress FQDN — check the infrastructure repo"
             exit 1
           fi
@@ -192,30 +203,25 @@ jobs:
           curl -fsS --max-time 10 "${URL}/readyz"
           curl -fsS --max-time 10 "${URL}/" | grep -q '<div id="root">'
 
-      - name: Roll back to the previous revision
+      - name: Roll back to the previous image
         if: failure()
         run: |
-          PREVIOUS="${{ steps.current.outputs.revision }}"
-          if [ -z "$PREVIOUS" ] || [ "$PREVIOUS" = "null" ]; then
-            echo "::error::No previous revision recorded — manual intervention required"
+          PREVIOUS="${{ steps.current.outputs.image }}"
+          if [ -z "$PREVIOUS" ]; then
+            echo "::error::No previous image recorded — manual intervention required"
             exit 1
           fi
 
-          echo "::warning::Deployment failed — reactivating ${PREVIOUS}"
-          az containerapp revision activate \
-            --revision "$PREVIOUS" \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}"
+          if [ "$PREVIOUS" = "${{ needs.build.outputs.image }}" ]; then
+            echo "::error::Previous image is the one that just failed — not rolling back"
+            exit 1
+          fi
 
-          # Single-revision mode routes all traffic to the newest active
-          # revision, so the old image must also be set back explicitly.
-          PREVIOUS_IMAGE=$(az containerapp revision show \
-            --revision "$PREVIOUS" \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --query 'properties.template.containers[0].image' -o tsv)
-
+          echo "::warning::Deployment failed — restoring ${PREVIOUS}"
           az containerapp update \
             --name "${{ vars.CONTAINER_APP_NAME }}" \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --image "$PREVIOUS_IMAGE"
+            --image "$PREVIOUS" \
+            --output none
 
-          echo "Rolled back to ${PREVIOUS} (${PREVIOUS_IMAGE})"
+          echo "Rolled back to ${PREVIOUS}"
