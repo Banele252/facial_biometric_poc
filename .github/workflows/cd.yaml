@@ -1,0 +1,221 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [dev, test, uat, prod]
+        default: dev
+
+# Never run two deploys at the same target concurrently, and never cancel a
+# deploy mid-flight — a half-applied Container App revision is worse than a queue.
+concurrency:
+  group: cd-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve target environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.target.outputs.environment }}
+      image_tag: ${{ steps.target.outputs.image_tag }}
+    steps:
+      - id: target
+        # A push to main always goes to dev; anything further is dispatched
+        # explicitly. `github.ref` is meaningless for workflow_dispatch, so the
+        # input is the only source of truth when one is present.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET="${{ github.event.inputs.environment }}"
+          else
+            TARGET="dev"
+          fi
+          echo "environment=${TARGET}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Deploying to ${TARGET} at tag ${GITHUB_SHA}"
+
+  build:
+    name: Build, scan and push image
+    runs-on: ubuntu-latest
+    needs: resolve
+    environment: ${{ needs.resolve.outputs.environment }}
+    permissions:
+      contents: read
+      id-token: write      # OIDC federated credential — no stored SP secret
+      security-events: write
+    outputs:
+      image: ${{ steps.image.outputs.reference }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      - id: image
+        run: |
+          echo "reference=${{ vars.ACR_LOGIN_SERVER }}/facial-biometric-poc:${{ needs.resolve.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ steps.image.outputs.reference }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Clear Trivy policy cache
+        run: rm -rf "$HOME/.cache/trivy/policy"
+
+      # Gate before push: an image that fails the scan never reaches the registry.
+      - name: Trivy gate — fail on CRITICAL/HIGH
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image.outputs.reference }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Push image
+        run: |
+          docker push "${{ steps.image.outputs.reference }}"
+          docker tag "${{ steps.image.outputs.reference }}" \
+            "${{ vars.ACR_LOGIN_SERVER }}/facial-biometric-poc:${{ needs.resolve.outputs.environment }}-latest"
+          docker push "${{ vars.ACR_LOGIN_SERVER }}/facial-biometric-poc:${{ needs.resolve.outputs.environment }}-latest"
+
+      - name: Generate image SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.image.outputs.reference }}
+          format: cyclonedx-json
+          artifact-name: sbom-image-${{ needs.resolve.outputs.environment }}.json
+
+  deploy:
+    name: Deploy to ${{ needs.resolve.outputs.environment }}
+    runs-on: ubuntu-latest
+    needs: [resolve, build]
+    # Protection rules on this GitHub Environment provide the prod approval gate.
+    environment:
+      name: ${{ needs.resolve.outputs.environment }}
+      url: ${{ steps.deployed.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The Container App itself — ingress, probes, scaling, secrets, ACR pull
+      # identity — is provisioned and owned by the infrastructure repo. This
+      # workflow only rolls a new image onto it, so config and secrets set there
+      # are carried over to the new revision untouched.
+      - name: Verify the Container App exists
+        run: |
+          if ! az containerapp show \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --only-show-errors -o none 2>/dev/null; then
+            echo "::error::Container App '${{ vars.CONTAINER_APP_NAME }}' not found in \
+          resource group '${{ vars.AZURE_RESOURCE_GROUP }}'. It must be provisioned by \
+          the infrastructure repo before this pipeline can deploy to it."
+            exit 1
+          fi
+
+      - name: Capture current revision (for rollback)
+        id: current
+        run: |
+          ACTIVE=$(az containerapp revision list \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "sort_by([?properties.active], &properties.createdTime)[-1].name" \
+            -o tsv 2>/dev/null || true)
+          echo "revision=${ACTIVE}" >> "$GITHUB_OUTPUT"
+          echo "Current active revision: ${ACTIVE:-none}"
+
+      - name: Roll new image onto the Container App
+        id: deployed
+        run: |
+          FQDN=$(az containerapp update \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ needs.build.outputs.image }}" \
+            --query 'properties.configuration.ingress.fqdn' -o tsv)
+
+          if [ -z "$FQDN" ]; then
+            echo "::error::Container App has no ingress FQDN — check the infrastructure repo"
+            exit 1
+          fi
+
+          echo "url=https://${FQDN}" >> "$GITHUB_OUTPUT"
+          echo "Deployed ${{ needs.build.outputs.image }} to https://${FQDN}"
+
+      - name: Smoke test the deployment
+        run: |
+          URL="${{ steps.deployed.outputs.url }}"
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "${URL}/healthz" > /dev/null; then
+              echo "healthz OK"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::deployment did not become healthy at ${URL}"
+              exit 1
+            fi
+            sleep 10
+          done
+          curl -fsS --max-time 10 "${URL}/readyz"
+          curl -fsS --max-time 10 "${URL}/" | grep -q '<div id="root">'
+
+      - name: Roll back to the previous revision
+        if: failure()
+        run: |
+          PREVIOUS="${{ steps.current.outputs.revision }}"
+          if [ -z "$PREVIOUS" ] || [ "$PREVIOUS" = "null" ]; then
+            echo "::error::No previous revision recorded — manual intervention required"
+            exit 1
+          fi
+
+          echo "::warning::Deployment failed — reactivating ${PREVIOUS}"
+          az containerapp revision activate \
+            --revision "$PREVIOUS" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}"
+
+          # Single-revision mode routes all traffic to the newest active
+          # revision, so the old image must also be set back explicitly.
+          PREVIOUS_IMAGE=$(az containerapp revision show \
+            --revision "$PREVIOUS" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query 'properties.template.containers[0].image' -o tsv)
+
+          az containerapp update \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "$PREVIOUS_IMAGE"
+
+          echo "Rolled back to ${PREVIOUS} (${PREVIOUS_IMAGE})"

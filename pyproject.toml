@@ -1,10 +1,55 @@
 [project]
-name = "facial-biometric-p20260717"
+name = "facial-biometric-poc"
 version = "0.1.0"
-description = "Add your description here"
+description = "Facial biometric authentication PoC — identity validation and verification"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
     "requests>=2.34.2",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "frontend", "Documents"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "C4"]
+ignore = [
+    # The repo predates these conventions; the pipeline PR does not rewrite
+    # existing business logic. Revisit in a dedicated cleanup.
+    "N801",  # class naming (id_validation)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # assert is the point of a test
+"Backend/internal_backend/id_validation.py" = [
+    "E722",  # bare except — pre-existing, out of scope for this PR
+    "B904",
+    "SIM105",
+    "E501",  # long line in an existing docstring; rewording is a content change
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+
+[tool.coverage.run]
+source = ["Backend"]
+omit = ["*/tests/*", "*/__init__.py"]
