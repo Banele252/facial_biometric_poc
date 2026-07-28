@@ -13,7 +13,15 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from Backend.app.config import get_settings
-from Backend.app.routers import health, validation, verification
+from Backend.app.db import init_db
+from Backend.app.routers import (
+    health,
+    notifications,
+    selfies,
+    validation,
+    verification,
+    verifications,
+)
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -43,6 +51,13 @@ if _cors_origins:
 app.include_router(health.router)
 app.include_router(validation.router)
 app.include_router(verification.router)
+app.include_router(selfies.router)
+app.include_router(verifications.router)
+app.include_router(notifications.router)
+
+# Create the history/notification tables on startup. Cheap and idempotent; for
+# the default local SQLite backend this needs no external service.
+init_db()
 
 
 def _mount_frontend() -> None:
