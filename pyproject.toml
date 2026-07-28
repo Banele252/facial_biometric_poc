@@ -14,6 +14,7 @@ dependencies = [
     "azure-ai-documentintelligence>=1.0.0",
     "azure-ai-vision-face>=1.0.0b2",
     "azure-core>=1.30.0",
+    "psycopg[binary]>=3.3.4",
 ]
 
 [dependency-groups]

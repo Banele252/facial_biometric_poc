@@ -17,28 +17,43 @@ Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from db_logger import ensure_table, log_call, summarize_upload
 from document_match import DocumentType, match_user_input_to_document
 from dotenv import load_dotenv
 from face_match import match_face_to_document
 from fallback_verification_decision import evaluate_fallback_verification
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 from ocr_validator import extract_id_fields
 from pydantic import BaseModel
 
 load_dotenv()
 
-app = FastAPI(title="Facial Biometric Verification - Internal API", version="0.1.0")
+SERVICE_NAME = "internal_backend"
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    ensure_table()
+    yield
+
+
+app = FastAPI(
+    title="Facial Biometric Verification - Internal API", version="0.1.0", lifespan=lifespan
+)
 
 
 # --------------------------------------------------------------------------
 # OCR Validation
 # --------------------------------------------------------------------------
 @app.post("/api/v1/ocr/extract")
-async def ocr_extract(document_image: UploadFile = File(...)):
+async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadFile = File(...)):
     """Extract identity fields from a photographed/scanned ID document or passport."""
     document_bytes = await document_image.read()
     result = extract_id_fields(document_bytes)
-    return {
+    response = {
         "success": result.success,
         "document_type": result.document_type,
         "full_name": result.full_name,
@@ -48,6 +63,18 @@ async def ocr_extract(document_image: UploadFile = File(...)):
         "field_confidence": result.field_confidence,
         "error": result.error,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/ocr/extract",
+        method="POST",
+        request_summary=summarize_upload(
+            document_image.filename, document_image.content_type, len(document_bytes)
+        ),
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -55,6 +82,7 @@ async def ocr_extract(document_image: UploadFile = File(...)):
 # --------------------------------------------------------------------------
 @app.post("/api/v1/verify/document-match")
 async def document_match_endpoint(
+    background_tasks: BackgroundTasks,
     document_type: DocumentType = Form(...),
     user_full_name: str = Form(...),
     user_id_number: str = Form(""),
@@ -69,13 +97,30 @@ async def document_match_endpoint(
         user_full_name=user_full_name,
         ocr_result=ocr_result,
     )
-    return {
+    response = {
         "overall_match": match_result.overall_match,
         "id_number_match": match_result.id_number_match,
         "name_match": match_result.name_match,
         "name_similarity": match_result.name_similarity,
         "reasons": match_result.reasons,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/verify/document-match",
+        method="POST",
+        request_summary={
+            "document_type": document_type.value,
+            "user_full_name": user_full_name,
+            "user_id_number": user_id_number,
+            "document_image": summarize_upload(
+                document_image.filename, document_image.content_type, len(document_bytes)
+            ),
+        },
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -83,6 +128,7 @@ async def document_match_endpoint(
 # --------------------------------------------------------------------------
 @app.post("/api/v1/verify/face-match")
 async def face_match_endpoint(
+    background_tasks: BackgroundTasks,
     selfie_image: UploadFile = File(...),
     document_image: UploadFile = File(...),
 ):
@@ -90,12 +136,29 @@ async def face_match_endpoint(
     selfie_bytes = await selfie_image.read()
     document_bytes = await document_image.read()
     result = match_face_to_document(selfie_bytes, document_bytes)
-    return {
+    response = {
         "success": result.success,
         "is_match": result.is_match,
         "confidence": result.confidence,
         "error": result.error,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/verify/face-match",
+        method="POST",
+        request_summary={
+            "selfie_image": summarize_upload(
+                selfie_image.filename, selfie_image.content_type, len(selfie_bytes)
+            ),
+            "document_image": summarize_upload(
+                document_image.filename, document_image.content_type, len(document_bytes)
+            ),
+        },
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -108,6 +171,7 @@ class FallbackVerifyResponse(BaseModel):
 
 @app.post("/api/v1/fallback-verification/verify", response_model=FallbackVerifyResponse)
 async def verify_fallback(
+    background_tasks: BackgroundTasks,
     document_type: DocumentType = Form(...),
     user_full_name: str = Form(...),
     user_id_number: str = Form(""),
@@ -136,6 +200,27 @@ async def verify_fallback(
         document_match_result=doc_match_result,
         face_match_result=face_result,
         reference_id=reference_id,
+    )
+
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/fallback-verification/verify",
+        method="POST",
+        request_summary={
+            "document_type": document_type.value,
+            "user_full_name": user_full_name,
+            "user_id_number": user_id_number,
+            "reference_id": reference_id,
+            "selfie_image": summarize_upload(
+                selfie_image.filename, selfie_image.content_type, len(selfie_bytes)
+            ),
+            "document_image": summarize_upload(
+                document_image.filename, document_image.content_type, len(document_bytes)
+            ),
+        },
+        response_summary={"status": decision.status.value, "reasons": decision.reasons},
+        status_code=200,
     )
 
     return FallbackVerifyResponse(status=decision.status.value, reasons=decision.reasons)
