@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.9.0",
+    "psycopg[binary]>=3.2.0",
 ]
 
 [dependency-groups]
@@ -44,6 +45,7 @@ ignore = [
     "SIM105",
     "E501",  # long line in an existing docstring; rewording is a content change
 ]
+"Backend/rica_service/test_*.py" = ["S101"]  # assert is the point of a test
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
