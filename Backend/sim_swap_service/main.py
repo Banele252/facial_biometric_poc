@@ -15,7 +15,12 @@ Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Form, HTTPException
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from db_logger import ensure_table, log_call
+from dotenv import load_dotenv
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException
 from sim_swap_activation import InMemorySimRegistry, activate_new_sim
 from sim_swap_request import (
     FraudDecision,
@@ -24,7 +29,18 @@ from sim_swap_request import (
     create_sim_swap_request,
 )
 
-app = FastAPI(title="SIM Swap Service API", version="0.1.0")
+load_dotenv()
+
+SERVICE_NAME = "sim_swap_service"
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    ensure_table()
+    yield
+
+
+app = FastAPI(title="SIM Swap Service API", version="0.1.0", lifespan=lifespan)
 
 # POC-only in-memory stores, shared across requests for the life of this
 # process. Replace with a real provisioning/order system and SIM registry
@@ -35,6 +51,7 @@ _sim_registry = InMemorySimRegistry()
 
 @app.post("/api/v1/sim-swap/create")
 async def create_sim_swap(
+    background_tasks: BackgroundTasks,
     msisdn: str = Form(...),
     new_sim_serial: str = Form(...),
     identity_reference: str = Form(...),
@@ -50,11 +67,27 @@ async def create_sim_swap(
         fraud_decision=fraud_decision,
         store=_order_store,
     )
-    return {
+    response = {
         "status": result.status.value,
         "order": result.order.__dict__ if result.order else None,
         "reasons": result.reasons,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/sim-swap/create",
+        method="POST",
+        request_summary={
+            "msisdn": msisdn,
+            "new_sim_serial": new_sim_serial,
+            "identity_reference": identity_reference,
+            "verification_status": verification_status.value,
+            "fraud_decision": fraud_decision.value,
+        },
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 @app.get("/api/v1/sim-swap/{order_id}")
@@ -67,10 +100,10 @@ async def get_sim_swap(order_id: str):
 
 
 @app.post("/api/v1/sim-swap/{order_id}/activate")
-async def activate_sim_swap(order_id: str):
+async def activate_sim_swap(order_id: str, background_tasks: BackgroundTasks):
     """Activate the new SIM and deactivate the previous one for this order."""
     result = activate_new_sim(order_id, _order_store, _sim_registry)
-    return {
+    response = {
         "status": result.status.value,
         "order_id": result.order_id,
         "new_sim_serial": result.new_sim_serial,
@@ -78,6 +111,16 @@ async def activate_sim_swap(order_id: str):
         "activated_at": result.activated_at,
         "reasons": result.reasons,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/sim-swap/{order_id}/activate",
+        method="POST",
+        request_summary={"order_id": order_id},
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 @app.get("/health")
