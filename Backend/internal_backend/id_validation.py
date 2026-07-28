@@ -3,9 +3,12 @@
 
 
 class id_validation:
-    def __init__(self, id: str):
+    def __init__(self, id:str, process:str='id-precheck'):
         self.id = id
         self.id_list = list(id)
+        self.process = process
+      
+ 
 
     def is_id_length_valid(self) -> bool:
         """
