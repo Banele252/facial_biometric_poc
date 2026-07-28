@@ -1,40 +1,28 @@
-import requests
+"""Local development entrypoint.
+
+Runs the API with autoreload. This file previously duplicated the VerifyNow
+script in Backend/external_backend/main.py verbatim; that logic now lives there
+as importable functions, so this is the dev server launcher.
+
+    uv run python main.py
+
+In the container the app is served by uvicorn directly — see the Dockerfile.
+"""
+
 import os
+
+import uvicorn
 from dotenv import load_dotenv
 
 
-load_dotenv(override=True)
-
-verify_now_api_key = os.getenv('VERIFY_NOW_API_KEY')
-verify_base_url = os.getenv('VERIFY_BASE_URL')
-idempotency_id_key = os.getenv('Idempotency_id_key')
-my_credits_endpoint = '/my_credits'
-every_endpoint = '/verify'
-
-header_details = {
-    'x-api-key': f'{verify_now_api_key}',
-    'Content-Type': 'application/json',
-    'Idempotency-Key': f'{idempotency_id_key}'
-    }
-
-def main():
-    resp = requests.post(
-    url=f'{verify_base_url}{every_endpoint}',
-    headers= {
-        'x-api-key': f'{verify_now_api_key}',
-        'Content-Type': 'application/json',
-        'Idempotency-Key': f'{idempotency_id_key}'
-        },
-    json={
-        "reportType": "said_verification",
-        "idNumber": "",
-        "mode": "production"
-        }
+def main() -> None:
+    load_dotenv(override=True)
+    uvicorn.run(
+        "Backend.app.main:app",
+        host=os.getenv("HOST", "127.0.0.1"),
+        port=int(os.getenv("PORT", "8000")),
+        reload=True,
     )
-    response = resp.json()
-    print(response)
-    ##if response['Status'] == 'Success':
-    ##    print(f"Credits: {response['credits']}")
 
 
 if __name__ == "__main__":
