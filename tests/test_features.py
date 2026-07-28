@@ -133,36 +133,90 @@ class TestVerificationGates:
 
 
 class TestVerificationDecision:
-    def test_verifynow_approval(self, client, monkeypatch):
+    @staticmethod
+    def _configure(monkeypatch):
         monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
         monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
         config.get_settings.cache_clear()
+
+    @staticmethod
+    def _match(outcome, score=88.0, provider_status="Approved", detail="ok"):
+        from Backend.app.services.face_match import FaceMatchResult
+
+        return lambda *_a, **_k: FaceMatchResult(
+            outcome=outcome,
+            provider_status=provider_status,
+            score=score,
+            detail=detail,
+            request_id="req-1",
+        )
+
+    def test_face_match_approval(self, client, monkeypatch):
+        self._configure(monkeypatch)
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.verify_said",
-            lambda **_: {"Status": "Success"},
+            "Backend.app.routers.verifications.run_face_match", self._match("approved")
         )
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
         ).json()
         assert body["status"] == "approved"
-        assert body["method"] == "verifynow"
+        assert body["method"] == "facematch"
         assert body["notification_type"] == "approval"
+        assert body["match_score"] == 88.0
+        # Sandbox unless the deployment opts into production.
+        assert body["mode"] == "sandbox"
 
-    def test_verifynow_rejection(self, client, monkeypatch):
-        monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
-        monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
-        config.get_settings.cache_clear()
+    def test_face_match_rejection(self, client, monkeypatch):
+        self._configure(monkeypatch)
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.verify_said",
-            lambda **_: {"Status": "failed"},
+            "Backend.app.routers.verifications.run_face_match",
+            self._match("rejected", score=12.0, provider_status="Declined"),
         )
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
         ).json()
         assert body["status"] == "rejected"
-        assert body["method"] == "verifynow"
+        assert body["method"] == "facematch"
+        assert body["notification_type"] == "rejection"
+
+    def test_face_match_in_review(self, client, monkeypatch):
+        """"In Review" is neither approval nor rejection and must not be coerced."""
+        self._configure(monkeypatch)
+        monkeypatch.setattr(
+            "Backend.app.routers.verifications.run_face_match",
+            self._match("review", score=68.0, provider_status="In Review"),
+        )
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
+        ).json()
+        assert body["status"] == "review"
+        assert body["provider_status"] == "In Review"
+        assert body["notification_type"] == "review"
+
+    def test_client_cannot_force_production(self, client, monkeypatch):
+        """A client-supplied mode must not be able to spend live credits."""
+        self._configure(monkeypatch)
+        captured = {}
+
+        def _capture_mode(id_number, storage_ref, settings=None):
+            from Backend.app.config import get_settings
+
+            captured["mode"] = (settings or get_settings()).verify_mode
+            return self._match("approved")()
+
+        monkeypatch.setattr(
+            "Backend.app.routers.verifications.run_face_match", _capture_mode
+        )
+        selfie_id = _pass_liveness(client)
+        client.post(
+            "/api/v1/verifications",
+            json={"id_number": VALID_ID, "selfie_id": selfie_id, "mode": "production"},
+        )
+        # The provider call resolves its mode from settings, not the request body.
+        assert captured["mode"] == "sandbox"
 
     def test_fallback_approval_when_provider_unconfigured(self, client, monkeypatch):
         monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
@@ -183,10 +237,10 @@ class TestVerificationDecision:
         monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
         config.get_settings.cache_clear()
 
-        def _boom(**_):
+        def _boom(*_a, **_k):
             raise VerifyNowError("upstream down")
 
-        monkeypatch.setattr("Backend.app.routers.verifications.verify_said", _boom)
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _boom)
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
@@ -204,7 +258,7 @@ class TestVerificationDecision:
             json={"id_number": VALID_ID, "selfie_id": selfie_id, "allow_fallback": False},
         ).json()
         assert body["status"] == "rejected"
-        assert body["method"] == "verifynow"
+        assert body["method"] == "facematch"
 
 
 class TestHistoryAndNotifications:
@@ -255,3 +309,96 @@ class TestHistoryAndNotifications:
 )
 def test_verification_schema_violations_rejected(client, payload):
     assert client.post("/api/v1/verifications", json=payload).status_code == 422
+
+
+class TestRicaAndAudit:
+    """The RICA gate and the audit trail (journey one, steps 2 and 4)."""
+
+    @staticmethod
+    def _seed_rica(client, id_number, full_name, msisdn):
+        resp = client.post(
+            "/api/v1/rica/records",
+            json={"id_number": id_number, "full_name": full_name, "msisdn": msisdn},
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_rica_mismatch_rejects_before_any_provider_call(self, client, monkeypatch):
+        """A name that does not own the number is the fraud case — stop there."""
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        self._seed_rica(client, VALID_ID, "Thabo Nkosi", "0821234567")
+
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Someone Else",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        assert body["status"] == "rejected"
+        assert body["method"] == "rica"
+        assert body["provider_status"] == "rica_mismatch"
+        names = [c["name"] for c in body["checks"]]
+        # The journey stopped at RICA: no provider steps were even attempted.
+        assert "rica" in names
+        assert "face_match" not in names
+
+    def test_rica_match_lets_the_journey_continue(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        self._seed_rica(client, VALID_ID, "Thabo Nkosi", "0821234567")
+
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "  thabo nkosi  ",  # case and padding must not matter
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        rica = next(c for c in body["checks"] if c["name"] == "rica")
+        assert rica["status"] == "pass"
+        assert body["status"] == "approved"  # fallback, provider unconfigured
+
+    def test_rica_skipped_when_identity_not_supplied(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
+        ).json()
+        rica = next(c for c in body["checks"] if c["name"] == "rica")
+        assert rica["status"] == "skipped"
+
+    def test_every_decision_is_audited(self, client, monkeypatch):
+        from Backend.app.services.audit import list_events
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        selfie_id = _pass_liveness(client)
+        client.post(
+            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
+        )
+
+        processes = [e["process"] for e in list_events()]
+        assert "journey_started" in processes
+        assert "verification_decision" in processes
+
+    def test_audit_never_stores_the_image(self, client, monkeypatch):
+        """Biometric images are SPI (CARB slide 20) — only references are kept."""
+        from Backend.app.services.audit import list_events, record_event
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")  # force db init
+        record_event("test", {"image": "AAAABBBB", "id_number": VALID_ID})
+        payloads = [e["payload"] for e in list_events()]
+        assert any("<redacted>" in p for p in payloads)
+        assert not any("AAAABBBB" in p for p in payloads)

@@ -1,13 +1,16 @@
+import json
 import os
+
 import psycopg2
 from dotenv import load_dotenv
-import json
 
 load_dotenv(override=True)
 
 
 class AuditDB:
-    def __init__(self,input_data:dict={}):
+    # A mutable default is shared across every instance; None-then-default keeps
+    # each AuditDB with its own payload.
+    def __init__(self, input_data: dict | None = None):
         self.host = os.getenv("postgres_host")
         self.user = os.getenv("postgres_username")
         self.password = os.getenv("postgres_password")
@@ -15,7 +18,7 @@ class AuditDB:
         self.port = os.getenv("postgres_port")
         self.environment=os.getenv("environment")
         self.conn = None
-        self.input_data=input_data
+        self.input_data = input_data if input_data is not None else {}
 
 
 

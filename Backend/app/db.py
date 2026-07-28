@@ -48,6 +48,20 @@ _SCHEMA = (
         created_at TEXT NOT NULL
     )
     """,
+    # Audit trail. Same table name and columns as
+    # Backend/internal_backend/audit.py writes to, so queries written against
+    # that service still work — but created here and reached over the
+    # application's existing connection, so it needs no second driver
+    # (psycopg2) and no separate postgres_* configuration.
+    """
+    CREATE TABLE IF NOT EXISTS process_log (
+        id TEXT PRIMARY KEY,
+        environment TEXT,
+        process TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,

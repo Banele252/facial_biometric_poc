@@ -33,10 +33,25 @@ class Settings:
     # dependency-free mock that keeps the flow demonstrable.
     liveness_provider: str
     liveness_min_score: float
+    # VerifyNow call mode. "sandbox" returns mock responses and consumes no
+    # credits; "production" bills per call. Sandbox is the default so no code
+    # path can spend credits without an explicit deployment-level opt-in.
+    verify_mode: str
+    # VerifyNow face match returns a 0-100 score alongside its own status. The
+    # status is authoritative; this is the floor applied to an approval.
+    face_match_min_score: float
+    # The VerifyNow sandbox enforces a ~10s per-IP cooldown across its routes,
+    # so a journey making two provider calls must wait between them or the
+    # second returns "Too Many Requests". Production has no such limit.
+    sandbox_cooldown_seconds: float
 
     @property
     def verify_now_configured(self) -> bool:
         return bool(self.verify_now_api_key and self.verify_base_url)
+
+    @property
+    def is_sandbox(self) -> bool:
+        return self.verify_mode == "sandbox"
 
     @property
     def blob_storage_configured(self) -> bool:
@@ -59,4 +74,9 @@ def get_settings() -> Settings:
         azure_storage_container=os.getenv("AZURE_STORAGE_CONTAINER", "selfies"),
         liveness_provider=os.getenv("LIVENESS_PROVIDER", "mock"),
         liveness_min_score=float(os.getenv("LIVENESS_MIN_SCORE", "0.6")),
+        # Anything other than an explicit "production" is treated as sandbox,
+        # so a typo or empty value fails safe rather than spending credits.
+        verify_mode="production" if os.getenv("VERIFY_MODE") == "production" else "sandbox",
+        face_match_min_score=float(os.getenv("FACE_MATCH_MIN_SCORE", "60")),
+        sandbox_cooldown_seconds=float(os.getenv("SANDBOX_COOLDOWN_SECONDS", "11")),
     )
