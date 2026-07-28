@@ -39,8 +39,8 @@ the team before this goes further):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Protocol
 
 DEFAULT_WINDOW_DAYS = 7
@@ -48,7 +48,7 @@ DEFAULT_MAX_ATTEMPTS_PER_WINDOW = 3
 DEFAULT_MAX_DISTINCT_IDENTITIES_PER_WINDOW = 2
 
 
-class DeviceRiskLevel(str, Enum):
+class DeviceRiskLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -75,7 +75,9 @@ class DeviceAttemptStore(Protocol):
     below only depends on this interface, not on how attempts are stored.
     """
 
-    def record_attempt(self, device_id: str, identity_reference: str, timestamp: datetime) -> None: ...
+    def record_attempt(
+        self, device_id: str, identity_reference: str, timestamp: datetime
+    ) -> None: ...
 
     def get_attempts_since(self, device_id: str, since: datetime) -> list[DeviceAttempt]: ...
 
@@ -125,7 +127,7 @@ def assess_device_risk(
             reasons=["No device identifier was supplied."],
         )
 
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     store.record_attempt(device_id, identity_reference, now)
 
     since = now - timedelta(days=window_days)

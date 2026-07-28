@@ -27,15 +27,15 @@ device_risk_check.py.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from typing import Optional, Protocol
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Protocol
 
 DEFAULT_VELOCITY_WINDOW_HOURS = 24
 DEFAULT_MAX_ATTEMPTS_PER_MSISDN = 2
 
 
-class FraudRiskLevel(str, Enum):
+class FraudRiskLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -72,7 +72,7 @@ class InMemoryVelocityStore:
 class Watchlist:
     """Static in-memory watchlist of known-risky identifiers. POC only."""
 
-    def __init__(self, entries: Optional[set] = None) -> None:
+    def __init__(self, entries: set | None = None) -> None:
         self._entries = {e.strip().lower() for e in (entries or set())}
 
     def add(self, entry: str) -> None:
@@ -104,11 +104,11 @@ def assess_fraud_intelligence(
     device_id: str,
     velocity_store: VelocityStore,
     watchlist: Watchlist,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
     velocity_window_hours: int = DEFAULT_VELOCITY_WINDOW_HOURS,
     max_attempts_per_msisdn: int = DEFAULT_MAX_ATTEMPTS_PER_MSISDN,
 ) -> FraudIntelligenceResult:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     velocity_store.record_attempt(msisdn, now)
     since = now - timedelta(hours=velocity_window_hours)

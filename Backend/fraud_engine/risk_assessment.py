@@ -19,7 +19,7 @@ fraud-team scoring model - confirm before relying on it beyond the POC.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from device_risk_check import DeviceRiskResult
 from fraud_intelligence_check import FraudIntelligenceResult
@@ -39,7 +39,7 @@ MEDIUM_BAND_THRESHOLD = 34
 HIGH_BAND_THRESHOLD = 67
 
 
-class OverallRiskBand(str, Enum):
+class OverallRiskBand(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -67,9 +67,7 @@ def calculate_risk_score(
     device_points = LEVEL_POINTS[device_risk.risk_level.value]
     fraud_points = LEVEL_POINTS[fraud_intelligence.risk_level.value]
 
-    score = round(
-        device_points * DEVICE_RISK_WEIGHT + fraud_points * FRAUD_INTELLIGENCE_WEIGHT, 2
-    )
+    score = round(device_points * DEVICE_RISK_WEIGHT + fraud_points * FRAUD_INTELLIGENCE_WEIGHT, 2)
 
     contributing_factors = list(device_risk.reasons) + list(fraud_intelligence.reasons)
 

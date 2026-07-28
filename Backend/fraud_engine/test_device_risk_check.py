@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from device_risk_check import (
     DeviceRiskLevel,
@@ -6,7 +6,7 @@ from device_risk_check import (
     assess_device_risk,
 )
 
-NOW = datetime(2026, 7, 27, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 27, 12, 0, 0, tzinfo=UTC)
 
 
 def test_first_attempt_on_new_device_is_low_risk():

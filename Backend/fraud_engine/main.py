@@ -15,9 +15,6 @@ Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Form
-from pydantic import BaseModel
-
 from decisioning import decide
 from device_risk_check import (
     DeviceRiskLevel,
@@ -25,6 +22,7 @@ from device_risk_check import (
     InMemoryDeviceAttemptStore,
     assess_device_risk,
 )
+from fastapi import FastAPI, Form
 from fraud_intelligence_check import (
     FraudIntelligenceResult,
     FraudRiskLevel,
@@ -32,6 +30,7 @@ from fraud_intelligence_check import (
     Watchlist,
     assess_fraud_intelligence,
 )
+from pydantic import BaseModel
 from risk_assessment import OverallRiskBand, RiskScoreResult, calculate_risk_score
 
 app = FastAPI(title="Fraud Engine API", version="0.1.0")

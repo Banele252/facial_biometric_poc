@@ -20,13 +20,13 @@ the POC.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from fraud_intelligence_check import FraudIntelligenceResult
 from risk_assessment import OverallRiskBand, RiskScoreResult
 
 
-class FraudDecision(str, Enum):
+class FraudDecision(StrEnum):
     APPROVE = "APPROVE"
     REFER = "REFER"
     REJECT = "REJECT"
