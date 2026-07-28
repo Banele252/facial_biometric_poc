@@ -52,7 +52,7 @@ class id_validation:
                 return True
             else:
                 return False
-        except:
+        except IndexError:
             return False
 
     def is_valid_luhn(self) -> bool:
