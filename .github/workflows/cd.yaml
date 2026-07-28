@@ -1,0 +1,376 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+    # Release tags drive promotion beyond dev:
+    #   v1.2.3        -> prod
+    #   v1.2.3-rc.1   -> uat  (any prerelease suffix)
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [dev, test, uat, prod]
+        default: dev
+      ref:
+        description: Tag or SHA to deploy (defaults to the branch this is run from)
+        required: false
+        type: string
+
+# Never run two deploys at the same target concurrently, and never cancel a
+# deploy mid-flight — a half-applied Container App revision is worse than a queue.
+concurrency:
+  group: cd-${{ github.event.inputs.environment || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve target environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.target.outputs.environment }}
+      image_tag: ${{ steps.target.outputs.image_tag }}
+      release: ${{ steps.target.outputs.release }}
+      checkout_ref: ${{ steps.target.outputs.checkout_ref }}
+    steps:
+      - id: target
+        # Environment comes from the trigger:
+        #   workflow_dispatch -> the chosen input (github.ref is meaningless here)
+        #   tag push          -> prod for a clean semver tag, uat for a prerelease
+        #   push to main      -> dev
+        # The image tag is the release tag when there is one, so a deployed image
+        # is traceable to a version rather than only to a commit.
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          INPUT_ENV: ${{ github.event.inputs.environment }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+        run: |
+          set -euo pipefail
+          RELEASE=false
+          CHECKOUT_REF="${GITHUB_SHA}"
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            TARGET="$INPUT_ENV"
+            if [ -n "$INPUT_REF" ]; then
+              CHECKOUT_REF="$INPUT_REF"
+              IMAGE_TAG="$INPUT_REF"
+            else
+              IMAGE_TAG="$GITHUB_SHA"
+            fi
+
+          elif [ "${REF#refs/tags/}" != "$REF" ]; then
+            TAG="${REF#refs/tags/}"
+            RELEASE=true
+            CHECKOUT_REF="$TAG"
+            IMAGE_TAG="$TAG"
+            # A hyphen after the patch number marks a semver prerelease.
+            case "$TAG" in
+              *-*) TARGET="uat" ;;
+              *)   TARGET="prod" ;;
+            esac
+
+          else
+            TARGET="dev"
+            IMAGE_TAG="$GITHUB_SHA"
+          fi
+
+          if [ -z "$TARGET" ]; then
+            echo "::error::Could not resolve a target environment"
+            exit 1
+          fi
+
+          {
+            echo "environment=${TARGET}"
+            echo "image_tag=${IMAGE_TAG}"
+            echo "release=${RELEASE}"
+            echo "checkout_ref=${CHECKOUT_REF}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "### Deploying to \`${TARGET}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- image tag: \`${IMAGE_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ref: \`${CHECKOUT_REF}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- release: \`${RELEASE}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build, scan and push image
+    runs-on: ubuntu-latest
+    needs: resolve
+    environment: ${{ needs.resolve.outputs.environment }}
+    permissions:
+      contents: read
+      id-token: write      # OIDC federated credential — no stored SP secret
+      security-events: write
+    outputs:
+      image: ${{ steps.image.outputs.reference }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      - id: image
+        run: |
+          echo "reference=${{ vars.ACR_LOGIN_SERVER }}/facial-biometric-poc:${{ needs.resolve.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this tag is already in ACR
+        id: existing
+        run: |
+          if az acr repository show-tags \
+            --name "${{ vars.ACR_NAME }}" \
+            --repository facial-biometric-poc \
+            --query "[?@=='${{ needs.resolve.outputs.image_tag }}']" -o tsv 2>/dev/null | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Release tags are immutable — a version must always mean one exact image.
+      - name: Guard against overwriting a release tag
+        if: needs.resolve.outputs.release == 'true' && steps.existing.outputs.exists == 'true'
+        run: |
+          echo "::error::Tag ${{ needs.resolve.outputs.image_tag }} already exists in ACR. \
+          Release tags are immutable — cut a new version instead."
+          exit 1
+
+      # Redeploying an existing tag (promotion, roll-forward) reuses the exact
+      # image that was already built and scanned rather than rebuilding it.
+      - name: Reuse existing image
+        if: steps.existing.outputs.exists == 'true'
+        run: |
+          echo "Reusing ${{ steps.image.outputs.reference }} — already in ACR, skipping build."
+          echo "Reused existing image \`${{ steps.image.outputs.reference }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+          # Still move the environment pointer. `acr import` retags server-side,
+          # so nothing is pulled or rebuilt.
+          az acr import \
+            --name "${{ vars.ACR_NAME }}" \
+            --source "facial-biometric-poc:${{ needs.resolve.outputs.image_tag }}" \
+            --image "facial-biometric-poc:${{ needs.resolve.outputs.environment }}-latest" \
+            --force
+
+      - name: Build image
+        if: steps.existing.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ steps.image.outputs.reference }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Clear Trivy policy cache
+        if: steps.existing.outputs.exists == 'false'
+        run: rm -rf "$HOME/.cache/trivy/policy"
+
+      # Gate before push: an image that fails the scan never reaches the registry.
+      - name: Trivy gate — fail on CRITICAL/HIGH
+        if: steps.existing.outputs.exists == 'false'
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image.outputs.reference }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Push image
+        if: steps.existing.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          REPO="${{ vars.ACR_LOGIN_SERVER }}/facial-biometric-poc"
+
+          # Immutable, traceable tag — a release version or the commit SHA.
+          docker push "${{ steps.image.outputs.reference }}"
+
+          # Moving pointer to whatever that environment is currently running.
+          docker tag "${{ steps.image.outputs.reference }}" \
+            "${REPO}:${{ needs.resolve.outputs.environment }}-latest"
+          docker push "${REPO}:${{ needs.resolve.outputs.environment }}-latest"
+
+          # Releases also get the SHA tag, so a version can be traced to a commit
+          # in the registry without consulting git.
+          if [ "${{ needs.resolve.outputs.release }}" = "true" ]; then
+            docker tag "${{ steps.image.outputs.reference }}" "${REPO}:${GITHUB_SHA}"
+            docker push "${REPO}:${GITHUB_SHA}"
+          fi
+
+      - name: Generate image SBOM
+        if: steps.existing.outputs.exists == 'false'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.image.outputs.reference }}
+          format: cyclonedx-json
+          artifact-name: sbom-image-${{ needs.resolve.outputs.environment }}.json
+
+  deploy:
+    name: Deploy to ${{ needs.resolve.outputs.environment }}
+    runs-on: ubuntu-latest
+    needs: [resolve, build]
+    # Protection rules on this GitHub Environment provide the prod approval gate.
+    environment:
+      name: ${{ needs.resolve.outputs.environment }}
+      url: ${{ steps.deployed.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The Container App itself — ingress, probes, scaling, secrets, ACR pull
+      # identity — is provisioned and owned by the infrastructure repo. This
+      # workflow only rolls a new image onto it, so config and secrets set there
+      # are carried over to the new revision untouched.
+      - name: Verify the Container App exists
+        run: |
+          if ! az containerapp show \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --only-show-errors -o none 2>/dev/null; then
+            echo "::error::Container App '${{ vars.CONTAINER_APP_NAME }}' not found in \
+          resource group '${{ vars.AZURE_RESOURCE_GROUP }}'. It must be provisioned by \
+          the infrastructure repo before this pipeline can deploy to it."
+            exit 1
+          fi
+
+      # Capture the image currently serving traffic. Rolling back is then just
+      # setting it again — no revision activation, which does not apply in
+      # single-revision mode.
+      - name: Capture current image (for rollback)
+        id: current
+        run: |
+          CURRENT=$(az containerapp show \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query 'properties.template.containers[0].image' -o tsv 2>/dev/null || true)
+          echo "image=${CURRENT}" >> "$GITHUB_OUTPUT"
+          echo "Current image: ${CURRENT:-none}"
+
+      - name: Roll new image onto the Container App
+        run: |
+          az containerapp update \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ needs.build.outputs.image }}" \
+            --output none
+
+      # Read the FQDN from `show` rather than the `update` response, whose shape
+      # is not guaranteed to carry the ingress block.
+      - name: Resolve ingress URL
+        id: deployed
+        run: |
+          FQDN=$(az containerapp show \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query 'properties.configuration.ingress.fqdn' -o tsv)
+
+          if [ -z "$FQDN" ] || [ "$FQDN" = "null" ]; then
+            echo "::error::Container App has no ingress FQDN — check the infrastructure repo"
+            exit 1
+          fi
+
+          echo "url=https://${FQDN}" >> "$GITHUB_OUTPUT"
+          echo "Deployed ${{ needs.build.outputs.image }} to https://${FQDN}"
+
+      - name: Smoke test the deployment
+        run: |
+          URL="${{ steps.deployed.outputs.url }}"
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "${URL}/healthz" > /dev/null; then
+              echo "healthz OK"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::deployment did not become healthy at ${URL}"
+              exit 1
+            fi
+            sleep 10
+          done
+          curl -fsS --max-time 10 "${URL}/readyz"
+          curl -fsS --max-time 10 "${URL}/" | grep -q '<div id="root">'
+
+      - name: Roll back to the previous image
+        if: failure()
+        run: |
+          PREVIOUS="${{ steps.current.outputs.image }}"
+          if [ -z "$PREVIOUS" ]; then
+            echo "::error::No previous image recorded — manual intervention required"
+            exit 1
+          fi
+
+          if [ "$PREVIOUS" = "${{ needs.build.outputs.image }}" ]; then
+            echo "::error::Previous image is the one that just failed — not rolling back"
+            exit 1
+          fi
+
+          echo "::warning::Deployment failed — restoring ${PREVIOUS}"
+          az containerapp update \
+            --name "${{ vars.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "$PREVIOUS" \
+            --output none
+
+          echo "Rolled back to ${PREVIOUS}"
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [resolve, build, deploy]
+    # Only for tag-driven deploys, and only once the deployment is verified —
+    # a release should never point at something that failed its smoke test.
+    if: needs.resolve.outputs.release == 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
+          fetch-depth: 0  # release notes are generated from commit history
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          # A hyphen marks a semver prerelease (deployed to uat, not prod).
+          case "$TAG" in
+            *-*) PRERELEASE="--prerelease" ;;
+            *)   PRERELEASE="" ;;
+          esac
+
+          # With --generate-notes the API appends the changelog to this body.
+          NOTES=$(printf 'Deployed to `%s`\n\nImage: `%s`\n' \
+            "${{ needs.resolve.outputs.environment }}" \
+            "${{ needs.build.outputs.image }}")
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            --notes "$NOTES" \
+            $PRERELEASE
