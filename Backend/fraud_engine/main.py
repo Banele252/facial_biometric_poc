@@ -15,6 +15,10 @@ Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from db_logger import ensure_table, log_call
 from decisioning import decide
 from device_risk_check import (
     DeviceRiskLevel,
@@ -22,7 +26,8 @@ from device_risk_check import (
     InMemoryDeviceAttemptStore,
     assess_device_risk,
 )
-from fastapi import FastAPI, Form
+from dotenv import load_dotenv
+from fastapi import BackgroundTasks, FastAPI, Form
 from fraud_intelligence_check import (
     FraudIntelligenceResult,
     FraudRiskLevel,
@@ -33,7 +38,18 @@ from fraud_intelligence_check import (
 from pydantic import BaseModel
 from risk_assessment import OverallRiskBand, RiskScoreResult, calculate_risk_score
 
-app = FastAPI(title="Fraud Engine API", version="0.1.0")
+load_dotenv()
+
+SERVICE_NAME = "fraud_engine"
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    ensure_table()
+    yield
+
+
+app = FastAPI(title="Fraud Engine API", version="0.1.0", lifespan=lifespan)
 
 # POC-only in-memory stores, shared across requests for the life of this
 # process. Replace with persistent implementations before this leaves POC
@@ -48,17 +64,28 @@ _watchlist = Watchlist()
 # --------------------------------------------------------------------------
 @app.post("/api/v1/risk/device-check")
 async def device_check(
+    background_tasks: BackgroundTasks,
     device_id: str = Form(...),
     identity_reference: str = Form(...),
 ):
     """Assess the risk of the device attempting this SIM Swap request."""
     result = assess_device_risk(device_id, identity_reference, _device_attempt_store)
-    return {
+    response = {
         "risk_level": result.risk_level.value,
         "attempt_count_in_window": result.attempt_count_in_window,
         "distinct_identities_in_window": result.distinct_identities_in_window,
         "reasons": result.reasons,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/risk/device-check",
+        method="POST",
+        request_summary={"device_id": device_id, "identity_reference": identity_reference},
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -66,6 +93,7 @@ async def device_check(
 # --------------------------------------------------------------------------
 @app.post("/api/v1/risk/fraud-intelligence")
 async def fraud_intelligence_check(
+    background_tasks: BackgroundTasks,
     identity_reference: str = Form(...),
     msisdn: str = Form(...),
     device_id: str = Form(...),
@@ -74,13 +102,27 @@ async def fraud_intelligence_check(
     result = assess_fraud_intelligence(
         identity_reference, msisdn, device_id, _velocity_store, _watchlist
     )
-    return {
+    response = {
         "risk_level": result.risk_level.value,
         "velocity_count_in_window": result.velocity_count_in_window,
         "watchlist_hit": result.watchlist_hit,
         "triggered_indicators": result.triggered_indicators,
         "reasons": result.reasons,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/risk/fraud-intelligence",
+        method="POST",
+        request_summary={
+            "identity_reference": identity_reference,
+            "msisdn": msisdn,
+            "device_id": device_id,
+        },
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -102,7 +144,11 @@ class FraudIntelligenceInput(BaseModel):
 
 
 @app.post("/api/v1/risk/score")
-async def risk_score(device_risk: DeviceRiskInput, fraud_intelligence: FraudIntelligenceInput):
+async def risk_score(
+    background_tasks: BackgroundTasks,
+    device_risk: DeviceRiskInput,
+    fraud_intelligence: FraudIntelligenceInput,
+):
     """
     Combine a device-risk result and a fraud-intelligence result into a
     single risk score. Takes the raw signals as input (rather than
@@ -113,11 +159,24 @@ async def risk_score(device_risk: DeviceRiskInput, fraud_intelligence: FraudInte
         DeviceRiskResult(**device_risk.model_dump()),
         FraudIntelligenceResult(**fraud_intelligence.model_dump()),
     )
-    return {
+    response = {
         "score": result.score,
         "band": result.band.value,
         "contributing_factors": result.contributing_factors,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/risk/score",
+        method="POST",
+        request_summary={
+            "device_risk": device_risk.model_dump(),
+            "fraud_intelligence": fraud_intelligence.model_dump(),
+        },
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -130,7 +189,11 @@ class RiskScoreInput(BaseModel):
 
 
 @app.post("/api/v1/risk/decision")
-async def risk_decision(risk_result: RiskScoreInput, watchlist_hit: bool = False):
+async def risk_decision(
+    background_tasks: BackgroundTasks,
+    risk_result: RiskScoreInput,
+    watchlist_hit: bool = False,
+):
     """Apply APPROVE / REFER / REJECT thresholds to a risk score."""
     result = decide(
         RiskScoreResult(**risk_result.model_dump()),
@@ -140,11 +203,24 @@ async def risk_decision(risk_result: RiskScoreInput, watchlist_hit: bool = False
             watchlist_hit=watchlist_hit,
         ),
     )
-    return {
+    response = {
         "decision": result.decision.value,
         "risk_score": result.risk_score,
         "reasons": result.reasons,
     }
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/risk/decision",
+        method="POST",
+        request_summary={
+            "risk_result": risk_result.model_dump(),
+            "watchlist_hit": watchlist_hit,
+        },
+        response_summary=response,
+        status_code=200,
+    )
+    return response
 
 
 # --------------------------------------------------------------------------
@@ -161,6 +237,7 @@ class FraudCheckResponse(BaseModel):
 
 @app.post("/api/v1/fraud-checks/assess", response_model=FraudCheckResponse)
 async def assess_fraud_checks(
+    background_tasks: BackgroundTasks,
     device_id: str = Form(...),
     identity_reference: str = Form(...),
     msisdn: str = Form(...),
@@ -177,7 +254,7 @@ async def assess_fraud_checks(
     score = calculate_risk_score(device_risk, fraud_intelligence)
     decision = decide(score, fraud_intelligence)
 
-    return FraudCheckResponse(
+    response = FraudCheckResponse(
         decision=decision.decision.value,
         risk_score=score.score,
         risk_band=score.band.value,
@@ -185,6 +262,20 @@ async def assess_fraud_checks(
         fraud_intelligence_risk_level=fraud_intelligence.risk_level.value,
         reasons=decision.reasons,
     )
+    background_tasks.add_task(
+        log_call,
+        service=SERVICE_NAME,
+        endpoint="/api/v1/fraud-checks/assess",
+        method="POST",
+        request_summary={
+            "device_id": device_id,
+            "identity_reference": identity_reference,
+            "msisdn": msisdn,
+        },
+        response_summary=response.model_dump(),
+        status_code=200,
+    )
+    return response
 
 
 @app.get("/health")
