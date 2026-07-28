@@ -1,0 +1,144 @@
+:root {
+  --bg: #ffffff;
+  --fg: #16181d;
+  --muted: #5c6370;
+  --border: #dcdfe4;
+  --accent: #1f6feb;
+  --pass: #1a7f37;
+  --fail: #b42318;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181d;
+    --fg: #e6e8eb;
+    --muted: #9aa1ac;
+    --border: #2d323b;
+    --accent: #58a6ff;
+    --pass: #3fb950;
+    --fail: #f85149;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0 0 0.35rem;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin: 0 0 2rem;
+  font-size: 0.9rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+input {
+  padding: 0.7rem 0.8rem;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+button {
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 1.25rem;
+  color: var(--fail);
+  font-size: 0.9rem;
+}
+
+.result {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+.verdict {
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.verdict.pass {
+  color: var(--pass);
+}
+
+.verdict.fail {
+  color: var(--fail);
+}
+
+.result ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.result li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.92rem;
+}
+
+.result li.pass > span:first-child {
+  color: var(--pass);
+}
+
+.result li.fail > span:first-child {
+  color: var(--fail);
+}
