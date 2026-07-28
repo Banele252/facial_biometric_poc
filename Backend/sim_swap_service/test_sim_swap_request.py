@@ -10,8 +10,12 @@ from sim_swap_request import (
 def test_verification_accepted_and_fraud_approved_creates_order():
     store = InMemoryOrderStore()
     result = create_sim_swap_request(
-        "27821234567", "SIM-SERIAL-1", "9001015011082",
-        VerificationStatus.ACCEPTED, FraudDecision.APPROVE, store,
+        "27821234567",
+        "SIM-SERIAL-1",
+        "9001015011082",
+        VerificationStatus.ACCEPTED,
+        FraudDecision.APPROVE,
+        store,
     )
     assert result.status == OrderStatus.CREATED
     assert result.order is not None
@@ -22,8 +26,12 @@ def test_verification_accepted_and_fraud_approved_creates_order():
 def test_verification_rejected_blocks_order_creation():
     store = InMemoryOrderStore()
     result = create_sim_swap_request(
-        "27821234567", "SIM-SERIAL-1", "9001015011082",
-        VerificationStatus.REJECTED, FraudDecision.APPROVE, store,
+        "27821234567",
+        "SIM-SERIAL-1",
+        "9001015011082",
+        VerificationStatus.REJECTED,
+        FraudDecision.APPROVE,
+        store,
     )
     assert result.status == OrderStatus.REJECTED
     assert result.order is None
@@ -33,8 +41,12 @@ def test_verification_rejected_blocks_order_creation():
 def test_fraud_refer_blocks_order_creation():
     store = InMemoryOrderStore()
     result = create_sim_swap_request(
-        "27821234567", "SIM-SERIAL-1", "9001015011082",
-        VerificationStatus.ACCEPTED, FraudDecision.REFER, store,
+        "27821234567",
+        "SIM-SERIAL-1",
+        "9001015011082",
+        VerificationStatus.ACCEPTED,
+        FraudDecision.REFER,
+        store,
     )
     assert result.status == OrderStatus.REJECTED
     assert result.order is None
@@ -44,8 +56,12 @@ def test_fraud_refer_blocks_order_creation():
 def test_fraud_reject_blocks_order_creation():
     store = InMemoryOrderStore()
     result = create_sim_swap_request(
-        "27821234567", "SIM-SERIAL-1", "9001015011082",
-        VerificationStatus.ACCEPTED, FraudDecision.REJECT, store,
+        "27821234567",
+        "SIM-SERIAL-1",
+        "9001015011082",
+        VerificationStatus.ACCEPTED,
+        FraudDecision.REJECT,
+        store,
     )
     assert result.status == OrderStatus.REJECTED
     assert result.order is None
@@ -54,8 +70,12 @@ def test_fraud_reject_blocks_order_creation():
 def test_both_gates_failing_reports_both_reasons():
     store = InMemoryOrderStore()
     result = create_sim_swap_request(
-        "27821234567", "SIM-SERIAL-1", "9001015011082",
-        VerificationStatus.REJECTED, FraudDecision.REJECT, store,
+        "27821234567",
+        "SIM-SERIAL-1",
+        "9001015011082",
+        VerificationStatus.REJECTED,
+        FraudDecision.REJECT,
+        store,
     )
     assert len(result.reasons) == 2
 
@@ -63,7 +83,11 @@ def test_both_gates_failing_reports_both_reasons():
 def test_rejected_request_does_not_touch_the_store():
     store = InMemoryOrderStore()
     create_sim_swap_request(
-        "27821234567", "SIM-SERIAL-1", "9001015011082",
-        VerificationStatus.REJECTED, FraudDecision.REJECT, store,
+        "27821234567",
+        "SIM-SERIAL-1",
+        "9001015011082",
+        VerificationStatus.REJECTED,
+        FraudDecision.REJECT,
+        store,
     )
     assert store._orders == {}

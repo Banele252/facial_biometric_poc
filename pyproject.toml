@@ -45,6 +45,10 @@ ignore = [
     "SIM105",
     "E501",  # long line in an existing docstring; rewording is a content change
 ]
+"Backend/sim_swap_service/test_*.py" = ["S101"]  # assert is the point of a test
+"Backend/sim_swap_service/main.py" = [
+    "B008",  # Form(...) as a default is the standard FastAPI idiom
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

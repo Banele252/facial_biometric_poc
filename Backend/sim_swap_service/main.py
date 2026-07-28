@@ -13,7 +13,6 @@ Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 from __future__ import annotations
 
 from fastapi import FastAPI, Form, HTTPException
-
 from sim_swap_request import (
     FraudDecision,
     InMemoryOrderStore,

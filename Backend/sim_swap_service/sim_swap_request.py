@@ -23,23 +23,23 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Optional, Protocol
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Protocol
 
 
-class VerificationStatus(str, Enum):
+class VerificationStatus(StrEnum):
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
 
 
-class FraudDecision(str, Enum):
+class FraudDecision(StrEnum):
     APPROVE = "APPROVE"
     REFER = "REFER"
     REJECT = "REJECT"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     CREATED = "CREATED"
     REJECTED = "REJECTED"  # gate failed - no order was created
 
@@ -56,14 +56,14 @@ class SimSwapOrder:
 @dataclass
 class SimSwapRequestResult:
     status: OrderStatus
-    order: Optional[SimSwapOrder]
+    order: SimSwapOrder | None
     reasons: list = field(default_factory=list)
 
 
 class OrderStore(Protocol):
     def save(self, order: SimSwapOrder) -> None: ...
 
-    def get(self, order_id: str) -> Optional[SimSwapOrder]: ...
+    def get(self, order_id: str) -> SimSwapOrder | None: ...
 
 
 class InMemoryOrderStore:
@@ -75,7 +75,7 @@ class InMemoryOrderStore:
     def save(self, order: SimSwapOrder) -> None:
         self._orders[order.order_id] = order
 
-    def get(self, order_id: str) -> Optional[SimSwapOrder]:
+    def get(self, order_id: str) -> SimSwapOrder | None:
         return self._orders.get(order_id)
 
 
@@ -106,7 +106,7 @@ def create_sim_swap_request(
         msisdn=msisdn,
         new_sim_serial=new_sim_serial,
         identity_reference=identity_reference,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
     store.save(order)
 
