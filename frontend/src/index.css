@@ -1,260 +1,924 @@
+/* MTN Biometric Trust Platform — identity verification journey.
+ *
+ * Visual direction: a consumer flow with an audit spine. MTN yellow and black
+ * are brand (CARB slide 6); everything else stays light and instrument-like so
+ * the yellow reads as action rather than decoration. The ledger is the one
+ * loud element — dark, monospace, dense — because the product's premise is
+ * auditable handling of biometric data (CARB slide 20).
+ */
+
 :root {
-  --bg: #ffffff;
-  --fg: #16181d;
-  --muted: #5c6370;
-  --border: #dcdfe4;
-  --accent: #1f6feb;
-  --pass: #1a7f37;
-  --fail: #b42318;
+  /* Brand — from the CARB journey mockups. */
+  --mtn-yellow: #ffcc00;
+  --mtn-yellow-deep: #e0b000;
+  --ink: #101114;
 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color-scheme: light dark;
+  /* Surfaces. Neutral grey-white, deliberately not cream. */
+  --paper: #f5f5f2;
+  --surface: #ffffff;
+  --rule: #e4e4df;
+  --slate: #62666e;
+  /* Small mono text sits at 11px, so this has to clear 4.5:1 on white. */
+  --slate-dim: #6e727a;
+
+  /* Outcomes — the green ticks and states in the mockups. */
+  --pass: #0b7a3b;
+  --pass-wash: #e8f4ec;
+  --fail: #b3261e;
+  --fail-wash: #fbeceb;
+  /* Held for manual review — deliberately not red. */
+  --review: #8a5a00;
+  --review-wash: #fdf3e0;
+
+  /* The ledger surface. */
+  --ledger-bg: #17191d;
+  --ledger-fg: #e8e9ea;
+  /* Same constraint as --slate-dim, against the dark ledger surface. */
+  --ledger-dim: #8b9099;
+  --ledger-rule: #2a2d33;
+
+  --sans: ui-sans-serif, -apple-system, "Segoe UI Variable Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* The utility face carries the data: timestamps, ids, scores, step numbers. */
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", "JetBrains Mono", Menlo,
+    Consolas, monospace;
+
+  /* Wide enough that a selfie id or provider status does not wrap to shreds. */
+  --step-rail: 17.5rem;
+
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16181d;
-    --fg: #e6e8eb;
-    --muted: #9aa1ac;
-    --border: #2d323b;
-    --accent: #58a6ff;
-    --pass: #3fb950;
-    --fail: #f85149;
-  }
-}
-
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 
-main {
-  max-width: 34rem;
-  margin: 0 auto;
-  padding: 3rem 1.25rem;
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-h1 {
-  font-size: 1.6rem;
-  margin: 0 0 0.35rem;
-}
+/* ── Shell ──────────────────────────────────────────────────────────────── */
 
-.subtitle {
-  color: var(--muted);
-  margin: 0 0 2rem;
-  font-size: 0.9rem;
-}
-
-form {
+.shell {
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
 }
 
-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-input {
-  padding: 0.7rem 0.8rem;
-  font-size: 1rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--fg);
-}
-
-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-  border-color: var(--accent);
-}
-
-button {
-  padding: 0.7rem 1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--ink);
   color: #fff;
-  background: var(--accent);
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
 }
 
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.brandmark {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  background: var(--mtn-yellow);
+  color: var(--ink);
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
 }
 
-.error {
-  margin-top: 1.25rem;
-  color: var(--fail);
-  font-size: 0.9rem;
+.topbar-title {
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+  color: #cfd2d6;
 }
 
-.result {
-  margin-top: 2rem;
-  border-top: 1px solid var(--border);
-  padding-top: 1.5rem;
+.topbar-env {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ledger-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.verdict {
+.topbar-env::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pass);
+  box-shadow: 0 0 0 3px rgb(11 122 59 / 0.22);
+}
+
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr var(--step-rail);
+  gap: 0;
+  align-items: stretch;
+}
+
+.stage {
+  padding: 2.25rem 1.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Without this a wide child (the step spine) sets the column's min-content
+   * width and pushes the card past the viewport on narrow screens. */
+  min-width: 0;
+  /* Optically centre the card. Without this the flow sits in the top half of
+   * the viewport with a large void beneath it. Content taller than the stage
+   * still scrolls normally. */
+  justify-content: center;
+}
+
+/* ── Step spine ─────────────────────────────────────────────────────────── */
+/* Numbering is used because the journey genuinely is an ordered sequence —
+ * each stage gates the next (CARB slide 6, steps 3/5/6). */
+
+.spine {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+  max-width: min(27rem, 100%);
+}
+
+.spine-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.spine-step:last-child {
+  flex: 0 0 auto;
+}
+
+.spine-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4375rem;
+  flex: 0 0 auto;
+}
+
+.spine-name {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate-dim);
+  white-space: nowrap;
+}
+
+.spine-step.is-current .spine-name {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.spine-dot {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: var(--surface);
+  color: var(--slate-dim);
+  border: 1px solid var(--rule);
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.spine-line {
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+  /* Half the dot height, so the rule meets the dots' centre rather than the
+   * centre of the dot-plus-label stack. */
+  margin: 0.875rem 0.375rem 0;
+}
+
+.spine-step.is-done .spine-dot {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--mtn-yellow);
+  /* The tick needs more room than the digits to stay legible at this size. */
+  font-size: 0.8125rem;
+}
+
+.spine-step.is-current .spine-dot {
+  background: var(--mtn-yellow);
+  border-color: var(--mtn-yellow);
+  color: var(--ink);
+  box-shadow: 0 0 0 4px rgb(255 204 0 / 0.24);
+}
+
+.spine-step.is-done .spine-line {
+  background: var(--ink);
+}
+
+.spine-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Step card ──────────────────────────────────────────────────────────── */
+/* Phone-width so it reads as the app, without a literal device bezel. */
+
+.card {
+  width: 100%;
+  max-width: min(27rem, 100%);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 1.75rem 1.5rem 1.5rem;
+  box-shadow: 0 1px 2px rgb(16 17 20 / 0.04), 0 8px 24px -12px rgb(16 17 20 / 0.12);
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
   font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slate-dim);
+  margin: 0 0 0.5rem;
+}
+
+.card-title {
+  font-size: clamp(1.375rem, 4vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.022em;
+  line-height: 1.15;
+  margin: 0 0 0.5rem;
+}
+
+.card-lede {
+  color: var(--slate);
+  margin: 0 0 1.5rem;
+}
+
+.field {
+  display: block;
   margin: 0 0 1rem;
 }
 
-.verdict.pass {
-  color: var(--pass);
+.field-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: 0 0 0.375rem;
 }
 
-.verdict.fail {
-  color: var(--fail);
+.field-input {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 1.125rem;
+  letter-spacing: 0.08em;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
-.result ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* Names are prose, not digits — the tabular mono treatment fights them. */
+.field-input-text {
+  font-family: var(--sans);
+  font-size: 1rem;
+  letter-spacing: normal;
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: var(--ink);
+  background: var(--surface);
+}
+
+.field-hint {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--slate-dim);
+  margin: 0.375rem 0 0;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.8125rem 1rem;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 140ms ease, transform 90ms ease, border-color 140ms ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Disabled goes neutral rather than transparent — a faded yellow reads as a
+ * washed-out brand colour rather than an unavailable control. */
+.btn:disabled {
+  cursor: not-allowed;
+  background: #ebebe7;
+  color: var(--slate-dim);
+  border-color: transparent;
+}
+
+.btn-primary {
+  background: var(--mtn-yellow);
+  color: var(--ink);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--mtn-yellow-deep);
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.btn-row {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  margin-top: 0.25rem;
 }
 
-.result li {
+/* ── Capture ────────────────────────────────────────────────────────────── */
+
+.capture-frame {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  max-height: 20rem;
+  margin: 0 auto 1rem;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0d0e10;
+  display: grid;
+  place-items: center;
+}
+
+.capture-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Mirror, so moving left moves the on-screen face left. */
+  transform: scaleX(-1);
+}
+
+/* Corner brackets — the framing guide from the CARB mockup. */
+.capture-bracket {
+  position: absolute;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid var(--mtn-yellow);
+  pointer-events: none;
+}
+
+.capture-frame.is-ready .capture-bracket {
+  border-color: var(--pass);
+}
+
+.capture-bracket.tl {
+  top: 12%;
+  left: 10%;
+  border-right: 0;
+  border-bottom: 0;
+  border-top-left-radius: 6px;
+}
+
+.capture-bracket.tr {
+  top: 12%;
+  right: 10%;
+  border-left: 0;
+  border-bottom: 0;
+  border-top-right-radius: 6px;
+}
+
+.capture-bracket.bl {
+  bottom: 12%;
+  left: 10%;
+  border-right: 0;
+  border-top: 0;
+  border-bottom-left-radius: 6px;
+}
+
+.capture-bracket.br {
+  bottom: 12%;
+  right: 10%;
+  border-left: 0;
+  border-top: 0;
+  border-bottom-right-radius: 6px;
+}
+
+.capture-placeholder {
+  color: var(--ledger-dim);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.capture-upload {
+  display: block;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--slate);
+  margin-top: 0.75rem;
+  cursor: pointer;
+}
+
+.capture-upload input {
+  display: block;
+  margin: 0.5rem auto 0;
+  font-size: 0.75rem;
+  max-width: 100%;
+}
+
+/* ── Verdicts and checks ────────────────────────────────────────────────── */
+
+.verdict {
   display: flex;
-  gap: 0.6rem;
-  align-items: baseline;
-  font-size: 0.92rem;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  border-radius: 10px;
+  margin: 0 0 1.25rem;
+  font-size: 0.875rem;
 }
 
-.result li.pass > span:first-child {
+.verdict-pass {
+  background: var(--pass-wash);
   color: var(--pass);
 }
 
-.result li.fail > span:first-child {
+.verdict-fail {
+  background: var(--fail-wash);
   color: var(--fail);
 }
 
-/* Journey stepper */
-.steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  list-style: none;
-  margin: 0 0 1.75rem;
-  padding: 0;
-  font-size: 0.8rem;
-  color: var(--muted);
+.verdict-mark {
+  font-weight: 800;
+  line-height: 1.4;
 }
 
-.steps li {
-  padding: 0.25rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-
-.steps li.current {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-/* Structural check list reused mid-form */
 .checks {
   list-style: none;
   margin: 1rem 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.92rem;
+  border-top: 1px solid var(--rule);
 }
 
 .checks li {
   display: flex;
-  gap: 0.6rem;
-  align-items: baseline;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.875rem;
 }
 
-.checks li.pass > span:first-child {
+.checks .mark {
+  font-family: var(--mono);
+  font-weight: 700;
+  width: 1rem;
+  text-align: center;
+}
+
+.checks li.pass,
+.checks li.check-pass .mark {
   color: var(--pass);
 }
 
-.checks li.fail > span:first-child {
+/* Per-step results on the outcome screen. Each row states what ran and what it
+ * returned, so a decision is legible without opening the ledger. */
+.checks li.check-pass,
+.checks li.check-fail,
+.checks li.check-review,
+.checks li.check-skipped {
+  align-items: flex-start;
+  color: var(--ink);
+}
+
+.checks li.check-fail .mark {
   color: var(--fail);
 }
 
-/* Selfie capture */
-.capture {
+.checks li.check-review .mark {
+  color: var(--review);
+}
+
+.checks li.check-skipped {
+  color: var(--slate);
+}
+
+.checks li.check-skipped .mark {
+  color: var(--slate-dim);
+}
+
+.check-detail {
+  display: block;
+  color: var(--slate);
+  font-size: 0.8125rem;
+}
+
+/* Progress state for the multi-check verification request. */
+.running {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.running li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.875rem;
+  color: var(--slate);
+}
+
+.running li:last-child {
+  border-bottom: 0;
+}
+
+.running-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--mtn-yellow);
+  flex: 0 0 auto;
+  animation: running-pulse 1.4s ease-in-out infinite;
+}
+
+.running li:nth-child(2) .running-dot {
+  animation-delay: 0.2s;
+}
+.running li:nth-child(3) .running-dot {
+  animation-delay: 0.4s;
+}
+.running li:nth-child(4) .running-dot {
+  animation-delay: 0.6s;
+}
+
+@keyframes running-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.checks li.fail {
+  color: var(--fail);
+}
+
+/* ── Outcome ────────────────────────────────────────────────────────────── */
+
+.outcome-seal {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0 auto 1rem;
+}
+
+.outcome-seal.pass {
+  background: var(--pass-wash);
+  color: var(--pass);
+}
+
+.outcome-seal.fail {
+  background: var(--fail-wash);
+  color: var(--fail);
+}
+
+/* "In Review" from the face match provider — held, not refused. Amber rather
+ * than red so the customer does not read it as a rejection. */
+.outcome-seal.review {
+  background: var(--review-wash);
+  color: var(--review);
+}
+
+/* The face match score, shown as a plain readout rather than a gauge: it is a
+ * provider confidence value, not a metric the customer can act on. */
+.match-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 0.75rem 0.875rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--slate);
+}
+
+.match-readout strong {
+  font-family: var(--mono);
+  font-size: 1rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.outcome-title {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.375rem;
+}
+
+.outcome-reason {
+  text-align: center;
+  color: var(--slate);
+  margin: 0 0 1.5rem;
+}
+
+.inbox {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.inbox li {
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.6875rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.8125rem;
+}
+
+.inbox .chan {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--slate-dim);
+  padding-top: 0.15rem;
+  flex: 0 0 3.25rem;
+}
+
+.section-head {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slate-dim);
+  margin: 1.5rem 0 0.25rem;
+}
+
+.alert {
+  display: flex;
+  gap: 0.5rem;
+  background: var(--fail-wash);
+  color: var(--fail);
+  border-radius: 10px;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.8125rem;
+  margin: 0 0 1rem;
+  width: 100%;
+  max-width: 27rem;
+}
+
+/* ── Ledger — the signature element ─────────────────────────────────────── */
+
+.ledger {
+  background: var(--ledger-bg);
+  color: var(--ledger-fg);
+  padding: 1.25rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-top: 1rem;
+  border-left: 1px solid var(--ledger-rule);
 }
 
-.preview {
-  width: 100%;
-  max-height: 20rem;
-  background: #000;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  object-fit: cover;
-}
-
-.upload {
-  font-size: 0.85rem;
-  color: var(--muted);
+.ledger-head {
+  font-family: var(--mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ledger-dim);
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  font-weight: 400;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.625rem;
+  border-bottom: 1px solid var(--ledger-rule);
 }
 
-.muted {
-  color: var(--muted);
-  font-size: 0.9rem;
+.ledger-count {
+  color: var(--mtn-yellow);
 }
 
-section {
-  margin-top: 1.5rem;
-}
-
-section > button {
-  margin-top: 1rem;
-}
-
-h2 {
-  font-size: 1rem;
-  margin: 1.75rem 0 0.75rem;
-}
-
-.feed {
+.ledger-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 0.625rem;
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  overflow-y: auto;
+}
+
+.ledger-entry {
+  display: grid;
+  grid-template-columns: auto 1fr;
   gap: 0.5rem;
-  font-size: 0.9rem;
+  animation: ledger-in 260ms ease-out;
 }
 
-.feed li {
-  border-left: 3px solid var(--border);
-  padding: 0.35rem 0.75rem;
+.ledger-time {
+  color: var(--ledger-dim);
+  font-variant-numeric: tabular-nums;
 }
 
-.feed li.pass {
-  border-left-color: var(--pass);
+.ledger-label {
+  color: var(--ledger-fg);
+  word-break: break-word;
 }
 
-.feed li.fail {
-  border-left-color: var(--fail);
+.ledger-detail {
+  grid-column: 2;
+  color: var(--ledger-dim);
+  word-break: break-all;
+}
+
+.ledger-entry.is-pass .ledger-label::before {
+  content: "● ";
+  color: #35c46e;
+}
+
+.ledger-entry.is-fail .ledger-label::before {
+  content: "● ";
+  color: #ef6b62;
+}
+
+.ledger-entry.is-info .ledger-label::before {
+  content: "● ";
+  color: var(--mtn-yellow);
+}
+
+.ledger-empty {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  color: var(--ledger-dim);
+  line-height: 1.6;
+  margin: 0 0 1rem;
+}
+
+/* What the ledger will record, shown dimmed before anything has happened.
+ * These are the real stages, so the rail carries information from the start
+ * instead of sitting empty. */
+.ledger-entry.is-pending .ledger-time {
+  color: #4b5058;
+}
+
+.ledger-entry.is-pending .ledger-label {
+  color: #6a7078;
+}
+
+.ledger-entry.is-pending .ledger-label::before {
+  content: "○ ";
+  color: #4b5058;
+}
+
+.ledger-foot {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ledger-rule);
+  font-family: var(--mono);
+  font-size: 0.5625rem;
+  letter-spacing: 0.08em;
+  color: var(--ledger-dim);
+  text-transform: uppercase;
+}
+
+@keyframes ledger-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 60rem) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger {
+    border-left: 0;
+    border-top: 1px solid var(--ledger-rule);
+  }
+
+  .ledger-list {
+    max-height: 14rem;
+  }
+}
+
+@media (max-width: 30rem) {
+  .stage {
+    padding: 1.5rem 1rem 2rem;
+  }
+
+  .card {
+    padding: 1.375rem 1.125rem 1.25rem;
+    border-radius: 12px;
+  }
+
+  /* The stage no longer has room for four nowrap labels. The current step is
+   * already named in the card eyebrow ("Step 1 of 4 · Identity"), so the dots
+   * alone carry position here and nothing is lost. */
+  .spine-name {
+    display: none;
+  }
+
+  .spine-dot {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .spine-line {
+    margin-top: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

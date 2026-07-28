@@ -9,6 +9,10 @@ interface Props {
  * Selfie capture (HT2-11). Prefers the live camera via getUserMedia and falls
  * back to a file upload when the camera is unavailable or permission is denied,
  * so the journey is demonstrable on any device.
+ *
+ * The corner brackets are the framing guide from the CARB journey mockup: they
+ * sit yellow while the camera warms up and turn green once it is delivering
+ * frames, so "ready" is legible without a separate status line.
  */
 export default function SelfieCapture({ onCapture, disabled }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -21,11 +25,13 @@ export default function SelfieCapture({ onCapture, disabled }: Props) {
 
     async function start() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError('Camera not supported; upload a photo instead.')
+        setCameraError('This browser cannot open the camera. Upload a photo instead.')
         return
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+        })
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop())
           return
@@ -36,7 +42,7 @@ export default function SelfieCapture({ onCapture, disabled }: Props) {
           setCameraReady(true)
         }
       } catch {
-        setCameraError('Camera unavailable; upload a photo instead.')
+        setCameraError('Camera access was declined. Upload a photo instead.')
       }
     }
 
@@ -68,18 +74,34 @@ export default function SelfieCapture({ onCapture, disabled }: Props) {
   }
 
   return (
-    <div className="capture">
+    <div>
+      <div className={`capture-frame${cameraReady ? ' is-ready' : ''}`}>
+        {cameraError ? (
+          <p className="capture-placeholder">{cameraError}</p>
+        ) : (
+          <>
+            <video ref={videoRef} autoPlay playsInline muted className="capture-video" />
+            <span className="capture-bracket tl" />
+            <span className="capture-bracket tr" />
+            <span className="capture-bracket bl" />
+            <span className="capture-bracket br" />
+          </>
+        )}
+      </div>
+
       {!cameraError && (
-        <>
-          <video ref={videoRef} autoPlay playsInline muted className="preview" />
-          <button type="button" onClick={captureFromVideo} disabled={disabled || !cameraReady}>
-            Capture selfie
-          </button>
-        </>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={captureFromVideo}
+          disabled={disabled || !cameraReady}
+        >
+          {cameraReady ? 'Scan my face' : 'Starting camera…'}
+        </button>
       )}
-      {cameraError && <p className="muted">{cameraError}</p>}
-      <label className="upload">
-        Or upload a photo
+
+      <label className="capture-upload">
+        {cameraError ? 'Choose a photo' : 'Or upload a photo instead'}
         <input type="file" accept="image/*" onChange={onFile} disabled={disabled} />
       </label>
     </div>
