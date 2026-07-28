@@ -11,6 +11,25 @@ wheels/
 # Virtual environments
 .venv
 .env
+.env.*
+!.env.example
+
+# Test and lint caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Build and scan output
+*.sarif
+sbom*.json
+
+# LaTeX build artefacts
 *.aux
 *.fls
 *.fdb_latexmk
