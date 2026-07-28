@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from document_match import DocumentMatchResult
 from face_match import FaceMatchResult
@@ -37,7 +37,7 @@ if not logger.handlers:
     logger.setLevel(logging.INFO)
 
 
-class DecisionStatus(str, Enum):
+class DecisionStatus(StrEnum):
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
 
@@ -71,14 +71,16 @@ def evaluate_fallback_verification(
     reasons = []
 
     if not document_match_result.overall_match:
-        reasons.extend(document_match_result.reasons or ["Document details did not match user input."])
+        reasons.extend(
+            document_match_result.reasons or ["Document details did not match user input."]
+        )
 
     if not face_match_result.success:
         reasons.append(f"Face match could not be completed: {face_match_result.error}")
     elif not face_match_result.is_match:
         confidence = face_match_result.confidence
         reasons.append(
-            f"Live face did not match the document photo"
+            "Live face did not match the document photo"
             + (f" (confidence {confidence:.2f})." if confidence is not None else ".")
         )
 

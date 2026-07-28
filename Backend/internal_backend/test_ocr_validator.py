@@ -7,7 +7,9 @@ def fake_field(value, confidence=0.98):
     return SimpleNamespace(value_string=value, content=value, confidence=confidence)
 
 
-def make_fake_result(first_name="Thabo", last_name="Nkosi", document_number="9001015011082", dob="1990-01-01"):
+def make_fake_result(
+    first_name="Thabo", last_name="Nkosi", document_number="9001015011082", dob="1990-01-01"
+):
     doc = SimpleNamespace(
         doc_type="idDocument",
         fields={

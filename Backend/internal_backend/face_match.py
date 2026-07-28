@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.75
 
@@ -36,9 +35,9 @@ DEFAULT_CONFIDENCE_THRESHOLD = 0.75
 @dataclass
 class FaceMatchResult:
     success: bool
-    is_match: Optional[bool] = None
-    confidence: Optional[float] = None
-    error: Optional[str] = None
+    is_match: bool | None = None
+    confidence: float | None = None
+    error: str | None = None
 
 
 class FaceMatchError(Exception):
@@ -79,7 +78,9 @@ def match_face_to_document(
     Compare a live selfie against the photo on an ID document / passport.
     """
     if not selfie_bytes or not document_image_bytes:
-        return FaceMatchResult(success=False, error="Both a selfie and a document image are required.")
+        return FaceMatchResult(
+            success=False, error="Both a selfie and a document image are required."
+        )
 
     try:
         client = _get_client()

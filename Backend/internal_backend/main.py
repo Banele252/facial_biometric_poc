@@ -17,14 +17,13 @@ Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 
 from __future__ import annotations
 
-from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile
-from pydantic import BaseModel
-
 from document_match import DocumentType, match_user_input_to_document
+from dotenv import load_dotenv
 from face_match import match_face_to_document
 from fallback_verification_decision import evaluate_fallback_verification
+from fastapi import FastAPI, File, Form, UploadFile
 from ocr_validator import extract_id_fields
+from pydantic import BaseModel
 
 load_dotenv()
 

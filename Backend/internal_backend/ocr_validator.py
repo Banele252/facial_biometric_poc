@@ -23,21 +23,20 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
 
 
 @dataclass
 class OCRResult:
     success: bool
-    document_type: Optional[str] = None          # "idDocument" or "passport"
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    full_name: Optional[str] = None
-    document_number: Optional[str] = None         # SA ID number or passport number
-    date_of_birth: Optional[date] = None
-    country_region: Optional[str] = None
+    document_type: str | None = None  # "idDocument" or "passport"
+    first_name: str | None = None
+    last_name: str | None = None
+    full_name: str | None = None
+    document_number: str | None = None  # SA ID number or passport number
+    date_of_birth: date | None = None
+    country_region: str | None = None
     field_confidence: dict = field(default_factory=dict)
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class OCRValidationError(Exception):

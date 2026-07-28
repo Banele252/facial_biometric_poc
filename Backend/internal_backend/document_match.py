@@ -19,15 +19,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 from ocr_validator import OCRResult
 
 DEFAULT_NAME_SIMILARITY_THRESHOLD = 0.85
 
 
-class DocumentType(str, Enum):
+class DocumentType(StrEnum):
     SA_ID = "SA_ID"
     PASSPORT = "PASSPORT"
 
@@ -35,13 +34,13 @@ class DocumentType(str, Enum):
 @dataclass
 class DocumentMatchResult:
     overall_match: bool
-    id_number_match: Optional[bool]  # None when not applicable (foreign ID holders)
+    id_number_match: bool | None  # None when not applicable (foreign ID holders)
     name_match: bool
     name_similarity: float
     reasons: list = field(default_factory=list)
 
 
-def _normalize(text: Optional[str]) -> str:
+def _normalize(text: str | None) -> str:
     if not text:
         return ""
     return " ".join(text.strip().lower().split())
@@ -58,7 +57,7 @@ def _name_similarity(name_a: str, name_b: str) -> float:
 
 def match_user_input_to_document(
     document_type: DocumentType,
-    user_id_number: Optional[str],
+    user_id_number: str | None,
     user_full_name: str,
     ocr_result: OCRResult,
     name_similarity_threshold: float = DEFAULT_NAME_SIMILARITY_THRESHOLD,
@@ -83,13 +82,14 @@ def match_user_input_to_document(
     name_match = similarity >= name_similarity_threshold
     if not name_match:
         reasons.append(
-            f"Name similarity {similarity:.2f} is below the {name_similarity_threshold:.2f} threshold."
+            f"Name similarity {similarity:.2f} is below the "
+            f"{name_similarity_threshold:.2f} threshold."
         )
 
     # ID number match - only applicable for SA ID holders. Foreign ID holders
     # already had their passport number matched against RICA earlier in the
     # journey, so it is intentionally not re-checked here.
-    id_number_match: Optional[bool] = None
+    id_number_match: bool | None = None
     if document_type == DocumentType.SA_ID:
         id_number_match = _normalize(user_id_number) == _normalize(ocr_result.document_number)
         if not id_number_match:
