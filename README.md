@@ -62,30 +62,52 @@ docker run --rm -p 8000:8000 --env-file .env facial-biometric-poc
 
 ## Verification journey
 
-The SPA walks a customer through the full flow: **validate ID → capture selfie →
-liveness check → verification → decision**, then shows the resulting notification
-and history. `POST /api/v1/verifications` ties it together server-side:
+The SPA walks a customer through **details → selfie → liveness → verification →
+decision**, then shows the resulting notification and history.
+`POST /api/v1/verifications` runs the whole chain server-side and returns both
+the decision and a per-step `checks` array:
 
-1. Structural SA ID validation gate.
-2. Liveness gate — a captured selfie must have passed the liveness check.
-3. Primary verification via VerifyNow. If the provider is unavailable, a
-   structurally valid, live applicant is approved through a **fallback** path
-   flagged for manual review (HT2-15) rather than being failed.
-4. The attempt is recorded (history) and an approval/rejection notification is
-   sent (HT2-24/25).
+1. **ID precheck** — structural and Luhn validation. No external call.
+2. **Liveness gate** — the captured selfie must already have passed.
+3. **RICA registration** — does the claimed name own the number being swapped?
+   A mismatch ends the journey before any provider call, so the fraud case
+   costs nothing. Skipped when no name and number are supplied.
+4. **ID verification** — VerifyNow `said_verification`. A failure here is not
+   fatal; the face match is the stronger signal and still runs.
+5. **Home Affairs face match** — VerifyNow `/facematch`, comparing the selfie
+   against the ID photo Home Affairs holds.
 
-Storage, liveness and notifications are pluggable with dependency-free defaults,
-so the journey runs self-contained and upgrades to the target Azure services by
-setting environment variables (see `.env.example`):
+The attempt is recorded (history), a notification is sent (HT2-24/25), and every
+step is written to the audit trail. If the provider is unreachable, a
+structurally valid, live applicant is approved through a **fallback** path
+flagged for manual review (HT2-15) rather than being failed.
+
+The face match answers `Approved`, `In Review` or `Declined`, so **`review` is a
+third outcome** alongside approved and rejected — an *In Review* customer is
+neither approved nor turned away.
+
+Storage, liveness and notifications are pluggable with dependency-free defaults:
 
 | Concern | Default (no deps) | Target provider | Enable with |
 |---|---|---|---|
-| History / inbox | local SQLite | Azure Postgres | `DATABASE_URL=postgresql://…` (needs `psycopg`) |
+| History / inbox / audit | local SQLite | Azure Postgres | `DATABASE_URL=postgresql://…` (needs `psycopg`) |
 | Selfie storage | local directory | Azure Blob | `AZURE_STORAGE_CONNECTION_STRING` (needs `azure-storage-blob`) |
 | Liveness | `mock` heuristic | Azure AI Face | `LIVENESS_PROVIDER=azure_face` |
 
-The Azure AI Face liveness provider is the CARB-intended implementation; the
-`mock` default keeps the flow demonstrable where that provider is unavailable.
+### Provider mode and credits
+
+`VERIFY_MODE` resolves to `production` **only** on that exact string — anything
+else falls back to `sandbox`, which returns mock responses and consumes no
+credits. The request body cannot choose the mode; it is a deployment decision.
+
+The sandbox rate-limits per IP across its routes, so the two provider calls in a
+journey are separated by `SANDBOX_COOLDOWN_SECONDS` (default 11). A journey
+therefore takes ~15s in sandbox and the SPA shows a progress screen. Production
+has no such limit.
+
+> **See [`docs/architecture.md`](docs/architecture.md)** for what is actually
+> deployed, how the services fit together, the data model, and the gaps against
+> the CARB target.
 
 ## Checks
 
