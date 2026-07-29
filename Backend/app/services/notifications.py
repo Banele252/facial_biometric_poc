@@ -26,9 +26,7 @@ REVIEW = "review"
 class Notifier:
     channel = "base"
 
-    def send(
-        self, id_number: str, type_: str, message: str, attempt_id: str | None = None
-    ) -> dict:
+    def send(self, id_number: str, type_: str, message: str, attempt_id: str | None = None) -> dict:
         raise NotImplementedError
 
 
@@ -37,9 +35,7 @@ class InAppNotifier(Notifier):
 
     channel = "inapp"
 
-    def send(
-        self, id_number: str, type_: str, message: str, attempt_id: str | None = None
-    ) -> dict:
+    def send(self, id_number: str, type_: str, message: str, attempt_id: str | None = None) -> dict:
         # id_number is sensitive; log only that a notification was sent, not the value.
         logger.info("Sending %s notification via %s channel", type_, self.channel)
         return repository.create_notification(
@@ -70,9 +66,8 @@ def notify_decision(
         outcome = "approved" if outcome else "rejected"
 
     if outcome == "approved":
-        message = (
-            "Your identity verification was approved"
-            + (" via fallback review." if method == "fallback" else ".")
+        message = "Your identity verification was approved" + (
+            " via fallback review." if method == "fallback" else "."
         )
         return get_notifier().send(id_number, APPROVAL, message, attempt_id)
 

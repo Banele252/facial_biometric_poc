@@ -51,9 +51,7 @@ def _pass_liveness(client, image: str = None, id_number: str = VALID_ID) -> str:
 
 class TestCaptureSelfie:
     def test_capture_returns_id_and_pending_liveness(self, client):
-        resp = client.post(
-            "/api/v1/selfies", json={"id_number": VALID_ID, "image": _live_image()}
-        )
+        resp = client.post("/api/v1/selfies", json={"id_number": VALID_ID, "image": _live_image()})
         assert resp.status_code == 201
         body = resp.json()
         assert body["selfie_id"]
@@ -182,7 +180,7 @@ class TestVerificationDecision:
         assert body["notification_type"] == "rejection"
 
     def test_face_match_in_review(self, client, monkeypatch):
-        """"In Review" is neither approval nor rejection and must not be coerced."""
+        """ "In Review" is neither approval nor rejection and must not be coerced."""
         self._configure(monkeypatch)
         monkeypatch.setattr(
             "Backend.app.routers.verifications.run_face_match",
@@ -207,9 +205,7 @@ class TestVerificationDecision:
             captured["mode"] = (settings or get_settings()).verify_mode
             return self._match("approved")()
 
-        monkeypatch.setattr(
-            "Backend.app.routers.verifications.run_face_match", _capture_mode
-        )
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _capture_mode)
         selfie_id = _pass_liveness(client)
         client.post(
             "/api/v1/verifications",
@@ -269,9 +265,7 @@ class TestHistoryAndNotifications:
 
         # One approval (fallback) and one rejection (bad ID).
         selfie_id = _pass_liveness(client)
-        client.post(
-            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
-        )
+        client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
         client.post("/api/v1/verifications", json={"id_number": VALID_ID})
 
         all_history = client.get(f"/api/v1/verifications/history?id_number={VALID_ID}").json()
@@ -284,9 +278,7 @@ class TestHistoryAndNotifications:
         assert rejected[0]["status"] == "rejected"
 
     def test_invalid_history_status_filter_rejected(self, client):
-        assert (
-            client.get("/api/v1/verifications/history?status=maybe").status_code == 422
-        )
+        assert client.get("/api/v1/verifications/history?status=maybe").status_code == 422
 
     def test_notifications_inbox(self, client, monkeypatch):
         monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
@@ -294,9 +286,7 @@ class TestHistoryAndNotifications:
         config.get_settings.cache_clear()
 
         selfie_id = _pass_liveness(client)
-        client.post(
-            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
-        )
+        client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
         notifications = client.get(f"/api/v1/notifications?id_number={VALID_ID}").json()
         assert len(notifications) == 1
         assert notifications[0]["type"] == "approval"
@@ -383,9 +373,7 @@ class TestRicaAndAudit:
         monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
         config.get_settings.cache_clear()
         selfie_id = _pass_liveness(client)
-        client.post(
-            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
-        )
+        client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
 
         processes = [e["process"] for e in list_events()]
         assert "journey_started" in processes
@@ -402,3 +390,48 @@ class TestRicaAndAudit:
         payloads = [e["payload"] for e in list_events()]
         assert any("<redacted>" in p for p in payloads)
         assert not any("AAAABBBB" in p for p in payloads)
+
+
+class TestRicaUnregisteredVsMismatch:
+    """An unknown number and a wrong name are different answers."""
+
+    def test_unknown_number_goes_to_review_not_rejection(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0999999999",  # never seeded
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        assert body["status"] == "review"
+        assert body["provider_status"] == "rica_unregistered"
+        assert body["notification_type"] == "review"
+        rica = next(c for c in body["checks"] if c["name"] == "rica")
+        assert rica["status"] == "review"
+
+    def test_wrong_name_is_still_a_rejection(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.post(
+            "/api/v1/rica/records",
+            json={"id_number": VALID_ID, "full_name": "Thabo Nkosi", "msisdn": "0821234567"},
+        )
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Someone Else",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        assert body["status"] == "rejected"
+        assert body["provider_status"] == "rica_mismatch"

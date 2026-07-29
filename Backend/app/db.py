@@ -100,12 +100,10 @@ class Database:
     @staticmethod
     def _connect_sqlite(url: str) -> Any:
         # Accept sqlite:///relative/path.db, sqlite:////abs/path.db and :memory:.
-        target = url[len("sqlite:///"):] if url.startswith("sqlite:///") else url
+        target = url[len("sqlite:///") :] if url.startswith("sqlite:///") else url
         if target and target != ":memory:":
             Path(target).expanduser().parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(
-            target or ":memory:", check_same_thread=False
-        )
+        conn = sqlite3.connect(target or ":memory:", check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
 

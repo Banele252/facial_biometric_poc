@@ -16,11 +16,9 @@ class AuditDB:
         self.password = os.getenv("postgres_password")
         self.database = os.getenv("database")
         self.port = os.getenv("postgres_port")
-        self.environment=os.getenv("environment")
+        self.environment = os.getenv("environment")
         self.conn = None
         self.input_data = input_data if input_data is not None else {}
-
-
 
     def connect(self):
         self.conn = psycopg2.connect(
@@ -47,13 +45,11 @@ class AuditDB:
                 """,
                 (
                     self.environment,
-                    self.input_data.get('process'),
+                    self.input_data.get("process"),
                     json.dumps(self.input_data),
                 ),
             )
             self.conn.commit()
-
-
 
     def close(self):
         if self.conn:
@@ -67,5 +63,6 @@ class AuditDB:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
     def return_data(self):
-        return {"done":"done"}
+        return {"done": "done"}

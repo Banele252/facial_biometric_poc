@@ -103,8 +103,11 @@ def run_face_match(
             "threshold. Sent for manual review."
         )
     elif outcome == APPROVED:
-        detail = f"Face matched the Home Affairs photo (score {score:.0f})." if score is not None \
+        detail = (
+            f"Face matched the Home Affairs photo (score {score:.0f})."
+            if score is not None
             else "Face matched the Home Affairs photo."
+        )
     elif outcome == REJECTED:
         detail = "Face did not match the Home Affairs photo."
     else:

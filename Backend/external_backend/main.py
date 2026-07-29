@@ -109,9 +109,7 @@ def face_match(
     )
 
 
-def passive_liveness(
-    image_base64: str, mode: str = "sandbox", timeout: float = 30.0
-) -> dict:
+def passive_liveness(image_base64: str, mode: str = "sandbox", timeout: float = 30.0) -> dict:
     """Run passive liveness on a face image.
 
     Note: in sandbox this shares a 10-second per-IP cooldown with the other

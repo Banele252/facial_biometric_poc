@@ -18,6 +18,7 @@ class AuditLogRequest(BaseModel):
     `process` is required (used both as its own column and inside the JSON payload).
     `extra` holds any additional fields you want stored in the JSON payload.
     """
+
     process: str = Field(..., description="Name of the process being logged, e.g. 'invoice_import'")
     extra: dict[str, Any] | None = Field(
         default_factory=dict,

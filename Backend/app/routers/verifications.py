@@ -190,9 +190,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
             name="precheck",
             label="ID number precheck",
             status="pass" if valid else "fail",
-            detail="Structure and checksum valid"
-            if valid
-            else f"Failed: {', '.join(failed)}",
+            detail="Structure and checksum valid" if valid else f"Failed: {', '.join(failed)}",
         )
     )
     if not valid:
@@ -262,28 +260,50 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
             msisdn=payload.msisdn.strip(),
         )
         matched = bool(rica.get("matched"))
-        detail = "Matches the SIM registration" if matched else str(
-            rica.get("reason") or "Does not match the SIM registration"
-        )
+        # "No record" and "wrong name" are not the same answer and must not get
+        # the same outcome. A mismatch means someone is claiming a number that
+        # belongs to somebody else — the fraud case, and a rejection. An absent
+        # record only means the registry cannot confirm this number, which is a
+        # gap in the data rather than evidence against the customer, so it goes
+        # to manual review instead of turning them away.
+        unregistered = rica.get("record") is None
+
+        if matched:
+            detail = "Matches the SIM registration"
+        elif unregistered:
+            detail = "No registration found for this number"
+        else:
+            detail = str(rica.get("reason") or "Does not match the SIM registration")
+
         checks.append(
             CheckResult(
                 name="rica",
                 label="RICA registration",
-                status="pass" if matched else "fail",
+                status="pass" if matched else ("review" if unregistered else "fail"),
                 detail=detail,
             )
         )
-        record_event("rica_check", {"id_number": id_number, "matched": matched, "detail": detail})
+        record_event(
+            "rica_check",
+            {
+                "id_number": id_number,
+                "matched": matched,
+                "unregistered": unregistered,
+                "detail": detail,
+            },
+        )
         if not matched:
-            # The claimed identity does not own the number being swapped. That
-            # is the fraud case this journey exists to stop, so it ends here.
             return _finalise(
                 id_number,
-                decision=False,
+                decision=REVIEW if unregistered else REJECTED,
                 method="rica",
-                reason=f"RICA check failed: {detail}",
+                reason=(
+                    "This number is not registered, so the swap needs a manual check."
+                    if unregistered
+                    else f"RICA check failed: {detail}"
+                ),
                 selfie_id=payload.selfie_id,
-                provider_status="rica_mismatch",
+                provider_status="rica_unregistered" if unregistered else "rica_mismatch",
                 mode=mode,
                 checks=checks,
             )
@@ -429,9 +449,7 @@ def _fallback(
 @router.get("/verifications/history", response_model=list[AttemptRecord])
 def verification_history(
     id_number: str | None = Query(None, max_length=32),
-    status_filter: str | None = Query(
-        None, alias="status", pattern="^(approved|rejected|review)$"
-    ),
+    status_filter: str | None = Query(None, alias="status", pattern="^(approved|rejected|review)$"),
     limit: int = Query(50, ge=1, le=200),
 ) -> list[AttemptRecord]:
     rows = repository.list_attempts(
