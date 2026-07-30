@@ -77,7 +77,8 @@ class DeviceAttemptStore(Protocol):
 
     def record_attempt(
         self, device_id: str, identity_reference: str, timestamp: datetime
-    ) -> None: ...
+    ) -> None:
+        pass
 
     def get_attempts_since(self, device_id: str, since: datetime) -> list[DeviceAttempt]: ...
 
