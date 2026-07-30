@@ -18,14 +18,34 @@ class Settings:
     idempotency_key: str | None
     static_dir: Path
     request_timeout_seconds: float
+    # Persistence for verification history and the in-app notification inbox.
+    # Defaults to a local SQLite file; set to a postgresql:// URL to use the
+    # deployed Postgres (requires the optional `psycopg` package).
+    database_url: str
+    # Selfie storage. Defaults to a local directory; set an Azure Blob
+    # connection string + container to store in Blob (requires the optional
+    # `azure-storage-blob` package).
+    selfie_storage_dir: Path
+    azure_storage_connection_string: str | None
+    azure_storage_container: str
+    # Liveness detection. Azure AI Face is the target provider but is
+    # unavailable in the hackathon subscription, so the default is a
+    # dependency-free mock that keeps the flow demonstrable.
+    liveness_provider: str
+    liveness_min_score: float
 
     @property
     def verify_now_configured(self) -> bool:
         return bool(self.verify_now_api_key and self.verify_base_url)
 
+    @property
+    def blob_storage_configured(self) -> bool:
+        return bool(self.azure_storage_connection_string)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    default_db = f"sqlite:///{(Path('data') / 'verifications.db').as_posix()}"
     return Settings(
         verify_now_api_key=os.getenv("VERIFY_NOW_API_KEY"),
         verify_base_url=os.getenv("VERIFY_BASE_URL"),
@@ -33,4 +53,10 @@ def get_settings() -> Settings:
         idempotency_key=os.getenv("Idempotency_id_key"),
         static_dir=Path(os.getenv("STATIC_DIR", "static")),
         request_timeout_seconds=float(os.getenv("REQUEST_TIMEOUT_SECONDS", "15")),
+        database_url=os.getenv("DATABASE_URL", default_db),
+        selfie_storage_dir=Path(os.getenv("SELFIE_STORAGE_DIR", "data/selfies")),
+        azure_storage_connection_string=os.getenv("AZURE_STORAGE_CONNECTION_STRING"),
+        azure_storage_container=os.getenv("AZURE_STORAGE_CONTAINER", "selfies"),
+        liveness_provider=os.getenv("LIVENESS_PROVIDER", "mock"),
+        liveness_min_score=float(os.getenv("LIVENESS_MIN_SCORE", "0.6")),
     )
