@@ -6,16 +6,17 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
+    "fastapi>=0.140.7",
+    "python-multipart>=0.0.32",
     "requests>=2.34.2",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
+    "uvicorn[standard]>=0.51.0",
     "pydantic>=2.9.0",
-    "psycopg[binary]>=3.2.0",
+    "psycopg[binary]>=3.3.4",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3.0",
+    "pytest>=9.1.1",
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
     "ruff>=0.8.0",
@@ -44,6 +45,10 @@ ignore = [
     "B904",
     "SIM105",
     "E501",  # long line in an existing docstring; rewording is a content change
+]
+"Backend/sim_swap_service/test_*.py" = ["S101"]  # assert is the point of a test
+"Backend/sim_swap_service/main.py" = [
+    "B008",  # Form(...) as a default is the standard FastAPI idiom
 ]
 "Backend/rica_service/test_*.py" = ["S101"]  # assert is the point of a test
 
