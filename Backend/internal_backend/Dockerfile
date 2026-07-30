@@ -29,7 +29,7 @@ FROM python:3.12.9-slim-bookworm AS runtime
 
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl bzip2 \
     && rm -rf /var/lib/apt/lists/*
 
 # High UID — Defender for DevOps flags low-numbered UIDs as host-user collisions.
@@ -44,6 +44,19 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8000
 
 COPY --from=deps --chown=10001:10001 /app/.venv /app/.venv
+
+# Pretrained models for the local (non-Azure) face-match fallback - too large
+# to commit to git, so they're fetched at build time instead. Own layer,
+# ahead of the source COPY, so an app code change doesn't force a ~360MB
+# re-download. See Backend/internal_backend/FACE_MATCH_LOCAL.md.
+RUN mkdir -p Backend/internal_backend/models \
+    && curl -fL -o Backend/internal_backend/models/shape_predictor_68_face_landmarks.dat.bz2 \
+        http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2 \
+    && bzip2 -d Backend/internal_backend/models/shape_predictor_68_face_landmarks.dat.bz2 \
+    && curl -fL -o Backend/internal_backend/models/arcfaceresnet100-8.onnx \
+        https://github.com/onnx/models/raw/main/validated/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx \
+    && chown -R 10001:10001 Backend/internal_backend/models
+
 # Only this service's own directory - it runs standalone with flat imports,
 # independent of Backend/app and the other services.
 COPY --chown=10001:10001 Backend/internal_backend/ ./Backend/internal_backend/

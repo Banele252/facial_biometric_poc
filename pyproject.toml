@@ -15,6 +15,12 @@ dependencies = [
     "azure-ai-vision-face>=1.0.0b2",
     "azure-core>=1.30.0",
     "psycopg[binary]>=3.3.4",
+    "pillow>=10.0.0",
+    "numpy>=1.26.0",
+    "dlib>=20.0.0",
+    # Pinned <1.24: newer onnxruntime dropped macOS x86_64 wheels, which would
+    # force a source build on Intel Macs.
+    "onnxruntime>=1.20.0,<1.24.0",
 ]
 
 [dependency-groups]

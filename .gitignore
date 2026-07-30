@@ -37,3 +37,6 @@ RDS.log
 *.synctex.gz
 IRS.log
 fallback_verification_audit.log
+
+# dlib pretrained model - large binary, fetched on demand (see face_match_local.py)
+Backend/internal_backend/models/

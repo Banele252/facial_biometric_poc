@@ -17,13 +17,15 @@ Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from db_logger import ensure_table, log_call, summarize_upload
 from document_match import DocumentType, match_user_input_to_document
 from dotenv import load_dotenv
-from face_match import match_face_to_document
+from face_match import match_face_to_document as match_face_to_document_azure
+from face_match_local import match_face_to_document as match_face_to_document_local
 from fallback_verification_decision import evaluate_fallback_verification
 from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 from ocr_validator import extract_id_fields
@@ -32,6 +34,21 @@ from pydantic import BaseModel
 load_dotenv()
 
 SERVICE_NAME = "internal_backend"
+
+# face_match.py (Azure) is left untouched so it's a no-code-change swap back
+# once Azure Face API's Limited Access approval comes through - set
+# FACE_MATCH_PROVIDER=local in .env to use face_match_local.py instead.
+FACE_MATCH_PROVIDERS = {
+    "azure": match_face_to_document_azure,
+    "local": match_face_to_document_local,
+}
+
+
+def match_face_to_document(selfie_bytes: bytes, document_image_bytes: bytes):
+    provider = os.getenv("FACE_MATCH_PROVIDER", "azure")
+    return FACE_MATCH_PROVIDERS.get(provider, match_face_to_document_azure)(
+        selfie_bytes, document_image_bytes
+    )
 
 
 @asynccontextmanager
