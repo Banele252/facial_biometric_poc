@@ -42,8 +42,7 @@ class SimActivationResult:
 
 
 class SimRegistry(Protocol):
-    def get_active_sim(self, msisdn: str) -> str | None:
-        pass
+    def get_active_sim(self, msisdn: str) -> str | None: ...
 
     def set_active_sim(self, msisdn: str, sim_serial: str) -> None: ...
 
