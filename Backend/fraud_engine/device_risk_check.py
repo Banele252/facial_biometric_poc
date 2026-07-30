@@ -80,7 +80,8 @@ class DeviceAttemptStore(Protocol):
     ) -> None:
         pass
 
-    def get_attempts_since(self, device_id: str, since: datetime) -> list[DeviceAttempt]: ...
+    def get_attempts_since(self, device_id: str, since: datetime) -> list[DeviceAttempt]:
+        pass
 
 
 class InMemoryDeviceAttemptStore:
