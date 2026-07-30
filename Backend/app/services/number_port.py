@@ -29,6 +29,12 @@ from Backend.app.db import get_db, utcnow_iso
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_for_log(value: str) -> str:
+    """Remove line-break characters to prevent log injection."""
+    return value.replace("\r", "").replace("\n", "")
+
+
 # Authorised by MTN; the port itself completes out of band.
 STATUS_PENDING = "PENDING"
 STATUS_REFUSED = "REFUSED"
@@ -81,7 +87,8 @@ def create_port_request(
             utcnow_iso(),
         ),
     )
-    logger.info("Port request %s authorised for target network %s", request_id, target_network)
+    safe_target_network = _sanitize_for_log(target_network)
+    logger.info("Port request %s authorised for target network %s", request_id, safe_target_network)
     return PortResult(
         created=True,
         request_id=request_id,
