@@ -53,7 +53,39 @@ docker run --rm -p 8000:8000 --env-file .env facial-biometric-poc
 | POST   | `/api/v1/validate-id`    | Offline structural validation of an ID number |
 | POST   | `/api/v1/verify-identity`| Verification via the VerifyNow provider       |
 | GET    | `/api/v1/credits`        | Remaining VerifyNow credit balance            |
+| POST   | `/api/v1/selfies`        | Capture a selfie (HT2-11)                      |
+| POST   | `/api/v1/selfies/{id}/liveness` | Run the liveness check on a selfie (HT2-12) |
+| POST   | `/api/v1/verifications`  | Orchestrated decision with fallback (HT2-15)  |
+| GET    | `/api/v1/verifications/history` | Verification attempt history (HT2-14), `?status=rejected` for failures |
+| GET    | `/api/v1/notifications`  | In-app approval/rejection inbox (HT2-24/25)   |
 | GET    | `/docs`                  | OpenAPI UI (disabled in production)           |
+
+## Verification journey
+
+The SPA walks a customer through the full flow: **validate ID → capture selfie →
+liveness check → verification → decision**, then shows the resulting notification
+and history. `POST /api/v1/verifications` ties it together server-side:
+
+1. Structural SA ID validation gate.
+2. Liveness gate — a captured selfie must have passed the liveness check.
+3. Primary verification via VerifyNow. If the provider is unavailable, a
+   structurally valid, live applicant is approved through a **fallback** path
+   flagged for manual review (HT2-15) rather than being failed.
+4. The attempt is recorded (history) and an approval/rejection notification is
+   sent (HT2-24/25).
+
+Storage, liveness and notifications are pluggable with dependency-free defaults,
+so the journey runs self-contained and upgrades to the target Azure services by
+setting environment variables (see `.env.example`):
+
+| Concern | Default (no deps) | Target provider | Enable with |
+|---|---|---|---|
+| History / inbox | local SQLite | Azure Postgres | `DATABASE_URL=postgresql://…` (needs `psycopg`) |
+| Selfie storage | local directory | Azure Blob | `AZURE_STORAGE_CONNECTION_STRING` (needs `azure-storage-blob`) |
+| Liveness | `mock` heuristic | Azure AI Face | `LIVENESS_PROVIDER=azure_face` |
+
+The Azure AI Face liveness provider is the CARB-intended implementation; the
+`mock` default keeps the flow demonstrable where that provider is unavailable.
 
 ## Checks
 

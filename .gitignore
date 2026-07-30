@@ -10,9 +10,13 @@ wheels/
 
 # Virtual environments
 .venv
+.venv-win/
 .env
 .env.*
 !.env.example
+
+# Runtime data (local sqlite DB and selfie storage)
+data/
 
 # Test and lint caches
 .pytest_cache/

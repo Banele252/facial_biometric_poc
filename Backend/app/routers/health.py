@@ -22,4 +22,6 @@ def readyz() -> dict[str, object]:
     return {
         "status": "ready",
         "verify_now_configured": settings.verify_now_configured,
+        "liveness_provider": settings.liveness_provider,
+        "blob_storage_configured": settings.blob_storage_configured,
     }

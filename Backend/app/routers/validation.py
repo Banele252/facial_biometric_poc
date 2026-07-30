@@ -51,17 +51,26 @@ def _run_rule(validator: id_validation, method_name: str) -> bool:
         return False
 
 
+def run_structural_checks(id_number: str) -> tuple[bool, dict[str, bool], list[str]]:
+    """Run every structural rule for an ID number.
+
+    Shared by the /validate-id endpoint and the verification orchestrator so
+    both apply an identical definition of a structurally valid SA ID.
+    """
+    validator = id_validation(id=id_number)
+    checks = {name: _run_rule(validator, method) for name, method in RULES}
+    failed = [name for name, passed in checks.items() if not passed]
+    return (not failed), checks, failed
+
+
 @router.post("/validate-id", response_model=ValidationResponse)
 def validate_id(payload: ValidationRequest) -> ValidationResponse:
     id_number = payload.id_number.strip()
-    validator = id_validation(id=id_number)
-
-    checks = {name: _run_rule(validator, method) for name, method in RULES}
-    failed = [name for name, passed in checks.items() if not passed]
+    valid, checks, failed = run_structural_checks(id_number)
 
     return ValidationResponse(
         id_number_length=len(id_number),
-        valid=not failed,
+        valid=valid,
         checks=checks,
         failed_checks=failed,
     )

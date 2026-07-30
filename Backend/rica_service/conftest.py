@@ -1,26 +1,25 @@
 import os
 
-# Point persistence at an isolated in-memory database and keep selfie storage
-# out of the repo before the app (and its startup init_db) is imported.
+# Point persistence at an isolated in-memory database before the app (and its
+# lifespan get_db() call) is imported.
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 import pytest
+from config import get_settings
+from db import reset_db_cache
 from fastapi.testclient import TestClient
 
-from Backend.app.config import get_settings
-from Backend.app.db import reset_db_cache
-from Backend.app.main import app
+from main import app
 
 
 @pytest.fixture(autouse=True)
-def _isolate_state(tmp_path, monkeypatch):
-    """Give each test a fresh in-memory DB and a private selfie directory.
+def _isolate_state(monkeypatch):
+    """Give each test a fresh in-memory DB.
 
     Settings and the DB connection are cached per-process, so both caches are
     dropped around every test to prevent state leaking between them.
     """
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
-    monkeypatch.setenv("SELFIE_STORAGE_DIR", str(tmp_path / "selfies"))
     get_settings.cache_clear()
     reset_db_cache()
     yield
