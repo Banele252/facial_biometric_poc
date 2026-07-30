@@ -53,7 +53,8 @@ class FraudIntelligenceResult:
 class VelocityStore(Protocol):
     def record_attempt(self, msisdn: str, timestamp: datetime) -> None: ...
 
-    def get_attempts_since(self, msisdn: str, since: datetime) -> list: ...
+    def get_attempts_since(self, msisdn: str, since: datetime) -> list:
+        pass
 
 
 class InMemoryVelocityStore:
