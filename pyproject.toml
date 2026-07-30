@@ -51,6 +51,7 @@ ignore = [
     "B008",  # Form(...) as a default is the standard FastAPI idiom
 ]
 "Backend/rica_service/test_*.py" = ["S101"]  # assert is the point of a test
+"Backend/fraud_engine/test_*.py" = ["S101"]  # assert is the point of a test
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
