@@ -1,3 +1,5 @@
+.DS_Store
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -38,3 +40,4 @@ sbom*.json
 RDS.log
 *.synctex.gz
 IRS.log
+fallback_verification_audit.log
