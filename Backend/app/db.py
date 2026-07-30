@@ -75,6 +75,29 @@ _SCHEMA = (
         created_at TEXT NOT NULL
     )
     """,
+    # Which SIM is currently active on a number. The activation step reads the
+    # previous serial from here and writes the new one, so a restart cannot
+    # make an already-swapped number look un-swapped.
+    """
+    CREATE TABLE IF NOT EXISTS active_sims (
+        msisdn TEXT PRIMARY KEY,
+        sim_serial TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # Number port authorisations. PENDING means MTN authorised the customer's
+    # identity, not that the number has moved — the port completes out of band
+    # with the donor network.
+    """
+    CREATE TABLE IF NOT EXISTS port_requests (
+        request_id TEXT PRIMARY KEY,
+        msisdn TEXT NOT NULL,
+        target_network TEXT NOT NULL,
+        identity_reference TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,

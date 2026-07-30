@@ -483,10 +483,15 @@ class TestFraudAndSimSwap:
         assert body["method"] == "sim_swap"
 
         names = [c["name"] for c in body["checks"]]
-        assert names[-2:] == ["fraud", "sim_swap"]
+        assert names[-3:] == ["fraud", "sim_swap", "activation"]
         swap = next(c for c in body["checks"] if c["name"] == "sim_swap")
         assert swap["status"] == "pass"
         assert "order" in swap["detail"].lower()
+
+        # The swap is only real once the new SIM is live.
+        activation = next(c for c in body["checks"] if c["name"] == "activation")
+        assert activation["status"] == "pass"
+        assert "active" in activation["detail"].lower()
 
     def test_watchlist_hit_rejects_before_any_order_is_created(self, client, monkeypatch):
         """A watchlist match is the one hard rejection the fraud engine makes."""
@@ -520,3 +525,164 @@ class TestFraudAndSimSwap:
         names = [c["name"] for c in body["checks"]]
         assert "fraud" not in names
         assert "sim_swap" not in names
+
+
+class TestActivation:
+    """The step that actually cuts the customer over to the new SIM."""
+
+    def test_activation_records_the_serial_it_replaced(self, client, monkeypatch):
+        """The previous serial is what makes a swap reversible."""
+        from Backend.app.services.sim_swap import DatabaseSimRegistry, activate, create_order
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")  # force db init
+
+        registry = DatabaseSimRegistry()
+        registry.set_active_sim("0821234567", "OLD-SIM-0001")
+
+        swap = create_order(
+            msisdn="0821234567",
+            new_sim_serial="NEW-SIM-0002",
+            identity_reference=VALID_ID,
+            identity_verified=True,
+            fraud_approved=True,
+        )
+        assert swap.created
+
+        result = activate(swap.order_id)
+        assert result.activated
+        assert result.previous_sim_serial == "OLD-SIM-0001"
+        assert result.new_sim_serial == "NEW-SIM-0002"
+        # The registry now points at the new SIM.
+        assert registry.get_active_sim("0821234567") == "NEW-SIM-0002"
+
+    def test_activating_twice_is_refused(self, client, monkeypatch):
+        """An already-activated order must not be re-activated."""
+        from Backend.app.services.sim_swap import activate, create_order
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")
+
+        swap = create_order(
+            msisdn="0730000001",
+            new_sim_serial="SIM-A",
+            identity_reference=VALID_ID,
+            identity_verified=True,
+            fraud_approved=True,
+        )
+        assert activate(swap.order_id).activated is True
+        second = activate(swap.order_id)
+        assert second.activated is False
+        assert "ACTIVATED" in second.detail or "expected CREATED" in second.detail
+
+    def test_activating_an_unknown_order_is_refused(self, client, monkeypatch):
+        from Backend.app.services.sim_swap import activate
+
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")
+        result = activate("does-not-exist")
+        assert result.activated is False
+
+
+class TestNumberPort:
+    """The second high-risk transaction. Same identity chain, different action."""
+
+    @staticmethod
+    def _ready(client, monkeypatch):
+        monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
+        monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
+        config.get_settings.cache_clear()
+        from Backend.app.services.face_match import FaceMatchResult
+
+        monkeypatch.setattr(
+            "Backend.app.routers.verifications.run_face_match",
+            lambda *_a, **_k: FaceMatchResult(
+                outcome="approved",
+                provider_status="Approved",
+                score=88.0,
+                detail="matched",
+                request_id="r1",
+            ),
+        )
+        client.post(
+            "/api/v1/rica/records",
+            json={"id_number": VALID_ID, "full_name": "Thabo Nkosi", "msisdn": "0821234567"},
+        )
+        return _pass_liveness(client)
+
+    def test_port_runs_the_same_identity_chain_then_authorises(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+                "transaction": "number_port",
+                "target_network": "Vodacom",
+                "device_id": "dev-port-1",
+            },
+        ).json()
+
+        assert body["status"] == "approved"
+        assert body["method"] == "number_port"
+        names = [c["name"] for c in body["checks"]]
+        # Identical chain up to the final action.
+        assert names[:5] == ["precheck", "liveness", "rica", "id_verification", "face_match"]
+        assert names[-1] == "number_port"
+        # A port must never create a SIM swap order or activate a SIM.
+        assert "sim_swap" not in names
+        assert "activation" not in names
+
+    def test_port_is_gated_by_rica_like_a_swap(self, client, monkeypatch):
+        self._ready(client, monkeypatch)
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Not The Owner",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+                "transaction": "number_port",
+                "target_network": "Vodacom",
+            },
+        ).json()
+        assert body["status"] == "rejected"
+        assert body["method"] == "rica"
+        assert "number_port" not in [c["name"] for c in body["checks"]]
+
+    def test_port_without_a_target_network_is_skipped_not_failed(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+                "transaction": "number_port",
+            },
+        ).json()
+        assert body["status"] == "approved"
+        port = next(c for c in body["checks"] if c["name"] == "number_port")
+        assert port["status"] == "skipped"
+
+    def test_default_transaction_is_still_a_sim_swap(self, client, monkeypatch):
+        """Existing callers that send no transaction must be unaffected."""
+        selfie_id = self._ready(client, monkeypatch)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0821234567",
+                "new_sim_number": "SIM-9",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+        assert "sim_swap" in [c["name"] for c in body["checks"]]
+        assert "number_port" not in [c["name"] for c in body["checks"]]

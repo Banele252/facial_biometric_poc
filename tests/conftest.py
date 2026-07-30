@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from Backend.app.config import get_settings
 from Backend.app.db import reset_db_cache
 from Backend.app.main import app
+from Backend.app.services.fraud import reset_stores
 from Backend.external_backend.main import VerifyNowError
 
 
@@ -28,6 +29,7 @@ def _isolate_state(tmp_path, monkeypatch):
     monkeypatch.setenv("SANDBOX_COOLDOWN_SECONDS", "0")
     get_settings.cache_clear()
     reset_db_cache()
+    reset_stores()
     yield
     get_settings.cache_clear()
     reset_db_cache()

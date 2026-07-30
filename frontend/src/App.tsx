@@ -15,6 +15,7 @@ import {
   type DecisionStatus,
   type LivenessResponse,
   type NotificationRecord,
+  type TransactionKind,
   type ValidationResponse,
   type VerificationDecision,
 } from './api'
@@ -86,6 +87,8 @@ export default function App() {
   const [fullName, setFullName] = useState('')
   const [msisdn, setMsisdn] = useState('')
   const [newSim, setNewSim] = useState('')
+  const [transaction, setTransaction] = useState<TransactionKind>('sim_swap')
+  const [targetNetwork, setTargetNetwork] = useState('')
   const [validation, setValidation] = useState<ValidationResponse | null>(null)
   const [selfieId, setSelfieId] = useState<string | null>(null)
   const [liveness, setLiveness] = useState<LivenessResponse | null>(null)
@@ -108,6 +111,8 @@ export default function App() {
     setFullName('')
     setMsisdn('')
     setNewSim('')
+    setTransaction('sim_swap')
+    setTargetNetwork('')
     setValidation(null)
     setSelfieId(null)
     setLiveness(null)
@@ -174,6 +179,8 @@ export default function App() {
         msisdn: msisdn.trim() || undefined,
         new_sim_number: newSim.trim() || undefined,
         device_id: getDeviceId(),
+        transaction,
+        target_network: targetNetwork.trim() || undefined,
       })
       setDecision(result)
 
@@ -253,6 +260,26 @@ export default function App() {
               </p>
 
               <form onSubmit={onValidate}>
+                <fieldset className="choice">
+                  <legend className="field-label">What are you doing?</legend>
+                  {(
+                    [
+                      ['sim_swap', 'Swap my SIM'],
+                      ['number_port', 'Move my number'],
+                    ] as [TransactionKind, string][]
+                  ).map(([value, label]) => (
+                    <label key={value} className={transaction === value ? 'is-on' : ''}>
+                      <input
+                        type="radio"
+                        name="transaction"
+                        value={value}
+                        checked={transaction === value}
+                        onChange={() => setTransaction(value)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </fieldset>
                 <label className="field" htmlFor="id-number">
                   <span className="field-label">SA ID number</span>
                   <input
@@ -296,18 +323,32 @@ export default function App() {
                   />
                 </label>
 
-                <label className="field" htmlFor="new-sim">
-                  <span className="field-label">New SIM number</span>
-                  <input
-                    id="new-sim"
-                    className="field-input"
-                    inputMode="numeric"
-                    placeholder="Printed on the new SIM"
-                    maxLength={32}
-                    value={newSim}
-                    onChange={(e) => setNewSim(e.target.value)}
-                  />
-                </label>
+                {transaction === 'sim_swap' ? (
+                  <label className="field" htmlFor="new-sim">
+                    <span className="field-label">New SIM number</span>
+                    <input
+                      id="new-sim"
+                      className="field-input"
+                      inputMode="numeric"
+                      placeholder="Printed on the new SIM"
+                      maxLength={32}
+                      value={newSim}
+                      onChange={(e) => setNewSim(e.target.value)}
+                    />
+                  </label>
+                ) : (
+                  <label className="field" htmlFor="target-network">
+                    <span className="field-label">Network you are moving to</span>
+                    <input
+                      id="target-network"
+                      className="field-input field-input-text"
+                      placeholder="Receiving network"
+                      maxLength={64}
+                      value={targetNetwork}
+                      onChange={(e) => setTargetNetwork(e.target.value)}
+                    />
+                  </label>
+                )}
 
                 <button
                   type="submit"

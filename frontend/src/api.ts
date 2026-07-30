@@ -65,7 +65,13 @@ export interface VerificationInput {
   msisdn?: string
   new_sim_number?: string
   device_id?: string
+  transaction?: TransactionKind
+  target_network?: string
 }
+
+/** The two high-risk transactions the CARB names. They share the whole
+ *  identity chain and differ only in what happens once it passes. */
+export type TransactionKind = 'sim_swap' | 'number_port'
 
 /**
  * A stable per-browser identifier for the fraud engine's repeat-device and

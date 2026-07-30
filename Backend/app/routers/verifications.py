@@ -37,7 +37,8 @@ from Backend.app.services.audit import record_event
 from Backend.app.services.face_match import run_face_match
 from Backend.app.services.fraud import run_fraud_checks
 from Backend.app.services.notifications import notify_decision
-from Backend.app.services.sim_swap import create_order
+from Backend.app.services.number_port import create_port_request
+from Backend.app.services.sim_swap import activate, create_order
 from Backend.external_backend.main import VerifyNowError, verify_said
 from Backend.rica_service.store import verify as rica_verify
 
@@ -58,6 +59,11 @@ class VerificationRequest(BaseModel):
     full_name: str | None = Field(None, max_length=200)
     msisdn: str | None = Field(None, max_length=32, description="Number being swapped")
     new_sim_number: str | None = Field(None, max_length=32)
+    # Which high-risk transaction this journey authorises. The CARB names both;
+    # they share the entire identity chain and differ only in the final action.
+    transaction: str = Field("sim_swap", pattern="^(sim_swap|number_port)$")
+    # Receiving network, for a port. Ignored for a SIM swap.
+    target_network: str | None = Field(None, max_length=64)
     # Client-supplied device identifier, used for repeat-device and velocity
     # signals. Absent means those checks see every request as a new device.
     device_id: str | None = Field(None, max_length=128)
@@ -486,9 +492,15 @@ def _fraud_and_swap(
             checks=checks,
         )
 
-    # 6. Create the SIM swap order (CARB steps 10-11). Needs the number and the
-    #    new SIM; without them the identity journey still succeeded, so this is
-    #    reported as skipped rather than failing the customer.
+    # 6. The transaction itself. Identity is established and fraud is clear, so
+    #    from here the two journeys diverge: a port hands the number to another
+    #    network, a swap issues a new SIM on this one.
+    if payload.transaction == "number_port":
+        return _authorise_port(payload, id_number, mode, checks, match)
+
+    # SIM swap (CARB steps 10-11). Needs the number and the new SIM; without
+    # them the identity journey still succeeded, so this is reported as skipped
+    # rather than failing the customer.
     if not payload.msisdn or not payload.new_sim_number:
         checks.append(
             CheckResult(
@@ -535,11 +547,113 @@ def _fraud_and_swap(
         },
     )
 
+    # 7. Activate the new SIM (CARB step 11). Only once an order exists — this
+    #    is the step that actually cuts the customer over, and it records the
+    #    serial it replaced so the change is reversible.
+    if swap.created and swap.order_id:
+        activation = activate(swap.order_id)
+        checks.append(
+            CheckResult(
+                name="activation",
+                label="New SIM activation",
+                status="pass" if activation.activated else "fail",
+                detail=activation.detail,
+            )
+        )
+        record_event(
+            "sim_activation",
+            {
+                "id_number": id_number,
+                "order_id": swap.order_id,
+                "activated": activation.activated,
+                "status": activation.status,
+                "previous_sim_serial": activation.previous_sim_serial,
+            },
+        )
+        return _finalise(
+            id_number,
+            decision=APPROVED if activation.activated else REVIEW,
+            method="sim_swap" if activation.activated else "sim_swap_pending",
+            reason=activation.detail,
+            selfie_id=payload.selfie_id,
+            provider_status=match.provider_status,
+            match_score=match.score,
+            mode=mode,
+            checks=checks,
+        )
+
     return _finalise(
         id_number,
         decision=APPROVED if swap.created else REVIEW,
         method="sim_swap" if swap.created else "facematch",
         reason=swap.detail,
+        selfie_id=payload.selfie_id,
+        provider_status=match.provider_status,
+        match_score=match.score,
+        mode=mode,
+        checks=checks,
+    )
+
+
+def _authorise_port(
+    payload: VerificationRequest,
+    id_number: str,
+    mode: str,
+    checks: list[CheckResult],
+    match,
+) -> VerificationDecision:
+    """Final action for a number port, once identity and fraud have passed."""
+    if not payload.msisdn or not payload.target_network:
+        checks.append(
+            CheckResult(
+                name="number_port",
+                label="Number port authorisation",
+                status="skipped",
+                detail="Number and receiving network not supplied",
+            )
+        )
+        return _finalise(
+            id_number,
+            decision=APPROVED,
+            method="facematch",
+            reason=match.detail,
+            selfie_id=payload.selfie_id,
+            provider_status=match.provider_status,
+            match_score=match.score,
+            mode=mode,
+            checks=checks,
+        )
+
+    port = create_port_request(
+        msisdn=payload.msisdn.strip(),
+        target_network=payload.target_network.strip(),
+        identity_reference=id_number,
+        identity_verified=True,
+        fraud_approved=True,
+    )
+    checks.append(
+        CheckResult(
+            name="number_port",
+            label="Number port authorisation",
+            status="pass" if port.created else "fail",
+            detail=port.detail,
+        )
+    )
+    record_event(
+        "number_port",
+        {
+            "id_number": id_number,
+            "created": port.created,
+            "request_id": port.request_id,
+            "target_network": payload.target_network,
+            "status": port.status,
+        },
+    )
+    return _finalise(
+        id_number,
+        decision=APPROVED if port.created else REVIEW,
+        method="number_port",
+        reason=port.detail,
         selfie_id=payload.selfie_id,
         provider_status=match.provider_status,
         match_score=match.score,

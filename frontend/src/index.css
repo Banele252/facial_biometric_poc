@@ -922,3 +922,47 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Transaction picker. Two high-risk journeys share this form; the choice
+ * changes only the last field and the final action, so it sits inline rather
+ * than behind a separate entry point. */
+.choice {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.choice legend {
+  padding: 0;
+  margin-bottom: 0.375rem;
+}
+
+.choice label {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.choice label:hover {
+  border-color: var(--ink);
+}
+
+.choice label.is-on {
+  border-color: var(--ink);
+  background: var(--paper);
+  font-weight: 600;
+}
+
+.choice input {
+  accent-color: var(--mtn-yellow-deep);
+  margin: 0;
+}

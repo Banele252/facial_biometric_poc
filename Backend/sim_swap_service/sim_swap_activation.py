@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol
 
-from sim_swap_request import OrderStatus, OrderStore
+from Backend.sim_swap_service.sim_swap_request import OrderStatus, OrderStore
 
 
 class ActivationStatus(StrEnum):

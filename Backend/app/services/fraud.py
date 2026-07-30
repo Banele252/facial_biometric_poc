@@ -65,6 +65,19 @@ class FraudOutcome:
     detail: str
 
 
+def reset_stores() -> None:
+    """Clear the in-process fraud history.
+
+    Velocity and repeat-device signals are cumulative by design, so the stores
+    deliberately persist across requests. Tests need each case to start from a
+    clean slate, otherwise earlier cases push later ones over the thresholds.
+    """
+    global _device_store, _velocity_store, _watchlist
+    _device_store = InMemoryDeviceAttemptStore()
+    _velocity_store = InMemoryVelocityStore()
+    _watchlist = Watchlist()
+
+
 def get_watchlist() -> Watchlist:
     """The shared watchlist, exposed so a demo can seed a known-risky entry."""
     return _watchlist

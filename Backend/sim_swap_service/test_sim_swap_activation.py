@@ -1,5 +1,9 @@
-from sim_swap_activation import ActivationStatus, InMemorySimRegistry, activate_new_sim
-from sim_swap_request import (
+from Backend.sim_swap_service.sim_swap_activation import (
+    ActivationStatus,
+    InMemorySimRegistry,
+    activate_new_sim,
+)
+from Backend.sim_swap_service.sim_swap_request import (
     FraudDecision,
     InMemoryOrderStore,
     VerificationStatus,
