@@ -18,25 +18,30 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from db_logger import ensure_table, log_call
-from decisioning import decide
-from device_risk_check import (
+from dotenv import load_dotenv
+from fastapi import BackgroundTasks, FastAPI, Form
+from pydantic import BaseModel
+
+from Backend.fraud_engine.db_logger import ensure_table, log_call
+from Backend.fraud_engine.decisioning import decide
+from Backend.fraud_engine.device_risk_check import (
     DeviceRiskLevel,
     DeviceRiskResult,
     InMemoryDeviceAttemptStore,
     assess_device_risk,
 )
-from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, Form
-from fraud_intelligence_check import (
+from Backend.fraud_engine.fraud_intelligence_check import (
     FraudIntelligenceResult,
     FraudRiskLevel,
     InMemoryVelocityStore,
     Watchlist,
     assess_fraud_intelligence,
 )
-from pydantic import BaseModel
-from risk_assessment import OverallRiskBand, RiskScoreResult, calculate_risk_score
+from Backend.fraud_engine.risk_assessment import (
+    OverallRiskBand,
+    RiskScoreResult,
+    calculate_risk_score,
+)
 
 load_dotenv()
 

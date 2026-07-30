@@ -6,6 +6,7 @@ import {
   CHECK_LABELS,
   captureSelfie,
   checkLiveness,
+  getDeviceId,
   getHistory,
   getNotifications,
   validateId,
@@ -172,6 +173,7 @@ export default function App() {
         full_name: fullName.trim() || undefined,
         msisdn: msisdn.trim() || undefined,
         new_sim_number: newSim.trim() || undefined,
+        device_id: getDeviceId(),
       })
       setDecision(result)
 

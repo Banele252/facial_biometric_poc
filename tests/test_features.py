@@ -435,3 +435,88 @@ class TestRicaUnregisteredVsMismatch:
 
         assert body["status"] == "rejected"
         assert body["provider_status"] == "rica_mismatch"
+
+
+class TestFraudAndSimSwap:
+    """Journey steps 9-11: fraud checks, then creating the swap order."""
+
+    @staticmethod
+    def _ready(client, monkeypatch, outcome="approved", score=88.0):
+        """Get the journey as far as an approved face match."""
+        monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
+        monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
+        config.get_settings.cache_clear()
+        from Backend.app.services.face_match import FaceMatchResult
+
+        monkeypatch.setattr(
+            "Backend.app.routers.verifications.run_face_match",
+            lambda *_a, **_k: FaceMatchResult(
+                outcome=outcome,
+                provider_status="Approved",
+                score=score,
+                detail="matched",
+                request_id="r1",
+            ),
+        )
+        client.post(
+            "/api/v1/rica/records",
+            json={"id_number": VALID_ID, "full_name": "Thabo Nkosi", "msisdn": "0821234567"},
+        )
+        return _pass_liveness(client)
+
+    def _run(self, client, selfie_id, **extra):
+        body = {
+            "id_number": VALID_ID,
+            "full_name": "Thabo Nkosi",
+            "msisdn": "0821234567",
+            "selfie_id": selfie_id,
+            **extra,
+        }
+        return client.post("/api/v1/verifications", json=body).json()
+
+    def test_clean_request_creates_a_swap_order(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch)
+        body = self._run(
+            client, selfie_id, new_sim_number="8927001234567890", device_id="dev-clean-1"
+        )
+        assert body["status"] == "approved"
+        assert body["method"] == "sim_swap"
+
+        names = [c["name"] for c in body["checks"]]
+        assert names[-2:] == ["fraud", "sim_swap"]
+        swap = next(c for c in body["checks"] if c["name"] == "sim_swap")
+        assert swap["status"] == "pass"
+        assert "order" in swap["detail"].lower()
+
+    def test_watchlist_hit_rejects_before_any_order_is_created(self, client, monkeypatch):
+        """A watchlist match is the one hard rejection the fraud engine makes."""
+        from Backend.app.services.fraud import get_watchlist
+
+        selfie_id = self._ready(client, monkeypatch)
+        get_watchlist().add("dev-blocked")
+        try:
+            body = self._run(
+                client, selfie_id, new_sim_number="8927001234567890", device_id="dev-blocked"
+            )
+            assert body["status"] == "rejected"
+            assert body["method"] == "fraud"
+            # The order step must never have run.
+            assert "sim_swap" not in [c["name"] for c in body["checks"]]
+        finally:
+            get_watchlist()._entries.discard("dev-blocked")
+
+    def test_order_is_skipped_when_sim_details_are_missing(self, client, monkeypatch):
+        """Identity still succeeded — the customer is not failed for this."""
+        selfie_id = self._ready(client, monkeypatch)
+        body = self._run(client, selfie_id, device_id="dev-nosim")
+        assert body["status"] == "approved"
+        swap = next(c for c in body["checks"] if c["name"] == "sim_swap")
+        assert swap["status"] == "skipped"
+
+    def test_a_failed_face_match_never_reaches_fraud_or_swap(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch, outcome="rejected")
+        body = self._run(client, selfie_id, new_sim_number="8927001234567890", device_id="dev-x")
+        assert body["status"] == "rejected"
+        names = [c["name"] for c in body["checks"]]
+        assert "fraud" not in names
+        assert "sim_swap" not in names

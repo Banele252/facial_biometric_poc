@@ -15,10 +15,11 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from db_logger import ensure_table, log_call
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException
-from sim_swap_request import (
+
+from Backend.sim_swap_service.db_logger import ensure_table, log_call
+from Backend.sim_swap_service.sim_swap_request import (
     FraudDecision,
     InMemoryOrderStore,
     VerificationStatus,

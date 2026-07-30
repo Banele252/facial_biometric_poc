@@ -35,7 +35,9 @@ from Backend.app.config import get_settings
 from Backend.app.routers.validation import run_structural_checks
 from Backend.app.services.audit import record_event
 from Backend.app.services.face_match import run_face_match
+from Backend.app.services.fraud import run_fraud_checks
 from Backend.app.services.notifications import notify_decision
+from Backend.app.services.sim_swap import create_order
 from Backend.external_backend.main import VerifyNowError, verify_said
 from Backend.rica_service.store import verify as rica_verify
 
@@ -56,13 +58,18 @@ class VerificationRequest(BaseModel):
     full_name: str | None = Field(None, max_length=200)
     msisdn: str | None = Field(None, max_length=32, description="Number being swapped")
     new_sim_number: str | None = Field(None, max_length=32)
+    # Client-supplied device identifier, used for repeat-device and velocity
+    # signals. Absent means those checks see every request as a new device.
+    device_id: str | None = Field(None, max_length=128)
     selfie_id: str | None = Field(
         None, description="Selfie that passed liveness; required for approval"
     )
-    # The call mode is a deployment decision, not a client one — leaving this
-    # unset uses VERIFY_MODE, which defaults to sandbox. A client cannot make
-    # the service spend credits.
-    mode: str | None = Field(None, pattern="^(production|sandbox)$")
+    # Accepted but ignored — the call mode is a deployment decision, read from
+    # VERIFY_MODE. Kept on the model so existing callers do not break; see the
+    # note in verify() for why it is not honoured.
+    mode: str | None = Field(
+        None, pattern="^(production|sandbox)$", deprecated="Ignored; set VERIFY_MODE instead"
+    )
     allow_fallback: bool = Field(
         True, description="Permit fallback approval when the primary provider is down"
     )
@@ -170,7 +177,12 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
     """
     id_number = payload.id_number.strip()
     settings = get_settings()
-    mode = payload.mode or settings.verify_mode
+    # The call mode is read from configuration only. `payload.mode` is
+    # accepted for backwards compatibility but deliberately ignored: the
+    # face match already reads settings directly, and a client able to move
+    # one of the two provider calls to production but not the other is worse
+    # than a client that cannot move either.
+    mode = settings.verify_mode
     checks: list[CheckResult] = []
 
     record_event(
@@ -392,17 +404,22 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
                 "mode": mode,
             },
         )
-        return _finalise(
-            id_number,
-            decision=match.outcome,
-            method="facematch",
-            reason=match.detail,
-            selfie_id=payload.selfie_id,
-            provider_status=match.provider_status,
-            match_score=match.score,
-            mode=mode,
-            checks=checks,
-        )
+        if match.outcome != APPROVED:
+            # Identity is not established, so the fraud checks and the swap
+            # itself are moot — stop here.
+            return _finalise(
+                id_number,
+                decision=match.outcome,
+                method="facematch",
+                reason=match.detail,
+                selfie_id=payload.selfie_id,
+                provider_status=match.provider_status,
+                match_score=match.score,
+                mode=mode,
+                checks=checks,
+            )
+
+        return _fraud_and_swap(payload, id_number, mode, checks, match)
     except VerifyNowError as exc:
         logger.error("Face match unavailable, considering fallback: %s", exc)
         checks.append(
@@ -415,6 +432,120 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         )
 
     return _fallback(payload, id_number, mode, checks)
+
+
+def _fraud_and_swap(
+    payload: VerificationRequest,
+    id_number: str,
+    mode: str,
+    checks: list[CheckResult],
+    match,
+) -> VerificationDecision:
+    """Steps 9-11: fraud checks, then create the SIM swap order.
+
+    Only reached once identity is established. The fraud engine's own policy
+    stands: a watchlist hit rejects, volume-based risk refers to a human.
+    """
+    # 5. Fraud intelligence (CARB step 9).
+    fraud = run_fraud_checks(
+        identity_reference=id_number,
+        msisdn=(payload.msisdn or "").strip(),
+        device_id=(payload.device_id or "unknown-device").strip(),
+    )
+    checks.append(
+        CheckResult(
+            name="fraud",
+            label="Fraud checks",
+            status="pass"
+            if fraud.outcome == APPROVED
+            else ("fail" if fraud.outcome == REJECTED else "review"),
+            detail=fraud.detail,
+            score=fraud.risk_score,
+        )
+    )
+    record_event(
+        "fraud_checks",
+        {
+            "id_number": id_number,
+            "decision": fraud.decision,
+            "risk_score": fraud.risk_score,
+            "reasons": list(fraud.reasons),
+        },
+    )
+
+    if fraud.outcome != APPROVED:
+        return _finalise(
+            id_number,
+            decision=fraud.outcome,
+            method="fraud",
+            reason=fraud.detail,
+            selfie_id=payload.selfie_id,
+            provider_status=fraud.decision,
+            match_score=match.score,
+            mode=mode,
+            checks=checks,
+        )
+
+    # 6. Create the SIM swap order (CARB steps 10-11). Needs the number and the
+    #    new SIM; without them the identity journey still succeeded, so this is
+    #    reported as skipped rather than failing the customer.
+    if not payload.msisdn or not payload.new_sim_number:
+        checks.append(
+            CheckResult(
+                name="sim_swap",
+                label="SIM swap order",
+                status="skipped",
+                detail="Number and new SIM serial not supplied",
+            )
+        )
+        return _finalise(
+            id_number,
+            decision=APPROVED,
+            method="facematch",
+            reason=match.detail,
+            selfie_id=payload.selfie_id,
+            provider_status=match.provider_status,
+            match_score=match.score,
+            mode=mode,
+            checks=checks,
+        )
+
+    swap = create_order(
+        msisdn=payload.msisdn.strip(),
+        new_sim_serial=payload.new_sim_number.strip(),
+        identity_reference=id_number,
+        identity_verified=True,
+        fraud_approved=True,
+    )
+    checks.append(
+        CheckResult(
+            name="sim_swap",
+            label="SIM swap order",
+            status="pass" if swap.created else "fail",
+            detail=swap.detail,
+        )
+    )
+    record_event(
+        "sim_swap_order",
+        {
+            "id_number": id_number,
+            "created": swap.created,
+            "order_id": swap.order_id,
+            "status": swap.status,
+        },
+    )
+
+    return _finalise(
+        id_number,
+        decision=APPROVED if swap.created else REVIEW,
+        method="sim_swap" if swap.created else "facematch",
+        reason=swap.detail,
+        selfie_id=payload.selfie_id,
+        provider_status=match.provider_status,
+        match_score=match.score,
+        mode=mode,
+        checks=checks,
+    )
 
 
 def _fallback(

@@ -1,6 +1,6 @@
-from decisioning import FraudDecision, decide
-from fraud_intelligence_check import FraudIntelligenceResult, FraudRiskLevel
-from risk_assessment import OverallRiskBand, RiskScoreResult
+from Backend.fraud_engine.decisioning import FraudDecision, decide
+from Backend.fraud_engine.fraud_intelligence_check import FraudIntelligenceResult, FraudRiskLevel
+from Backend.fraud_engine.risk_assessment import OverallRiskBand, RiskScoreResult
 
 
 def make_risk_result(band, score=0, factors=None):

@@ -62,6 +62,19 @@ _SCHEMA = (
         created_at TEXT NOT NULL
     )
     """,
+    # SIM swap orders. Persisted rather than held in the service's in-memory
+    # store: losing the record of a completed swap is worse than never having
+    # written it, because the customer's SIM has already changed.
+    """
+    CREATE TABLE IF NOT EXISTS sim_swap_orders (
+        order_id TEXT PRIMARY KEY,
+        msisdn TEXT NOT NULL,
+        new_sim_serial TEXT NOT NULL,
+        identity_reference TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,

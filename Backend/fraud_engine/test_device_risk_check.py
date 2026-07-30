@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from device_risk_check import (
+from Backend.fraud_engine.device_risk_check import (
     DeviceRiskLevel,
     InMemoryDeviceAttemptStore,
     assess_device_risk,

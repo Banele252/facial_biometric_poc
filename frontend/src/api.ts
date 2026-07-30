@@ -64,6 +64,28 @@ export interface VerificationInput {
   full_name?: string
   msisdn?: string
   new_sim_number?: string
+  device_id?: string
+}
+
+/**
+ * A stable per-browser identifier for the fraud engine's repeat-device and
+ * velocity checks. Deliberately random and local-only — it identifies the
+ * device across attempts, not the person, and never leaves as anything but an
+ * opaque string.
+ */
+export function getDeviceId(): string {
+  const key = 'mtn.deviceId'
+  try {
+    const existing = localStorage.getItem(key)
+    if (existing) return existing
+    const id = `web-${crypto.randomUUID()}`
+    localStorage.setItem(key, id)
+    return id
+  } catch {
+    // Private browsing or storage disabled: the checks still run, they just
+    // see each attempt as a new device.
+    return 'web-unavailable'
+  }
 }
 
 export interface AttemptRecord {

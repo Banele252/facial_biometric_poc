@@ -1,6 +1,6 @@
-from device_risk_check import DeviceRiskLevel, DeviceRiskResult
-from fraud_intelligence_check import FraudIntelligenceResult, FraudRiskLevel
-from risk_assessment import OverallRiskBand, calculate_risk_score
+from Backend.fraud_engine.device_risk_check import DeviceRiskLevel, DeviceRiskResult
+from Backend.fraud_engine.fraud_intelligence_check import FraudIntelligenceResult, FraudRiskLevel
+from Backend.fraud_engine.risk_assessment import OverallRiskBand, calculate_risk_score
 
 
 def make_device_risk(level, reasons=None):

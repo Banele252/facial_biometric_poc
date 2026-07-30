@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fraud_intelligence_check import (
+from Backend.fraud_engine.fraud_intelligence_check import (
     FraudRiskLevel,
     InMemoryVelocityStore,
     Watchlist,

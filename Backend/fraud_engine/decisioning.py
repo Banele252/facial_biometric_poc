@@ -22,8 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from fraud_intelligence_check import FraudIntelligenceResult
-from risk_assessment import OverallRiskBand, RiskScoreResult
+from Backend.fraud_engine.fraud_intelligence_check import FraudIntelligenceResult
+from Backend.fraud_engine.risk_assessment import OverallRiskBand, RiskScoreResult
 
 
 class FraudDecision(StrEnum):

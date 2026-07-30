@@ -21,8 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from device_risk_check import DeviceRiskResult
-from fraud_intelligence_check import FraudIntelligenceResult
+from Backend.fraud_engine.device_risk_check import DeviceRiskResult
+from Backend.fraud_engine.fraud_intelligence_check import FraudIntelligenceResult
 
 LEVEL_POINTS = {
     "LOW": 0,
