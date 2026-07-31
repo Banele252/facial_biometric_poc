@@ -40,3 +40,4 @@ sbom*.json
 RDS.log
 *.synctex.gz
 IRS.log
+fallback_verification_audit.log
