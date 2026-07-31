@@ -42,6 +42,7 @@ class FraudDecision(StrEnum):
 class OrderStatus(StrEnum):
     CREATED = "CREATED"
     REJECTED = "REJECTED"  # gate failed - no order was created
+    ACTIVATED = "ACTIVATED"  # set by sim_swap_activation.py once the new SIM is live
 
 
 @dataclass
@@ -51,6 +52,7 @@ class SimSwapOrder:
     new_sim_serial: str
     identity_reference: str
     created_at: str
+    status: OrderStatus = OrderStatus.CREATED
 
 
 @dataclass

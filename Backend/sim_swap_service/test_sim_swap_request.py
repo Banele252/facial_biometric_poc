@@ -1,4 +1,4 @@
-from sim_swap_request import (
+from Backend.sim_swap_service.sim_swap_request import (
     FraudDecision,
     InMemoryOrderStore,
     OrderStatus,

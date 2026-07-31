@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from db import get_db
+from Backend.rica_service.db import get_db
 
 
 def new_id() -> str:

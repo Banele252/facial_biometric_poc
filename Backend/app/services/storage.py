@@ -103,7 +103,7 @@ class LocalSelfieStorage(SelfieStorage):
     def load(self, reference: str) -> bytes:
         if not reference.startswith("file://"):
             raise StorageError("Reference is not a local file")
-        return Path(reference[len("file://"):]).read_bytes()
+        return Path(reference[len("file://") :]).read_bytes()
 
 
 class AzureBlobSelfieStorage(SelfieStorage):
@@ -141,7 +141,7 @@ class AzureBlobSelfieStorage(SelfieStorage):
 
     def load(self, reference: str) -> bytes:
         # blob://<container>/<blob name...>
-        without_scheme = reference[len("blob://"):]
+        without_scheme = reference[len("blob://") :]
         container, _, blob_name = without_scheme.partition("/")
         client = self._service.get_blob_client(container, blob_name)
         return client.download_blob().readall()

@@ -28,9 +28,7 @@ def get_selfie(selfie_id: str) -> dict[str, Any] | None:
     return get_db().query_one("SELECT * FROM selfies WHERE id = ?", (selfie_id,))
 
 
-def set_selfie_liveness(
-    selfie_id: str, status: str, score: float, provider: str
-) -> None:
+def set_selfie_liveness(selfie_id: str, status: str, score: float, provider: str) -> None:
     get_db().execute(
         "UPDATE selfies SET liveness_status = ?, liveness_score = ?, "
         "liveness_provider = ? WHERE id = ?",
@@ -97,9 +95,7 @@ def create_notification(
     )
 
 
-def list_notifications(
-    id_number: str | None = None, limit: int = 50
-) -> list[dict[str, Any]]:
+def list_notifications(id_number: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
     where = "WHERE id_number = ?" if id_number else ""
     params: tuple[Any, ...] = (id_number, limit) if id_number else (limit,)
     return get_db().query(

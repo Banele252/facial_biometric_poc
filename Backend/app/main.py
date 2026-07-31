@@ -22,6 +22,7 @@ from Backend.app.routers import (
     verification,
     verifications,
 )
+from Backend.rica_service import main as rica_main
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -54,6 +55,10 @@ app.include_router(verification.router)
 app.include_router(selfies.router)
 app.include_router(verifications.router)
 app.include_router(notifications.router)
+# The mock RICA registry ships as its own runnable service, but the
+# infrastructure deploys a single container, so it is mounted here rather than
+# given a second port the platform has nowhere to route.
+app.include_router(rica_main.router)
 
 # Create the history/notification tables on startup. Cheap and idempotent; for
 # the default local SQLite backend this needs no external service.

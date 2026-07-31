@@ -55,6 +55,14 @@ COPY --from=deps --chown=10001:10001 /app/.venv /app/.venv
 COPY --chown=10001:10001 Backend/ ./Backend/
 COPY --from=frontend --chown=10001:10001 /build/dist /app/static
 
+# Writable state for the dependency-free defaults. Without DATABASE_URL the app
+# creates a SQLite file under ./data at startup, and without
+# AZURE_STORAGE_CONNECTION_STRING it writes selfies to ./data/selfies — both
+# inside a WORKDIR the app user cannot write to. The container then exits
+# before binding a port. Deployed environments override both with Postgres and
+# Blob, but the image has to stand up on its own.
+RUN mkdir -p /app/data/selfies && chown -R 10001:10001 /app/data
+
 USER 10001:10001
 
 EXPOSE 8000

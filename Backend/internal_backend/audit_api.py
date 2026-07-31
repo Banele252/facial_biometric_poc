@@ -1,8 +1,8 @@
-from typing import Any, Dict, Optional
+from typing import Any
 
+from audit import AuditDB
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from audit import AuditDB
 
 app = FastAPI(
     title="Audit Log API",
@@ -18,8 +18,9 @@ class AuditLogRequest(BaseModel):
     `process` is required (used both as its own column and inside the JSON payload).
     `extra` holds any additional fields you want stored in the JSON payload.
     """
+
     process: str = Field(..., description="Name of the process being logged, e.g. 'invoice_import'")
-    extra: Optional[Dict[str, Any]] = Field(
+    extra: dict[str, Any] | None = Field(
         default_factory=dict,
         description="Any additional key/value pairs to store alongside 'process' in the payload",
     )
@@ -53,6 +54,6 @@ def create_audit_log(request: AuditLogRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to write audit log: {exc}",
-        )
+        ) from exc
 
     return AuditLogResponse(status="success", detail="Audit record inserted")

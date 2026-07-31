@@ -48,6 +48,56 @@ _SCHEMA = (
         created_at TEXT NOT NULL
     )
     """,
+    # Audit trail. Same table name and columns as
+    # Backend/internal_backend/audit.py writes to, so queries written against
+    # that service still work — but created here and reached over the
+    # application's existing connection, so it needs no second driver
+    # (psycopg2) and no separate postgres_* configuration.
+    """
+    CREATE TABLE IF NOT EXISTS process_log (
+        id TEXT PRIMARY KEY,
+        environment TEXT,
+        process TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    # SIM swap orders. Persisted rather than held in the service's in-memory
+    # store: losing the record of a completed swap is worse than never having
+    # written it, because the customer's SIM has already changed.
+    """
+    CREATE TABLE IF NOT EXISTS sim_swap_orders (
+        order_id TEXT PRIMARY KEY,
+        msisdn TEXT NOT NULL,
+        new_sim_serial TEXT NOT NULL,
+        identity_reference TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    # Which SIM is currently active on a number. The activation step reads the
+    # previous serial from here and writes the new one, so a restart cannot
+    # make an already-swapped number look un-swapped.
+    """
+    CREATE TABLE IF NOT EXISTS active_sims (
+        msisdn TEXT PRIMARY KEY,
+        sim_serial TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # Number port authorisations. PENDING means MTN authorised the customer's
+    # identity, not that the number has moved — the port completes out of band
+    # with the donor network.
+    """
+    CREATE TABLE IF NOT EXISTS port_requests (
+        request_id TEXT PRIMARY KEY,
+        msisdn TEXT NOT NULL,
+        target_network TEXT NOT NULL,
+        identity_reference TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,
@@ -86,12 +136,10 @@ class Database:
     @staticmethod
     def _connect_sqlite(url: str) -> Any:
         # Accept sqlite:///relative/path.db, sqlite:////abs/path.db and :memory:.
-        target = url[len("sqlite:///"):] if url.startswith("sqlite:///") else url
+        target = url[len("sqlite:///") :] if url.startswith("sqlite:///") else url
         if target and target != ":memory:":
             Path(target).expanduser().parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(
-            target or ":memory:", check_same_thread=False
-        )
+        conn = sqlite3.connect(target or ":memory:", check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
 

@@ -15,7 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from config import get_settings
+from Backend.rica_service.config import get_settings
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS rica_records (

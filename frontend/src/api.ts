@@ -30,14 +30,68 @@ export interface LivenessResponse {
   detail: string
 }
 
+/** "review" comes from the face match provider's "In Review" verdict — the
+ *  journey is neither approved nor rejected and needs a human to finish it. */
+export type DecisionStatus = 'approved' | 'rejected' | 'review'
+
+/** One step of the journey, in the order the backend ran it. */
+export interface CheckResult {
+  name: string
+  label: string
+  status: 'pass' | 'fail' | 'review' | 'skipped'
+  detail: string
+  score: number | null
+}
+
 export interface VerificationDecision {
   attempt_id: string
   id_number: string
-  status: 'approved' | 'rejected'
+  status: DecisionStatus
   method: string
   reason: string
   provider_status: string | null
   notification_type: string
+  /** Face match confidence, 0-100. Null when no match ran (e.g. fallback). */
+  match_score: number | null
+  /** "sandbox" or "production" — which VerifyNow mode produced this decision. */
+  mode: string | null
+  checks: CheckResult[]
+}
+
+export interface VerificationInput {
+  id_number: string
+  selfie_id: string
+  full_name?: string
+  msisdn?: string
+  new_sim_number?: string
+  device_id?: string
+  transaction?: TransactionKind
+  target_network?: string
+}
+
+/** The two high-risk transactions the CARB names. They share the whole
+ *  identity chain and differ only in what happens once it passes. */
+export type TransactionKind = 'sim_swap' | 'number_port'
+
+/**
+ * A stable per-browser identifier for the fraud engine's repeat-device and
+ * velocity checks. Deliberately random and local-only — it identifies the
+ * device across attempts, not the person, and never leaves as anything but an
+ * opaque string.
+ */
+export function getDeviceId(): string {
+  const key = 'mtn.deviceId'
+  try {
+    const existing = localStorage.getItem(key)
+    if (existing) return existing
+    const id = `web-${crypto.randomUUID()}`
+    localStorage.setItem(key, id)
+    return id
+  } catch {
+    // Private browsing or storage disabled: the checks still run, they just
+    // see each attempt as a new device.
+    return 'web-unavailable'
+  }
 }
 
 export interface AttemptRecord {
@@ -95,13 +149,16 @@ export function checkLiveness(selfieId: string): Promise<LivenessResponse> {
   return request(`/api/v1/selfies/${selfieId}/liveness`, { method: 'POST' })
 }
 
-export function verifyIdentity(
-  idNumber: string,
-  selfieId: string,
-): Promise<VerificationDecision> {
+/**
+ * Runs the whole journey server-side: precheck, RICA, ID verification and the
+ * Home Affairs face match. Takes ~12s in sandbox, because the provider
+ * rate-limits per IP and the backend waits between its two calls — callers
+ * must show a progress state rather than assuming this is quick.
+ */
+export function verifyIdentity(input: VerificationInput): Promise<VerificationDecision> {
   return request('/api/v1/verifications', {
     method: 'POST',
-    body: JSON.stringify({ id_number: idNumber, selfie_id: selfieId }),
+    body: JSON.stringify(input),
   })
 }
 

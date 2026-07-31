@@ -51,9 +51,7 @@ def _pass_liveness(client, image: str = None, id_number: str = VALID_ID) -> str:
 
 class TestCaptureSelfie:
     def test_capture_returns_id_and_pending_liveness(self, client):
-        resp = client.post(
-            "/api/v1/selfies", json={"id_number": VALID_ID, "image": _live_image()}
-        )
+        resp = client.post("/api/v1/selfies", json={"id_number": VALID_ID, "image": _live_image()})
         assert resp.status_code == 201
         body = resp.json()
         assert body["selfie_id"]
@@ -133,36 +131,88 @@ class TestVerificationGates:
 
 
 class TestVerificationDecision:
-    def test_verifynow_approval(self, client, monkeypatch):
+    @staticmethod
+    def _configure(monkeypatch):
         monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
         monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
         config.get_settings.cache_clear()
+
+    @staticmethod
+    def _match(outcome, score=88.0, provider_status="Approved", detail="ok"):
+        from Backend.app.services.face_match import FaceMatchResult
+
+        return lambda *_a, **_k: FaceMatchResult(
+            outcome=outcome,
+            provider_status=provider_status,
+            score=score,
+            detail=detail,
+            request_id="req-1",
+        )
+
+    def test_face_match_approval(self, client, monkeypatch):
+        self._configure(monkeypatch)
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.verify_said",
-            lambda **_: {"Status": "Success"},
+            "Backend.app.routers.verifications.run_face_match", self._match("approved")
         )
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
         ).json()
         assert body["status"] == "approved"
-        assert body["method"] == "verifynow"
+        assert body["method"] == "facematch"
         assert body["notification_type"] == "approval"
+        assert body["match_score"] == 88.0
+        # Sandbox unless the deployment opts into production.
+        assert body["mode"] == "sandbox"
 
-    def test_verifynow_rejection(self, client, monkeypatch):
-        monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
-        monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
-        config.get_settings.cache_clear()
+    def test_face_match_rejection(self, client, monkeypatch):
+        self._configure(monkeypatch)
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.verify_said",
-            lambda **_: {"Status": "failed"},
+            "Backend.app.routers.verifications.run_face_match",
+            self._match("rejected", score=12.0, provider_status="Declined"),
         )
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
         ).json()
         assert body["status"] == "rejected"
-        assert body["method"] == "verifynow"
+        assert body["method"] == "facematch"
+        assert body["notification_type"] == "rejection"
+
+    def test_face_match_in_review(self, client, monkeypatch):
+        """ "In Review" is neither approval nor rejection and must not be coerced."""
+        self._configure(monkeypatch)
+        monkeypatch.setattr(
+            "Backend.app.routers.verifications.run_face_match",
+            self._match("review", score=68.0, provider_status="In Review"),
+        )
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
+        ).json()
+        assert body["status"] == "review"
+        assert body["provider_status"] == "In Review"
+        assert body["notification_type"] == "review"
+
+    def test_client_cannot_force_production(self, client, monkeypatch):
+        """A client-supplied mode must not be able to spend live credits."""
+        self._configure(monkeypatch)
+        captured = {}
+
+        def _capture_mode(id_number, storage_ref, settings=None):
+            from Backend.app.config import get_settings
+
+            captured["mode"] = (settings or get_settings()).verify_mode
+            return self._match("approved")()
+
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _capture_mode)
+        selfie_id = _pass_liveness(client)
+        client.post(
+            "/api/v1/verifications",
+            json={"id_number": VALID_ID, "selfie_id": selfie_id, "mode": "production"},
+        )
+        # The provider call resolves its mode from settings, not the request body.
+        assert captured["mode"] == "sandbox"
 
     def test_fallback_approval_when_provider_unconfigured(self, client, monkeypatch):
         monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
@@ -183,10 +233,10 @@ class TestVerificationDecision:
         monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
         config.get_settings.cache_clear()
 
-        def _boom(**_):
+        def _boom(*_a, **_k):
             raise VerifyNowError("upstream down")
 
-        monkeypatch.setattr("Backend.app.routers.verifications.verify_said", _boom)
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _boom)
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
@@ -204,7 +254,7 @@ class TestVerificationDecision:
             json={"id_number": VALID_ID, "selfie_id": selfie_id, "allow_fallback": False},
         ).json()
         assert body["status"] == "rejected"
-        assert body["method"] == "verifynow"
+        assert body["method"] == "facematch"
 
 
 class TestHistoryAndNotifications:
@@ -215,9 +265,7 @@ class TestHistoryAndNotifications:
 
         # One approval (fallback) and one rejection (bad ID).
         selfie_id = _pass_liveness(client)
-        client.post(
-            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
-        )
+        client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
         client.post("/api/v1/verifications", json={"id_number": VALID_ID})
 
         all_history = client.get(f"/api/v1/verifications/history?id_number={VALID_ID}").json()
@@ -230,9 +278,7 @@ class TestHistoryAndNotifications:
         assert rejected[0]["status"] == "rejected"
 
     def test_invalid_history_status_filter_rejected(self, client):
-        assert (
-            client.get("/api/v1/verifications/history?status=maybe").status_code == 422
-        )
+        assert client.get("/api/v1/verifications/history?status=maybe").status_code == 422
 
     def test_notifications_inbox(self, client, monkeypatch):
         monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
@@ -240,9 +286,7 @@ class TestHistoryAndNotifications:
         config.get_settings.cache_clear()
 
         selfie_id = _pass_liveness(client)
-        client.post(
-            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
-        )
+        client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
         notifications = client.get(f"/api/v1/notifications?id_number={VALID_ID}").json()
         assert len(notifications) == 1
         assert notifications[0]["type"] == "approval"
@@ -255,3 +299,390 @@ class TestHistoryAndNotifications:
 )
 def test_verification_schema_violations_rejected(client, payload):
     assert client.post("/api/v1/verifications", json=payload).status_code == 422
+
+
+class TestRicaAndAudit:
+    """The RICA gate and the audit trail (journey one, steps 2 and 4)."""
+
+    @staticmethod
+    def _seed_rica(client, id_number, full_name, msisdn):
+        resp = client.post(
+            "/api/v1/rica/records",
+            json={"id_number": id_number, "full_name": full_name, "msisdn": msisdn},
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_rica_mismatch_rejects_before_any_provider_call(self, client, monkeypatch):
+        """A name that does not own the number is the fraud case — stop there."""
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        self._seed_rica(client, VALID_ID, "Thabo Nkosi", "0821234567")
+
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Someone Else",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        assert body["status"] == "rejected"
+        assert body["method"] == "rica"
+        assert body["provider_status"] == "rica_mismatch"
+        names = [c["name"] for c in body["checks"]]
+        # The journey stopped at RICA: no provider steps were even attempted.
+        assert "rica" in names
+        assert "face_match" not in names
+
+    def test_rica_match_lets_the_journey_continue(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        self._seed_rica(client, VALID_ID, "Thabo Nkosi", "0821234567")
+
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "  thabo nkosi  ",  # case and padding must not matter
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        rica = next(c for c in body["checks"] if c["name"] == "rica")
+        assert rica["status"] == "pass"
+        assert body["status"] == "approved"  # fallback, provider unconfigured
+
+    def test_rica_skipped_when_identity_not_supplied(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id}
+        ).json()
+        rica = next(c for c in body["checks"] if c["name"] == "rica")
+        assert rica["status"] == "skipped"
+
+    def test_every_decision_is_audited(self, client, monkeypatch):
+        from Backend.app.services.audit import list_events
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        selfie_id = _pass_liveness(client)
+        client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
+
+        processes = [e["process"] for e in list_events()]
+        assert "journey_started" in processes
+        assert "verification_decision" in processes
+
+    def test_audit_never_stores_the_image(self, client, monkeypatch):
+        """Biometric images are SPI (CARB slide 20) — only references are kept."""
+        from Backend.app.services.audit import list_events, record_event
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")  # force db init
+        record_event("test", {"image": "AAAABBBB", "id_number": VALID_ID})
+        payloads = [e["payload"] for e in list_events()]
+        assert any("<redacted>" in p for p in payloads)
+        assert not any("AAAABBBB" in p for p in payloads)
+
+
+class TestRicaUnregisteredVsMismatch:
+    """An unknown number and a wrong name are different answers."""
+
+    def test_unknown_number_goes_to_review_not_rejection(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0999999999",  # never seeded
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        assert body["status"] == "review"
+        assert body["provider_status"] == "rica_unregistered"
+        assert body["notification_type"] == "review"
+        rica = next(c for c in body["checks"] if c["name"] == "rica")
+        assert rica["status"] == "review"
+
+    def test_wrong_name_is_still_a_rejection(self, client, monkeypatch):
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.post(
+            "/api/v1/rica/records",
+            json={"id_number": VALID_ID, "full_name": "Thabo Nkosi", "msisdn": "0821234567"},
+        )
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Someone Else",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+
+        assert body["status"] == "rejected"
+        assert body["provider_status"] == "rica_mismatch"
+
+
+class TestFraudAndSimSwap:
+    """Journey steps 9-11: fraud checks, then creating the swap order."""
+
+    @staticmethod
+    def _ready(client, monkeypatch, outcome="approved", score=88.0):
+        """Get the journey as far as an approved face match."""
+        monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
+        monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
+        config.get_settings.cache_clear()
+        from Backend.app.services.face_match import FaceMatchResult
+
+        monkeypatch.setattr(
+            "Backend.app.routers.verifications.run_face_match",
+            lambda *_a, **_k: FaceMatchResult(
+                outcome=outcome,
+                provider_status="Approved",
+                score=score,
+                detail="matched",
+                request_id="r1",
+            ),
+        )
+        client.post(
+            "/api/v1/rica/records",
+            json={"id_number": VALID_ID, "full_name": "Thabo Nkosi", "msisdn": "0821234567"},
+        )
+        return _pass_liveness(client)
+
+    def _run(self, client, selfie_id, **extra):
+        body = {
+            "id_number": VALID_ID,
+            "full_name": "Thabo Nkosi",
+            "msisdn": "0821234567",
+            "selfie_id": selfie_id,
+            **extra,
+        }
+        return client.post("/api/v1/verifications", json=body).json()
+
+    def test_clean_request_creates_a_swap_order(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch)
+        body = self._run(
+            client, selfie_id, new_sim_number="8927001234567890", device_id="dev-clean-1"
+        )
+        assert body["status"] == "approved"
+        assert body["method"] == "sim_swap"
+
+        names = [c["name"] for c in body["checks"]]
+        assert names[-3:] == ["fraud", "sim_swap", "activation"]
+        swap = next(c for c in body["checks"] if c["name"] == "sim_swap")
+        assert swap["status"] == "pass"
+        assert "order" in swap["detail"].lower()
+
+        # The swap is only real once the new SIM is live.
+        activation = next(c for c in body["checks"] if c["name"] == "activation")
+        assert activation["status"] == "pass"
+        assert "active" in activation["detail"].lower()
+
+    def test_watchlist_hit_rejects_before_any_order_is_created(self, client, monkeypatch):
+        """A watchlist match is the one hard rejection the fraud engine makes."""
+        from Backend.app.services.fraud import get_watchlist
+
+        selfie_id = self._ready(client, monkeypatch)
+        get_watchlist().add("dev-blocked")
+        try:
+            body = self._run(
+                client, selfie_id, new_sim_number="8927001234567890", device_id="dev-blocked"
+            )
+            assert body["status"] == "rejected"
+            assert body["method"] == "fraud"
+            # The order step must never have run.
+            assert "sim_swap" not in [c["name"] for c in body["checks"]]
+        finally:
+            get_watchlist()._entries.discard("dev-blocked")
+
+    def test_order_is_skipped_when_sim_details_are_missing(self, client, monkeypatch):
+        """Identity still succeeded — the customer is not failed for this."""
+        selfie_id = self._ready(client, monkeypatch)
+        body = self._run(client, selfie_id, device_id="dev-nosim")
+        assert body["status"] == "approved"
+        swap = next(c for c in body["checks"] if c["name"] == "sim_swap")
+        assert swap["status"] == "skipped"
+
+    def test_a_failed_face_match_never_reaches_fraud_or_swap(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch, outcome="rejected")
+        body = self._run(client, selfie_id, new_sim_number="8927001234567890", device_id="dev-x")
+        assert body["status"] == "rejected"
+        names = [c["name"] for c in body["checks"]]
+        assert "fraud" not in names
+        assert "sim_swap" not in names
+
+
+class TestActivation:
+    """The step that actually cuts the customer over to the new SIM."""
+
+    def test_activation_records_the_serial_it_replaced(self, client, monkeypatch):
+        """The previous serial is what makes a swap reversible."""
+        from Backend.app.services.sim_swap import DatabaseSimRegistry, activate, create_order
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")  # force db init
+
+        registry = DatabaseSimRegistry()
+        registry.set_active_sim("0821234567", "OLD-SIM-0001")
+
+        swap = create_order(
+            msisdn="0821234567",
+            new_sim_serial="NEW-SIM-0002",
+            identity_reference=VALID_ID,
+            identity_verified=True,
+            fraud_approved=True,
+        )
+        assert swap.created
+
+        result = activate(swap.order_id)
+        assert result.activated
+        assert result.previous_sim_serial == "OLD-SIM-0001"
+        assert result.new_sim_serial == "NEW-SIM-0002"
+        # The registry now points at the new SIM.
+        assert registry.get_active_sim("0821234567") == "NEW-SIM-0002"
+
+    def test_activating_twice_is_refused(self, client, monkeypatch):
+        """An already-activated order must not be re-activated."""
+        from Backend.app.services.sim_swap import activate, create_order
+
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")
+
+        swap = create_order(
+            msisdn="0730000001",
+            new_sim_serial="SIM-A",
+            identity_reference=VALID_ID,
+            identity_verified=True,
+            fraud_approved=True,
+        )
+        assert activate(swap.order_id).activated is True
+        second = activate(swap.order_id)
+        assert second.activated is False
+        assert "ACTIVATED" in second.detail or "expected CREATED" in second.detail
+
+    def test_activating_an_unknown_order_is_refused(self, client, monkeypatch):
+        from Backend.app.services.sim_swap import activate
+
+        config.get_settings.cache_clear()
+        client.get("/api/v1/notifications")
+        result = activate("does-not-exist")
+        assert result.activated is False
+
+
+class TestNumberPort:
+    """The second high-risk transaction. Same identity chain, different action."""
+
+    @staticmethod
+    def _ready(client, monkeypatch):
+        monkeypatch.setenv("VERIFY_NOW_API_KEY", "k")
+        monkeypatch.setenv("VERIFY_BASE_URL", "https://verify.example.com")
+        config.get_settings.cache_clear()
+        from Backend.app.services.face_match import FaceMatchResult
+
+        monkeypatch.setattr(
+            "Backend.app.routers.verifications.run_face_match",
+            lambda *_a, **_k: FaceMatchResult(
+                outcome="approved",
+                provider_status="Approved",
+                score=88.0,
+                detail="matched",
+                request_id="r1",
+            ),
+        )
+        client.post(
+            "/api/v1/rica/records",
+            json={"id_number": VALID_ID, "full_name": "Thabo Nkosi", "msisdn": "0821234567"},
+        )
+        return _pass_liveness(client)
+
+    def test_port_runs_the_same_identity_chain_then_authorises(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+                "transaction": "number_port",
+                "target_network": "Vodacom",
+                "device_id": "dev-port-1",
+            },
+        ).json()
+
+        assert body["status"] == "approved"
+        assert body["method"] == "number_port"
+        names = [c["name"] for c in body["checks"]]
+        # Identical chain up to the final action.
+        assert names[:5] == ["precheck", "liveness", "rica", "id_verification", "face_match"]
+        assert names[-1] == "number_port"
+        # A port must never create a SIM swap order or activate a SIM.
+        assert "sim_swap" not in names
+        assert "activation" not in names
+
+    def test_port_is_gated_by_rica_like_a_swap(self, client, monkeypatch):
+        self._ready(client, monkeypatch)
+        selfie_id = _pass_liveness(client)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Not The Owner",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+                "transaction": "number_port",
+                "target_network": "Vodacom",
+            },
+        ).json()
+        assert body["status"] == "rejected"
+        assert body["method"] == "rica"
+        assert "number_port" not in [c["name"] for c in body["checks"]]
+
+    def test_port_without_a_target_network_is_skipped_not_failed(self, client, monkeypatch):
+        selfie_id = self._ready(client, monkeypatch)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0821234567",
+                "selfie_id": selfie_id,
+                "transaction": "number_port",
+            },
+        ).json()
+        assert body["status"] == "approved"
+        port = next(c for c in body["checks"] if c["name"] == "number_port")
+        assert port["status"] == "skipped"
+
+    def test_default_transaction_is_still_a_sim_swap(self, client, monkeypatch):
+        """Existing callers that send no transaction must be unaffected."""
+        selfie_id = self._ready(client, monkeypatch)
+        body = client.post(
+            "/api/v1/verifications",
+            json={
+                "id_number": VALID_ID,
+                "full_name": "Thabo Nkosi",
+                "msisdn": "0821234567",
+                "new_sim_number": "SIM-9",
+                "selfie_id": selfie_id,
+            },
+        ).json()
+        assert "sim_swap" in [c["name"] for c in body["checks"]]
+        assert "number_port" not in [c["name"] for c in body["checks"]]
