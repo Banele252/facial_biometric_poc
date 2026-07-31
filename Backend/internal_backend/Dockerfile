@@ -10,6 +10,13 @@
 # ---------- Stage 1: resolve Python dependencies ----------
 FROM python:3.12.9-slim-bookworm AS deps
 
+# dlib ships no prebuilt wheel on any platform (PyPI is sdist-only), so it
+# always compiles from source here - cmake plus a full C/C++ toolchain
+# (build-essential: gcc, g++, make, libc headers) are required.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends cmake build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.5.29 /uv /bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
