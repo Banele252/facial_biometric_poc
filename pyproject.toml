@@ -10,6 +10,11 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.9.0",
+    "insightface>=1.0.1",
+    "opencv-python>=5.0.0.93",
+    "numpy>=2.5.1",
+    "python-multipart>=0.0.32",
+    "onnxruntime>=1.28.0",
 ]
 
 [dependency-groups]

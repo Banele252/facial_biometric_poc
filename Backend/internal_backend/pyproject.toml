@@ -1,0 +1,14 @@
+[project]
+name = "face-api"
+version = "1.0.0"
+description = "FastAPI service for face analysis, ID photo extraction, and face matching using InsightFace"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "insightface",
+    "onnxruntime",
+    "opencv-python-headless",
+    "numpy",
+]
