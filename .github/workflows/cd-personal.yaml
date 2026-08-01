@@ -213,11 +213,20 @@ jobs:
             exit 0
           fi
           echo "First deploy of this service — creating $WEBAPP_NAME on the shared plan."
+          # A Linux Web App has to be created with SOME runtime spec — az
+          # rejects --assign-identity alone. The image is already pushed to
+          # ACR by this point in the run, so pass it here even though pull
+          # will still fail until the next step grants the new identity
+          # AcrPull and reconfigures identity-based pull; that step restarts
+          # the app once it's actually able to pull.
+          IMAGE="${{ steps.infra.outputs.acr_login_server }}/${{ steps.resolve.outputs.service_name }}:${{ github.sha }}"
           az webapp create \
             --name "$WEBAPP_NAME" \
             --resource-group "$RG" \
             --plan "${{ steps.infra.outputs.plan_name }}" \
             --assign-identity '[system]' \
+            --container-image-name "$IMAGE" \
+            --container-registry-url "https://${{ steps.infra.outputs.acr_login_server }}" \
             -o none
 
       - name: Wire ACR pull identity and point at the new image
