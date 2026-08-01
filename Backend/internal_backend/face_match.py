@@ -29,7 +29,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-DEFAULT_CONFIDENCE_THRESHOLD = 0.75
+DEFAULT_CONFIDENCE_THRESHOLD = 0.60
 
 
 @dataclass
