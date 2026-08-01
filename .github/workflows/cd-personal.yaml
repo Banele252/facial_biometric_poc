@@ -1,12 +1,17 @@
 name: CD (personal subscription)
 
-# Deploys to the personal Azure subscription provisioned by
-# facial_biometric_iac/infra-personal (App Service Plan + ACR only — see
-# that template's header for why). Unlike cd.yaml (one enterprise Container
-# App, one image), this workflow deploys ONE service per run, and creates
-# that service's Web App itself the first time it runs — nothing here is
-# pre-registered per service, so testing a new Backend/<whatever>/Dockerfile
-# never means editing this file or touching any other service's Web App.
+# Deploys to the personal Azure subscription. Unlike cd.yaml (one enterprise
+# Container App, one image, infra provisioned separately), this workflow is
+# fully self-provisioning: it creates the resource group, App Service Plan
+# and Container Registry itself if they don't exist yet, then creates the
+# target service's own Web App the first time that service is deployed.
+# Nothing about infra is pre-registered per service or tracked as separate
+# GitHub config — the only things that have to exist before this workflow
+# can run at all are the OIDC identity and its RBAC grants (see
+# infra-personal/bootstrap.sh), because a pipeline can't grant itself its
+# own first credential. Everything downstream of that is self-healing: if a
+# resource is ever deleted or this runs against a fresh subscription, the
+# next run just recreates it.
 #
 # Runs only via workflow_dispatch, from whichever branch you pick in the
 # "Run workflow" UI (the workflow file has to already exist on that branch).
@@ -27,11 +32,16 @@ name: CD (personal subscription)
 # Backend/rica_service, sim_swap_service, fraud_engine and internal_backend
 # already follow) — that's what the health-check step polls.
 #
-# Requires (see infra-personal/bootstrap.sh, which prints these) — this is
-# deliberately the entire secret list:
+# Requires (see infra-personal/bootstrap.sh, which sets these) — this is
+# deliberately the entire list, and there is no separate list of GitHub
+# repo variables to keep in sync:
 #   secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
-#   vars:    AZURE_RESOURCE_GROUP, AZURE_PLAN_NAME, AZURE_NAME_PREFIX,
-#            ACR_NAME, ACR_LOGIN_SERVER
+#
+# AZURE_NAME_PREFIX/AZURE_RESOURCE_GROUP/AZURE_LOCATION below must match
+# what bootstrap.sh was run with — it's the one thing bootstrap.sh and this
+# file each hardcode independently rather than sharing, since nothing else
+# in this workflow can safely learn "which resource group" any other way
+# before it's authenticated.
 #
 # Anything a service itself needs (a database URL, an API key, ...) is never
 # handled here — push it to that service's Web App by hand
@@ -55,6 +65,11 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  AZURE_NAME_PREFIX: fbio
+  AZURE_RESOURCE_GROUP: rg-fbio-personal
+  AZURE_LOCATION: southafricanorth
 
 jobs:
   deploy:
@@ -107,7 +122,7 @@ jobs:
           if [ "$BRANCH" != "main" ]; then
             SERVICE_NAME="${SERVICE_NAME}-$(sanitize "$BRANCH")"
           fi
-          WEBAPP_NAME="$(echo "${{ vars.AZURE_NAME_PREFIX }}-${SERVICE_NAME}" | cut -c1-55 | sed -e 's/-*$//')"
+          WEBAPP_NAME="$(echo "${{ env.AZURE_NAME_PREFIX }}-${SERVICE_NAME}" | cut -c1-55 | sed -e 's/-*$//')"
 
           {
             echo "dockerfile=${DOCKERFILE}"
@@ -126,6 +141,46 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Ensure shared infra exists (resource group, plan, ACR)
+        id: infra
+        run: |
+          set -euo pipefail
+          RG="${{ env.AZURE_RESOURCE_GROUP }}"
+
+          if ! az group show --name "$RG" -o none 2>/dev/null; then
+            echo "Creating resource group $RG..."
+            az group create --name "$RG" --location "${{ env.AZURE_LOCATION }}" -o none
+          fi
+
+          PLAN_NAME="${{ env.AZURE_NAME_PREFIX }}-plan"
+          if ! az appservice plan show --name "$PLAN_NAME" --resource-group "$RG" -o none 2>/dev/null; then
+            echo "Creating App Service Plan $PLAN_NAME..."
+            az appservice plan create \
+              --name "$PLAN_NAME" --resource-group "$RG" \
+              --location "${{ env.AZURE_LOCATION }}" --is-linux --sku B1 -o none
+          fi
+
+          # ACR names are globally unique across all of Azure, not just this
+          # subscription, so a fixed short name risks colliding with someone
+          # else's registry. Deriving the suffix from the subscription ID
+          # keeps the name both deterministic (same name every run) and
+          # collision-resistant, without persisting it anywhere.
+          SUB_ID="$(az account show --query id -o tsv)"
+          ACR_NAME="${{ env.AZURE_NAME_PREFIX }}acr$(echo -n "$SUB_ID" | sha256sum | cut -c1-8)"
+          if ! az acr show --name "$ACR_NAME" -o none 2>/dev/null; then
+            echo "Creating Container Registry $ACR_NAME..."
+            az acr create --name "$ACR_NAME" --resource-group "$RG" --sku Basic --admin-enabled false -o none
+          fi
+          ACR_ID="$(az acr show --name "$ACR_NAME" --query id -o tsv)"
+          ACR_LOGIN_SERVER="$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)"
+
+          {
+            echo "plan_name=${PLAN_NAME}"
+            echo "acr_name=${ACR_NAME}"
+            echo "acr_id=${ACR_ID}"
+            echo "acr_login_server=${ACR_LOGIN_SERVER}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build image
         uses: docker/build-push-action@v6
         with:
@@ -133,18 +188,16 @@ jobs:
           file: ${{ steps.resolve.outputs.dockerfile }}
           push: false
           load: true
-          tags: ${{ vars.ACR_LOGIN_SERVER }}/${{ steps.resolve.outputs.service_name }}:${{ github.sha }}
+          tags: ${{ steps.infra.outputs.acr_login_server }}/${{ steps.resolve.outputs.service_name }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ steps.resolve.outputs.service_name }}
           cache-to: type=gha,mode=max,scope=${{ steps.resolve.outputs.service_name }}
           provenance: false
 
-
-
       - name: Push image
         run: |
           set -euo pipefail
-          az acr login --name "${{ vars.ACR_NAME }}"
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ steps.resolve.outputs.service_name }}"
+          az acr login --name "${{ steps.infra.outputs.acr_name }}"
+          IMAGE="${{ steps.infra.outputs.acr_login_server }}/${{ steps.resolve.outputs.service_name }}"
           docker push "${IMAGE}:${{ github.sha }}"
           docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:latest"
           docker push "${IMAGE}:latest"
@@ -152,7 +205,7 @@ jobs:
       - name: Create the Web App if it doesn't exist yet
         env:
           WEBAPP_NAME: ${{ steps.resolve.outputs.webapp_name }}
-          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          RG: ${{ env.AZURE_RESOURCE_GROUP }}
         run: |
           set -euo pipefail
           if az webapp show --name "$WEBAPP_NAME" --resource-group "$RG" -o none 2>/dev/null; then
@@ -163,30 +216,31 @@ jobs:
           az webapp create \
             --name "$WEBAPP_NAME" \
             --resource-group "$RG" \
-            --plan "${{ vars.AZURE_PLAN_NAME }}" \
+            --plan "${{ steps.infra.outputs.plan_name }}" \
             --assign-identity '[system]' \
             -o none
 
       - name: Wire ACR pull identity and point at the new image
         env:
           WEBAPP_NAME: ${{ steps.resolve.outputs.webapp_name }}
-          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          RG: ${{ env.AZURE_RESOURCE_GROUP }}
         run: |
           set -euo pipefail
-          IMAGE="${{ vars.ACR_LOGIN_SERVER }}/${{ steps.resolve.outputs.service_name }}:${{ github.sha }}"
+          IMAGE="${{ steps.infra.outputs.acr_login_server }}/${{ steps.resolve.outputs.service_name }}:${{ github.sha }}"
 
           PRINCIPAL_ID="$(az webapp identity show --name "$WEBAPP_NAME" --resource-group "$RG" --query principalId -o tsv 2>/dev/null || true)"
           if [ -z "$PRINCIPAL_ID" ] || [ "$PRINCIPAL_ID" = "None" ]; then
             PRINCIPAL_ID="$(az webapp identity assign --name "$WEBAPP_NAME" --resource-group "$RG" --query principalId -o tsv)"
           fi
 
-          # Scoped to just this ACR — see bootstrap.sh's User Access
-          # Administrator grant for why the pipeline is allowed to do this.
+          # Scoped to just this resource group — see bootstrap.sh's User
+          # Access Administrator grant for why the pipeline is allowed to do
+          # this.
           az role assignment create \
             --assignee-object-id "$PRINCIPAL_ID" \
             --assignee-principal-type ServicePrincipal \
             --role AcrPull \
-            --scope "$(az acr show --name '${{ vars.ACR_NAME }}' --query id -o tsv)" \
+            --scope "${{ steps.infra.outputs.acr_id }}" \
             -o none 2>/dev/null || true
 
           az webapp config set --name "$WEBAPP_NAME" --resource-group "$RG" \
@@ -194,7 +248,7 @@ jobs:
           az webapp config container set \
             --name "$WEBAPP_NAME" --resource-group "$RG" \
             --container-image-name "$IMAGE" \
-            --container-registry-url "https://${{ vars.ACR_LOGIN_SERVER }}" \
+            --container-registry-url "https://${{ steps.infra.outputs.acr_login_server }}" \
             -o none
           az webapp config appsettings set --name "$WEBAPP_NAME" --resource-group "$RG" \
             --settings WEBSITES_PORT=8000 PORT=8000 -o none
@@ -225,4 +279,4 @@ jobs:
         env:
           WEBAPP_NAME: ${{ steps.resolve.outputs.webapp_name }}
         run: |
-          echo "**${{ steps.resolve.outputs.service_name }}** deployed: \`${{ vars.ACR_LOGIN_SERVER }}/${{ steps.resolve.outputs.service_name }}:${{ github.sha }}\` -> https://${WEBAPP_NAME}.azurewebsites.net" >> "$GITHUB_STEP_SUMMARY"
+          echo "**${{ steps.resolve.outputs.service_name }}** deployed: \`${{ steps.infra.outputs.acr_login_server }}/${{ steps.resolve.outputs.service_name }}:${{ github.sha }}\` -> https://${WEBAPP_NAME}.azurewebsites.net" >> "$GITHUB_STEP_SUMMARY"
