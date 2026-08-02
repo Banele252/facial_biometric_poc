@@ -64,8 +64,8 @@ def credits() -> dict:
 @router.post("/face-match")
 async def face_match_endpoint(
           id_number: str = Form(...),
-    mode: str = Form("production"),
-    selfie_image: UploadFile = File(...),
+          mode: str = Form("production"),
+          selfie_image: UploadFile = File(...),
                 ) -> dict:
     settings = get_settings()
     if not settings.verify_now_configured:
