@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, Container } from '@/components/ui';
-import { Colors } from '@/theme';
 
 type Choice = 'sa' | 'foreign';
 
