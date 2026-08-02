@@ -57,11 +57,14 @@ COPY --from=frontend --chown=10001:10001 /build/dist /app/static
 
 # Writable state for the dependency-free defaults. Without DATABASE_URL the app
 # creates a SQLite file under ./data at startup, and without
-# AZURE_STORAGE_CONNECTION_STRING it writes selfies to ./data/selfies — both
-# inside a WORKDIR the app user cannot write to. The container then exits
-# before binding a port. Deployed environments override both with Postgres and
+# AZURE_STORAGE_CONNECTION_STRING it writes selfies to ./data/selfies. The
+# fallback verification decision step also writes an audit log under
+# ./data/logs by default (overridable via FALLBACK_AUDIT_LOG_PATH). All three
+# live inside a WORKDIR the app user cannot write to unless created and
+# chowned here — otherwise the container exits before binding a port.
+# Deployed environments override the DB and storage paths with Postgres and
 # Blob, but the image has to stand up on its own.
-RUN mkdir -p /app/data/selfies && chown -R 10001:10001 /app/data
+RUN mkdir -p /app/data/selfies /app/data/logs && chown -R 10001:10001 /app/data
 
 USER 10001:10001
 
