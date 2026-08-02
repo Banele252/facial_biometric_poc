@@ -42,15 +42,15 @@ export interface AttemptRecord {
 export const CHECK_LABELS = ['ID Check', 'Face Match', 'Liveness Check'];
 
 export const captureSelfie = async (_idNumber: string, _dataUrl: string) => ({
-    selfie_id: `selfie_${Date.now()}`,
-    content_type: 'image/jpeg'
+  selfie_id: `selfie_${Date.now()}`,
+  content_type: 'image/jpeg',
 });
 
 export const checkLiveness = async (_selfieId: string): Promise<LivenessResponse> => ({
-    is_live: true,
-    score: 0.98,
-    provider: 'MockProvider',
-    detail: 'Passed liveness check'
+  is_live: true,
+  score: 0.98,
+  provider: 'MockProvider',
+  detail: 'Passed liveness check',
 });
 
 export const getDeviceId = async () => 'mock_device_123';
@@ -60,17 +60,17 @@ export const getHistory = async (_idNumber: string): Promise<AttemptRecord[]> =>
 export const getNotifications = async (_idNumber: string): Promise<NotificationRecord[]> => ([]);
 
 export const validateId = async (idNumber: string): Promise<ValidationResponse> => ({
-    valid: true,
-    id_number_length: idNumber.length,
-    failed_checks: []
+  valid: true,
+  id_number_length: idNumber.length,
+  failed_checks: [],
 });
 
 export const verifyIdentity = async (_payload: any): Promise<VerificationDecision> => ({
-    status: 'approved',
-    method: 'auto',
-    checks: [
-        { label: 'ID Check', status: 'pass', score: 100 },
-        { label: 'Face Match', status: 'pass', score: 99 },
-        { label: 'Liveness Check', status: 'pass', score: 98 }
-    ]
+  status: 'approved',
+  method: 'auto',
+  checks: [
+    { label: 'ID Check', status: 'pass', score: 100 },
+    { label: 'Face Match', status: 'pass', score: 99 },
+    { label: 'Liveness Check', status: 'pass', score: 98 },
+  ],
 });
