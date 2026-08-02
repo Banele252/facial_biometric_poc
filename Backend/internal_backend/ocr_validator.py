@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 
 @dataclass
@@ -74,13 +74,51 @@ def _analyze_document(document_bytes: bytes):
     return poller.result()
 
 
+# Document Intelligence puts a field's parsed value on a type-specific
+# attribute - a date field populates `value_date` and leaves `value_string`
+# empty, a country field populates `value_country_region`, and so on. Reading
+# only `value_string` therefore silently misses every non-string field and
+# falls through to `content`, which is the raw text exactly as printed on the
+# document ("15 MAR 90", "ZAF") rather than a parsed value.
+_TYPED_VALUE_ATTRS = ("value_date", "value_country_region", "value_string")
+
+
 def _field_value(fields: dict, name: str):
     f = fields.get(name)
     if f is None:
         return None, None
-    value = getattr(f, "value_string", None) or getattr(f, "content", None)
     confidence = getattr(f, "confidence", None)
-    return value, confidence
+    for attr in _TYPED_VALUE_ATTRS:
+        value = getattr(f, attr, None)
+        if value is not None:
+            return value, confidence
+    # Nothing typed - fall back to the raw OCR text for this field.
+    return getattr(f, "content", None), confidence
+
+
+def _coerce_date(value) -> date | None:
+    """Normalise a Document Intelligence date field to a `date`.
+
+    `value_date` already gives a real date object. The fallback path only
+    matters when Azure could not type the field and we are left with the raw
+    text off the document, which is rarely ISO-formatted - so the common
+    printed layouts are tried explicitly. Day-first ordering throughout:
+    these are SA IDs and passports, not US documents.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%d %b %Y", "%d %B %Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def extract_id_fields(document_bytes: bytes) -> OCRResult:
@@ -112,15 +150,9 @@ def extract_id_fields(document_bytes: bytes) -> OCRResult:
     last_name, ln_conf = _field_value(fields, "LastName")
     document_number, dn_conf = _field_value(fields, "DocumentNumber")
     dob_raw, dob_conf = _field_value(fields, "DateOfBirth")
-    country_region, _ = _field_value(fields, "CountryRegion")
+    country_region, cr_conf = _field_value(fields, "CountryRegion")
 
-    dob = None
-    if dob_raw:
-        try:
-            # Document Intelligence normally returns ISO-formatted dates.
-            dob = date.fromisoformat(str(dob_raw)[:10])
-        except ValueError:
-            dob = None
+    dob = _coerce_date(dob_raw) if dob_raw else None
 
     full_name = " ".join(part for part in [first_name, last_name] if part) or None
 
@@ -138,5 +170,6 @@ def extract_id_fields(document_bytes: bytes) -> OCRResult:
             "last_name": ln_conf,
             "document_number": dn_conf,
             "date_of_birth": dob_conf,
+            "country_region": cr_conf,
         },
     )

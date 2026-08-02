@@ -23,7 +23,7 @@ from enum import StrEnum
 
 from ocr_validator import OCRResult
 
-DEFAULT_NAME_SIMILARITY_THRESHOLD = 0.85
+DEFAULT_NAME_SIMILARITY_THRESHOLD = 0.60
 
 
 class DocumentType(StrEnum):
