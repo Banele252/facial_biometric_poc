@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Button, Container } from '@/components/ui';
+import { Button } from '@/components/ui';
 
 type Choice = 'sa' | 'foreign';
 
