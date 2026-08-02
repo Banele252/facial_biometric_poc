@@ -26,8 +26,8 @@ import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from document_match import DocumentMatchResult
-from face_match import FaceMatchResult
+from Backend.internal_backend.document_match import DocumentMatchResult
+from Backend.internal_backend.face_match import FaceMatchResult
 
 logger = logging.getLogger("fallback_verification_decision")
 if not logger.handlers:

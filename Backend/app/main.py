@@ -21,7 +21,9 @@ from Backend.app.routers import (
     validation,
     verification,
     verifications,
+    external_validation,
 )
+from Backend.app.routers import external_validation
 from Backend.rica_service import main as rica_main
 
 logging.basicConfig(
@@ -59,6 +61,7 @@ app.include_router(notifications.router)
 # infrastructure deploys a single container, so it is mounted here rather than
 # given a second port the platform has nowhere to route.
 app.include_router(rica_main.router)
+app.include_router(external_validation.router)
 
 # Create the history/notification tables on startup. Cheap and idempotent; for
 # the default local SQLite backend this needs no external service.

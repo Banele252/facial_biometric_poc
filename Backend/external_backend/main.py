@@ -10,6 +10,7 @@ import os
 
 import requests
 from dotenv import load_dotenv
+import uuid
 
 MY_CREDITS_ENDPOINT = "/my_credits"
 VERIFY_ENDPOINT = "/verify"
@@ -35,7 +36,7 @@ def _headers(mode: str = "production") -> dict[str, str]:
     # different sandbox requests would be wrong anyway, since a key may only be
     # replayed for an identical body.
     if mode != "sandbox":
-        headers["Idempotency-Key"] = os.getenv("Idempotency_id_key", "")
+        headers["Idempotency-Key"] = str(uuid.uuid4())
     return headers
 
 
@@ -79,7 +80,9 @@ def verify_said(id_number: str, mode: str = "production", timeout: float = 15.0)
     """Run a said_verification report against VerifyNow for the given ID number."""
     return _post(
         VERIFY_ENDPOINT,
-        {"reportType": "said_verification", "idNumber": id_number, "mode": mode},
+        {"reportType": "said_verification",
+          "idNumber": id_number,
+            "mode": mode},
         mode,
         timeout,
     )
@@ -88,7 +91,7 @@ def verify_said(id_number: str, mode: str = "production", timeout: float = 15.0)
 def face_match(
     id_number: str,
     selfie_image_base64: str,
-    mode: str = "sandbox",
+    mode: str = "production",
     timeout: float = 30.0,
 ) -> dict:
     """Match a selfie against the Home Affairs ID photo for the given ID number.
