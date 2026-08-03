@@ -11,7 +11,6 @@ dependencies = [
     "requests>=2.34.2",
     "uvicorn[standard]>=0.51.0",
     "pydantic>=2.9.0",
-    "python-multipart>=0.0.9",
     "azure-ai-documentintelligence>=1.0.0",
     "azure-ai-vision-face>=1.0.0b2",
     "azure-core>=1.30.0",
@@ -51,11 +50,16 @@ ignore = [
     "E501",  # long line in an existing docstring; rewording is a content change
 ]
 "Backend/internal_backend/test_*.py" = ["S101"]  # assert is the point of a test
-"Backend/internal_backend/main.py" = [
-    "B008",  # File(...)/Form(...) as defaults is the standard FastAPI idiom
-]
 "Backend/rica_service/test_*.py" = ["S101"]  # assert is the point of a test
 "Backend/fraud_engine/test_*.py" = ["S101"]  # assert is the point of a test
+# These were missing, which is why lint has been failing on main since the
+# sim swap service landed — every other service has the same two ignores.
+"Backend/sim_swap_service/test_*.py" = ["S101"]  # assert is the point of a test
+# File(...)/Form(...) as argument defaults is the standard FastAPI idiom, and
+# the only way to declare multipart parameters. B008 cannot tell it apart from
+# an accidental mutable default.
+"Backend/app/routers/*.py" = ["B008"]
+"Backend/sim_swap_service/main.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

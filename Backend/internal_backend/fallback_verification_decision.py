@@ -23,15 +23,51 @@ Framework.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 
-from document_match import DocumentMatchResult
-from face_match import FaceMatchResult
+from Backend.internal_backend.document_match import DocumentMatchResult
+from Backend.internal_backend.face_match import FaceMatchResult
 
 logger = logging.getLogger("fallback_verification_decision")
-if not logger.handlers:
-    handler = logging.FileHandler("fallback_verification_audit.log")
+
+# Default is relative so the module imports anywhere — a developer's checkout, a
+# test runner, the container. The container overrides it to a directory the app
+# user owns; see the Dockerfile.
+DEFAULT_AUDIT_LOG_PATH = "data/logs/fallback_verification_audit.log"
+
+_audit_handler_attached = False
+
+
+def _attach_audit_handler() -> None:
+    """Attach the audit file handler, once, on first use.
+
+    Deliberately lazy and best-effort. Doing this at import time meant a
+    read-only or non-existent log directory raised while the module was being
+    imported, which took the whole application down before it could bind a
+    port. An audit log that cannot be opened is worth a warning, not an outage
+    — the decision itself is still recorded through the normal logging chain.
+    """
+    global _audit_handler_attached
+    if _audit_handler_attached or logger.handlers:
+        return
+    _audit_handler_attached = True
+
+    path = Path(os.getenv("FALLBACK_AUDIT_LOG_PATH", DEFAULT_AUDIT_LOG_PATH))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(path)
+    except OSError as exc:
+        logging.getLogger(__name__).warning(
+            "Fallback verification audit log unavailable at %s (%s); "
+            "decisions will only go to the application log",
+            path,
+            exc,
+        )
+        return
+
     handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
@@ -68,6 +104,7 @@ def evaluate_fallback_verification(
     `reference_id` is any identifier you want in the audit trail (e.g. the
     RICA/MSISDN reference or a request ID) - it is masked before logging.
     """
+    _attach_audit_handler()
     reasons = []
 
     if not document_match_result.overall_match:

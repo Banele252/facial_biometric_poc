@@ -67,23 +67,42 @@ def _extract(body: dict) -> tuple[str, float | None, str | None, tuple[str, ...]
 
 
 def run_face_match(
-    id_number: str, storage_ref: str, settings: Settings | None = None
+    id_number: str,
+    storage_ref: str,
+    settings: Settings | None = None,
+    idempotency_key: str | None = None,
 ) -> FaceMatchResult:
     """Run the Home Affairs face match for a stored selfie.
 
     Raises VerifyNowError if the provider cannot be reached, so the caller can
-    fall back rather than failing the customer.
+    retry or reject rather than silently passing the customer through.
     """
     settings = settings or get_settings()
-
     raw = storage_service.get_storage(settings).load(storage_ref)
-    selfie_b64 = base64.b64encode(raw).decode("ascii")
+    return run_face_match_bytes(id_number, raw, settings, idempotency_key)
+
+
+def run_face_match_bytes(
+    id_number: str,
+    selfie_bytes: bytes,
+    settings: Settings | None = None,
+    idempotency_key: str | None = None,
+) -> FaceMatchResult:
+    """Same match, for a selfie already in memory rather than in storage.
+
+    The provider response is interpreted in exactly one place — status mapping
+    and the score floor below — so a selfie that arrived as an upload cannot be
+    judged more leniently than one the journey stored.
+    """
+    settings = settings or get_settings()
+    selfie_b64 = base64.b64encode(selfie_bytes).decode("ascii")
 
     body = face_match(
         id_number=id_number,
         selfie_image_base64=selfie_b64,
         mode=settings.verify_mode,
         timeout=settings.request_timeout_seconds * 2,
+        idempotency_key=idempotency_key,
     )
 
     if body.get("success") is False:
