@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from enum import StrEnum
 
-from ocr_validator import OCRResult
+from Backend.internal_backend.ocr_validator import OCRResult
 
 DEFAULT_NAME_SIMILARITY_THRESHOLD = 0.60
 

@@ -20,13 +20,13 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from db_logger import ensure_table, log_call, summarize_upload
-from document_match import DocumentType, match_user_input_to_document
+from Backend.internal_backend.db_logger import ensure_table, log_call, summarize_upload
+from Backend.internal_backend.document_match import DocumentType, match_user_input_to_document
 from dotenv import load_dotenv
-from face_match import match_face_to_document
-from fallback_verification_decision import evaluate_fallback_verification
-from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
-from ocr_validator import extract_id_fields
+from Backend.internal_backend.face_match import match_face_to_document
+from Backend.internal_backend.fallback_verification_decision import evaluate_fallback_verification
+from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile, APIRouter
+from Backend.internal_backend.ocr_validator import extract_id_fields
 from pydantic import BaseModel
 
 load_dotenv()
@@ -34,21 +34,17 @@ load_dotenv()
 SERVICE_NAME = "internal_backend"
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    ensure_table()
-    yield
 
 
-app = FastAPI(
-    title="Facial Biometric Verification - Internal API", version="0.1.0", lifespan=lifespan
+router = APIRouter(
+   prefix="/api/v1", tags=["external_validation"]
 )
 
 
 # --------------------------------------------------------------------------
 # OCR Validation
 # --------------------------------------------------------------------------
-@app.post("/api/v1/ocr/extract")
+@router.post("/ocr/extract")
 async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadFile = File(...)):
     """Extract identity fields from a photographed/scanned ID document or passport."""
     document_bytes = await document_image.read()
@@ -80,7 +76,7 @@ async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadF
 # --------------------------------------------------------------------------
 # User Input Match Against Document
 # --------------------------------------------------------------------------
-@app.post("/api/v1/verify/document-match")
+@router.post("/verify/document-match")
 async def document_match_endpoint(
     background_tasks: BackgroundTasks,
     document_type: DocumentType = Form(...),
@@ -126,7 +122,7 @@ async def document_match_endpoint(
 # --------------------------------------------------------------------------
 # Face Match Against Document photo
 # --------------------------------------------------------------------------
-@app.post("/api/v1/verify/face-match")
+@router.post("/verify/face-match")
 async def face_match_endpoint(
     background_tasks: BackgroundTasks,
     selfie_image: UploadFile = File(...),
@@ -169,7 +165,7 @@ class FallbackVerifyResponse(BaseModel):
     reasons: list[str]
 
 
-@app.post("/api/v1/fallback-verification/verify", response_model=FallbackVerifyResponse)
+@router.post("/fallback-verification/verify", response_model=FallbackVerifyResponse)
 async def verify_fallback(
     background_tasks: BackgroundTasks,
     document_type: DocumentType = Form(...),
@@ -226,6 +222,6 @@ async def verify_fallback(
     return FallbackVerifyResponse(status=decision.status.value, reasons=decision.reasons)
 
 
-@app.get("/health")
+@router.get("/health")
 async def health():
     return {"status": "ok"}
