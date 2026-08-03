@@ -5,7 +5,7 @@ module.exports = defineConfig([
   expoConfig,
   {
     files: ["**/*.ts", "**/*.tsx"],
-    ignores: ["dist/*", "node_modules", "android", "ios"],
+    ignores: ["dist/**", "node_modules/**", "android/**", "ios/**"],
     rules: {
       'indent': ['error', 2],
       'quotes': ['error', 'single'],
