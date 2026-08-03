@@ -51,20 +51,29 @@ export interface VerificationDecision {
   reason: string
   provider_status: string | null
   notification_type: string
-  /** Face match confidence, 0-100. Null when no match ran (e.g. fallback). */
+  /** Face match confidence, 0-100. Null when no match ran (e.g. a passport). */
   match_score: number | null
   /** "sandbox" or "production" — which VerifyNow mode produced this decision. */
   mode: string | null
+  document_type: DocumentKind
+  /** Issued only once every check has passed. Null on any other outcome. */
+  authorisation_token: string | null
   checks: CheckResult[]
 }
 
 export interface VerificationInput {
   id_number: string
   selfie_id: string
+  /** Required — the journey refuses to start without it (RICA/POPIA). */
+  consent: boolean
+  document_type: DocumentKind
+  /** Base64 data URL of the scanned ID or passport. Required. */
+  document_image: string
   full_name?: string
   msisdn?: string
   new_sim_number?: string
   device_id?: string
+  imei?: string
   transaction?: TransactionKind
   target_network?: string
 }
@@ -72,6 +81,11 @@ export interface VerificationInput {
 /** The two high-risk transactions the CARB names. They share the whole
  *  identity chain and differ only in what happens once it passes. */
 export type TransactionKind = 'sim_swap' | 'number_port'
+
+/** Which document the customer is presenting. A passport skips the SA ID
+ *  checksum and the Home Affairs face match — Home Affairs holds no photo for
+ *  a passport holder, so their identity rests on the document checks and RICA. */
+export type DocumentKind = 'SA_ID' | 'PASSPORT'
 
 /**
  * A stable per-browser identifier for the fraud engine's repeat-device and
@@ -150,10 +164,13 @@ export function checkLiveness(selfieId: string): Promise<LivenessResponse> {
 }
 
 /**
- * Runs the whole journey server-side: precheck, RICA, ID verification and the
- * Home Affairs face match. Takes ~12s in sandbox, because the provider
- * rate-limits per IP and the backend waits between its two calls — callers
- * must show a progress state rather than assuming this is quick.
+ * Runs the whole journey server-side, in the order the process diagram sets
+ * out: consent, ID precheck, liveness, fraud pre-checks, the three document
+ * checks, RICA, Home Affairs, then the authorisation token and the swap.
+ *
+ * Takes ~12s in sandbox, because the provider rate-limits per IP and the
+ * backend waits between its calls — callers must show a progress state rather
+ * than assuming this is quick.
  */
 export function verifyIdentity(input: VerificationInput): Promise<VerificationDecision> {
   return request('/api/v1/verifications', {

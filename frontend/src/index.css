@@ -416,6 +416,17 @@ body {
   transform: scaleX(-1);
 }
 
+/* A document is held out and photographed landscape, not framed like a face —
+ * and it must not be mirrored, or the text reads backwards to the OCR step. */
+.capture-frame.is-document {
+  aspect-ratio: 4 / 3;
+  max-height: 16rem;
+}
+
+.capture-video.is-document {
+  transform: none;
+}
+
 /* Corner brackets — the framing guide from the CARB mockup. */
 .capture-bracket {
   position: absolute;
@@ -965,4 +976,40 @@ body {
 .choice input {
   accent-color: var(--mtn-yellow-deep);
   margin: 0;
+}
+
+/* ── Consent ────────────────────────────────────────────────────────────── */
+
+/* Deliberately not styled as a choice chip. Consent is a decision the customer
+ * makes once, in their own words, not one option among several — and the
+ * journey will not start until they make it. */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+  padding: 0.875rem;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.consent:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--paper);
+}
+
+.consent input {
+  accent-color: var(--mtn-yellow-deep);
+  margin-top: 0.2rem;
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.consent .field-hint {
+  display: block;
+  margin-top: 0.375rem;
 }
