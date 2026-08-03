@@ -7,7 +7,8 @@ export type LedgerEntry = {
     detail?: string;
 };
 
-export const stamp = (label: string, kind: LedgerEntry['kind'], detail?: string): LedgerEntry => ({
+export const stamp = (label: string, kind: LedgerEntry['kind'],
+  detail?: string): LedgerEntry => ({
   id: `entry_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
   timestamp: new Date().toISOString(),
   label,

@@ -5,21 +5,20 @@ import { StatusBar } from 'expo-status-bar';
 import { Typography, Button, Container } from '@/components/ui';
 import { Colors } from '@/theme';
 
-// height is no longer needed; we removed it
 const { height } = Dimensions.get('window');
 
 interface Props {
-  onGetStarted: () => void;
-  onLearnMore: () => void;
+  navigate: (screen: string, params?: any) => void;
+  goBack: () => void;
 }
 
-export default function SplashScreen({ onGetStarted, onLearnMore }: Props) {
+export default function SplashScreen({ navigate, goBack }: Props) {
   return (
     <View style={styles.shell}>
       <StatusBar style="dark" />
       <View style={styles.imageContainer}>
         <Image
-          source={require('../../assets/splash-photo.png')}
+          source={require('../../../assets/splash-photo.png')}
           style={styles.backgroundImage}
           resizeMode="cover"
         />
@@ -31,7 +30,10 @@ export default function SplashScreen({ onGetStarted, onLearnMore }: Props) {
       </View>
       <Container style={{ justifyContent: 'space-between', paddingTop: 52, paddingBottom: 26 }}>
         <View style={{ alignItems: 'center', gap: 14 }}>
-          <Image source={require('../../assets/mtn-logo.png')} style={styles.logo} />
+          <Image
+            source={{ uri: 'https://placehold.co/120x120?text=MTN' }}
+            style={styles.logo}
+          />
           <Typography variant="h1" align="center">
               Secure. Simple. Yours.
           </Typography>
@@ -40,10 +42,18 @@ export default function SplashScreen({ onGetStarted, onLearnMore }: Props) {
           </Typography>
         </View>
         <View style={{ gap: 10 }}>
-          <Button variant="primary" size="lg" onPress={onGetStarted}>
+          <Button
+            variant="primary"
+            size="lg"
+            onPress={() => navigate('RequestSimSwap')}
+          >
               Get Started
           </Button>
-          <Button variant="secondary" size="lg" onPress={onLearnMore}>
+          <Button
+            variant="secondary"
+            size="lg"
+            onPress={() => alert('Learn More pressed')}
+          >
               Learn More
           </Button>
         </View>
