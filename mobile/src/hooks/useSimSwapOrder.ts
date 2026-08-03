@@ -1,68 +1,57 @@
-// src/hooks/useSimSwapOrder.ts
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { request } from '@/shared/api';
+import { useState, useCallback } from 'react';
 
-export type SimSwapStatus = 'idle' | 'loading' | 'success' | 'error';
+// ── TEMP MOCK FLAG ─────────────────────────────────────────────
+// Set to false when the real endpoint is ready.
+const USE_MOCK = true;
+// ───────────────────────────────────────────────────────────────
 
 interface SimSwapPayload {
-    fullName: string;
-    msisdn: string;
-    iccid: string;
+  fullName: string;
+  msisdn: string;
+  iccid: string;
 }
 
-interface UseSimSwapOrderReturn {
-    status: SimSwapStatus;
-    isLoading: boolean;
-    serverMessage: string | null;
-    submit: (payload: SimSwapPayload) => Promise<boolean>;
-    dismissError: () => void;
-}
-
-export function useSimSwapOrder(): UseSimSwapOrderReturn {
-  const [status, setStatus] = useState<SimSwapStatus>('idle');
-  const [serverMessage, setServerMessage] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    return () => { abortRef.current?.abort(); };
-  }, []);
+export function useSimSwapOrder() {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [serverMessage, setServerMessage] = useState('');
 
   const submit = useCallback(async (payload: SimSwapPayload): Promise<boolean> => {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
     setStatus('loading');
-    setServerMessage(null);
+    setServerMessage('');
 
-    try {
-      await request('/api/v1/sim-swap/initiate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: payload.fullName,
-          msisdn: payload.msisdn,
-          new_sim_serial: payload.iccid,
-        }),
-        signal: ctrl.signal,
-      });
-
-      if (ctrl.signal.aborted) return false;
+    if (USE_MOCK) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      console.log('[MOCK] sim-swap/initiate 200 OK', payload);
       setStatus('success');
       return true;
-    } catch (err) {
-      if (ctrl.signal.aborted) return false;
-      const message = err instanceof Error ? err.message : 'Could not submit swap details.';
-      setServerMessage(message);
+    }
+
+    try {
+      const base = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
+      const response = await fetch(`${base}/api/v1/sim-swap/initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `Request failed (${response.status})`);
+      }
+
+      setStatus('success');
+      return true;
+    } catch (error: any) {
       setStatus('error');
+      setServerMessage(error.message || 'Failed to initiate SIM swap.');
       return false;
     }
   }, []);
 
   const dismissError = useCallback(() => {
-    setServerMessage(null);
+    setServerMessage('');
     if (status === 'error') setStatus('idle');
   }, [status]);
 
-  return { status, isLoading: status === 'loading', serverMessage, submit, dismissError };
+  return { submit, status, serverMessage, dismissError };
 }

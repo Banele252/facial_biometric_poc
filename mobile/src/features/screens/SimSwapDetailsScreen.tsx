@@ -1,5 +1,5 @@
-// src/screens/SimSwapDetailsScreen.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+// src/features/screens/SimSwapDetailsScreen.tsx
+import React, { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -18,12 +18,10 @@ import { NavigationAction } from '@/navigation/types';
 import { useSimSwapOrder } from '@/hooks/useSimSwapOrder';
 
 interface Props {
-  dispatch: React.Dispatch<NavigationAction>;
-  route?: {
-    params?: {
-      scannedIcid?: string;
-    };
-  };
+  navigate?: (screen: string, params?: any) => void;
+  goBack?: () => void;
+  dispatch?: React.Dispatch<NavigationAction>;
+  routeParams?: Record<string, unknown>;
 }
 
 interface FieldDef {
@@ -102,28 +100,28 @@ function validateField(def: FieldDef, value: string): boolean {
   return true;
 }
 
-export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
-  const [values, setValues] = useState<Record<string, string>>({
+export default function SimSwapDetailsScreen({
+  navigate,
+  goBack,
+  dispatch,
+  routeParams,
+}: Props) {
+  const scannedIcid = (routeParams?.scannedIcid as string) || '';
+
+  // Lazy initializers: derived from props on mount. No useEffect needed
+  // because this screen remounts every time it becomes active in the router.
+  const [values, setValues] = useState<Record<string, string>>(() => ({
     names: '',
     msisdn: '',
-    iccid: route?.params?.scannedIcid ?? '',
-  });
-  const [touched, setTouched] = useState<Record<string, boolean>>({
-    iccid: !!route?.params?.scannedIcid,
-  });
+    iccid: scannedIcid,
+  }));
+  const [touched, setTouched] = useState<Record<string, boolean>>(() => ({
+    iccid: !!scannedIcid,
+  }));
   const [focus, setFocus] = useState<string>('');
   const [banner, setBanner] = useState('');
 
   const { submit, status, serverMessage, dismissError } = useSimSwapOrder();
-
-  /* Sync scanned ICCID when navigating back with result */
-  useEffect(() => {
-    const scanned = route?.params?.scannedIcid;
-    if (scanned) {
-      setValues((prev) => ({ ...prev, iccid: scanned }));
-      setTouched((prev) => ({ ...prev, iccid: true }));
-    }
-  }, [route?.params?.scannedIcid]);
 
   const handleInput = useCallback(
     (def: FieldDef, text: string) => {
@@ -163,27 +161,38 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
     });
 
     if (success) {
-      dispatch({
-        type: 'NAVIGATE',
-        payload: {
-          screen: 'IDDocumentScan',
-          params: {
-            fullName: values.names,
-            cellNumber: values.msisdn,
-            iccid: values.iccid,
-          },
-        },
-      });
+      const params = {
+        fullName: values.names,
+        cellNumber: values.msisdn,
+        iccid: values.iccid,
+      };
+      if (navigate) {
+        navigate('IDDocumentScan', params);
+      } else if (dispatch) {
+        dispatch({
+          type: 'NAVIGATE',
+          payload: { screen: 'IDDocumentScan', params },
+        });
+      }
     }
   };
 
   const dismissBanner = () => setBanner('');
 
   const openBarcodeScanner = () => {
-    dispatch({
-      type: 'NAVIGATE',
-      payload: { screen: 'SimBarcodeScan' },
-    });
+    if (navigate) {
+      navigate('SimBarcodeScan');
+    } else if (dispatch) {
+      dispatch({ type: 'NAVIGATE', payload: { screen: 'SimBarcodeScan' } });
+    }
+  };
+
+  const handleBack = () => {
+    if (goBack) {
+      goBack();
+    } else if (dispatch) {
+      dispatch({ type: 'GO_BACK' });
+    }
   };
 
   return (
@@ -194,10 +203,7 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
       <View style={styles.patternBottom} />
 
       <View style={styles.topBar}>
-        <Pressable
-          onPress={() => dispatch({ type: 'GO_BACK' })}
-          style={styles.backButton}
-        >
+        <Pressable onPress={handleBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </Pressable>
         <Typography variant="body" style={{ fontWeight: '700' }}>

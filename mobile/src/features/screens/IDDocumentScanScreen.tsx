@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -14,21 +15,29 @@ import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
 
 interface Props {
-  requireBackSide?: boolean;
-  simulateFailure?: boolean;
-  showChecklist?: boolean;
-  dispatch: (action: any) => void;
+  navigate?: (screen: string, params?: any) => void;
+  goBack?: () => void;
+  dispatch?: (action: any) => void;
+  routeParams?: Record<string, unknown>;
+}
+
+/*Mock API*/
+async function mockVerifyIdentity(): Promise<boolean> {
+  await new Promise((resolve) => setTimeout(resolve, 900));
+   
+  console.log('[MOCK] POST /api/v1/verify-identity 200 OK');
+  return true;
 }
 
 export function IDDocumentScanScreen({
-  requireBackSide = true,
-  simulateFailure = false,
-  showChecklist = true,
+  navigate,
+  goBack,
   dispatch,
 }: Props) {
   const [phase, setPhase] = useState<'ready' | 'scanning' | 'done' | 'error'>('ready');
   const [side, setSide] = useState<'front' | 'back'>('front');
   const [banner, setBanner] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const scanTimer = useRef<NodeJS.Timeout | null>(null);
 
   const sweepAnim = useMemo(() => new Animated.Value(0), []);
@@ -72,16 +81,32 @@ export function IDDocumentScanScreen({
     [sweepAnim],
   );
 
-  const handleCapture = async () => {
-    if (phase === 'scanning') return;
-    if (phase === 'done' && side === 'front' && requireBackSide) {
-      setPhase('ready');
-      setSide('back');
-      setBanner('');
-      return;
+  /* ── Navigation helpers ── */
+  const handleBack = () => {
+    if (goBack) {
+      goBack();
+    } else if (dispatch) {
+      dispatch({ type: 'GO_BACK' });
     }
+  };
+
+  const handleNavigate = (screen: string, params?: any) => {
+    if (navigate) {
+      navigate(screen, params);
+    } else if (dispatch) {
+      dispatch({ type: 'NAVIGATE', payload: { screen, params } });
+    }
+  };
+
+  /* ── Capture flow ── */
+  const handleCapture = async () => {
+    if (phase === 'scanning' || verifying) return;
+
     if (phase === 'done') {
-      dispatch({ type: 'NAVIGATE', payload: { screen: 'FacialVerification' } });
+      setVerifying(true);
+      const ok = await mockVerifyIdentity();
+      setVerifying(false);
+      if (ok) handleNavigate('FacialVerification');
       return;
     }
 
@@ -104,7 +129,8 @@ export function IDDocumentScanScreen({
     setBanner('');
     if (scanTimer.current) clearTimeout(scanTimer.current);
     scanTimer.current = setTimeout(() => {
-      if (simulateFailure) {
+      if (false) {
+        // Toggle to true to test error state
         setPhase('error');
         setBanner('The text came out blurry. Steady your phone and keep the card flat.');
       } else {
@@ -120,6 +146,7 @@ export function IDDocumentScanScreen({
   };
 
   const handleUsePassport = () => {
+     
     alert('Passport flow not yet implemented.');
   };
 
@@ -129,27 +156,28 @@ export function IDDocumentScanScreen({
   const isBack = side === 'back';
   const accentColor = isError ? '#E0574A' : isDone ? '#2FA96B' : Colors.primary;
 
-  const getChip = (label: string, tone: 'good' | 'warn' | 'idle') => {
-    const map = {
-      good: { bg: '#E4F5EA', fg: '#1F7A4C', bd: '#C4E7D2' },
-      warn: { bg: '#FEF3F1', fg: '#A8382C', bd: '#F3C9C3' },
-      idle: { bg: Colors.surface, fg: '#6B6559', bd: '#ECE8DF' },
-    }[tone];
-    return {
-      label,
-      style: {
-        fontSize: 12.5,
-        fontWeight: '600' as const,
-        paddingVertical: 7,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        backgroundColor: map.bg,
-        color: map.fg,
-        borderWidth: 1,
-        borderColor: map.bd,
-      },
-    };
-  };
+  const getChip = 
+      (label: string, tone: 'good' | 'warn' | 'idle') => {
+        const map = {
+          good: { bg: '#E4F5EA', fg: '#1F7A4C', bd: '#C4E7D2' },
+          warn: { bg: '#FEF3F1', fg: '#A8382C', bd: '#F3C9C3' },
+          idle: { bg: Colors.surface, fg: '#6B6559', bd: '#ECE8DF' },
+        }[tone];
+        return {
+          label,
+          style: {
+            fontSize: 12.5,
+            fontWeight: '600' as const,
+            paddingVertical: 7,
+            paddingHorizontal: 12,
+            borderRadius: 999,
+            backgroundColor: map.bg,
+            borderWidth: 1,
+            borderColor: map.bd,
+          },
+          textColor: map.fg,
+        };
+      };
 
   const chips = [
     getChip('Flat surface', isError ? 'warn' : isDone ? 'good' : 'idle'),
@@ -157,7 +185,17 @@ export function IDDocumentScanScreen({
     getChip('All corners inside', isDone ? 'good' : 'idle'),
   ];
 
-  const canContinue = phase === 'done' && (!requireBackSide || side === 'back');
+  const canContinue = phase === 'done' && side === 'back';
+
+  const buttonLabel = verifying
+    ? 'Verifying…'
+    : isScanning
+      ? 'Scanning…'
+      : isError
+        ? 'Try again'
+        : canContinue
+          ? 'Continue'
+          : 'Capture';
 
   return (
     <SafeAreaView style={styles.shell}>
@@ -165,10 +203,7 @@ export function IDDocumentScanScreen({
       <Container>
         <Card style={styles.cardContainer}>
           <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => dispatch({ type: 'GO_BACK' })}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
               <Ionicons name="chevron-back" size={24} color={Colors.text} />
             </TouchableOpacity>
             <Typography variant="subtitle" style={styles.headerTitle}>
@@ -245,11 +280,15 @@ export function IDDocumentScanScreen({
             </View>
 
             <TouchableOpacity
-              style={[styles.shutter, isScanning && styles.shutterDisabled]}
+              style={[styles.shutter, (isScanning || verifying) && styles.shutterDisabled]}
               onPress={handleCapture}
-              disabled={isScanning}
+              disabled={isScanning || verifying}
             >
-              <View style={styles.shutterInner} />
+              {verifying ? (
+                <ActivityIndicator color={Colors.text} />
+              ) : (
+                <View style={styles.shutterInner} />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -283,11 +322,19 @@ export function IDDocumentScanScreen({
             </Typography>
           </View>
 
-          {showChecklist && !banner && (
+          {side === 'front' && isDone && (
+            <View style={styles.sidePrompt}>
+              <Typography variant="body" style={styles.sidePromptText}>
+                    Great. Now flip the card and capture the back.
+              </Typography>
+            </View>
+          )}
+
+          {!banner && (
             <View style={styles.chipsContainer}>
               {chips.map((chip, idx) => (
                 <View key={idx} style={chip.style}>
-                  <Typography variant="caption" style={{ color: chip.style.color }}>
+                  <Typography variant="caption" style={{ color: chip.textColor }}>
                     {chip.label}
                   </Typography>
                 </View>
@@ -295,7 +342,7 @@ export function IDDocumentScanScreen({
             </View>
           )}
 
-          {banner && (
+          {!!banner && (
             <View style={styles.banner}>
               <View style={styles.bannerIcon}>
                 <Ionicons name="alert-circle" size={16} color="#C0362C" />
@@ -314,17 +361,11 @@ export function IDDocumentScanScreen({
           <View style={styles.actionContainer}>
             <Button
               onPress={handleCapture}
-              variant={isScanning ? 'outline' : 'primary'}
-              disabled={isScanning}
-              style={isScanning ? styles.buttonDisabled : styles.buttonPrimary}
+              variant={isScanning || verifying ? 'outline' : 'primary'}
+              disabled={isScanning || verifying}
+              style={isScanning || verifying ? styles.buttonDisabled : styles.buttonPrimary}
             >
-              {isScanning
-                ? 'Scanning…'
-                : isError
-                  ? 'Try again'
-                  : canContinue
-                    ? 'Continue'
-                    : 'Capture'}
+              {buttonLabel}
             </Button>
             <TouchableOpacity onPress={handleUsePassport} style={styles.passportLink}>
               <Typography variant="caption" style={styles.passportText}>
@@ -337,10 +378,7 @@ export function IDDocumentScanScreen({
             {Array.from({ length: 10 }).map((_, i) => (
               <View
                 key={i}
-                style={[
-                  styles.dot,
-                  i === 4 ? styles.dotActive : styles.dotInactive,
-                ]}
+                style={[styles.dot, i === 4 ? styles.dotActive : styles.dotInactive]}
               />
             ))}
           </View>
@@ -354,22 +392,22 @@ const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: Colors.background },
   cardContainer: { paddingHorizontal: 24, paddingVertical: 16, alignItems: 'stretch' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  backButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: '#EFEBE1', backgroundColor:
-    Colors.surface, alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: '#EFEBE1',
+    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 15.5, fontWeight: '700', color: Colors.text },
   headerSpacer: { width: 42 },
   headlineContainer: { flexDirection: 'row', alignItems: 'stretch', gap: 13, marginBottom: 22 },
   titleAccent: { width: 4, borderRadius: 4 },
   headline: { fontSize: 25, lineHeight: 30, fontWeight: '800', color: Colors.text, letterSpacing: -0.6, maxWidth: 258 },
-  viewport: { position: 'relative', width: '100%', height: 212, borderRadius: 20, overflow: 'hidden', backgroundColor:
-        '#1C1A16', alignItems: 'center', justifyContent: 'center', borderWidth: 0 },
+  viewport: { position: 'relative', width: '100%', height: 212, borderRadius: 20, overflow: 'hidden',
+    backgroundColor: '#1C1A16', alignItems: 'center', justifyContent: 'center', borderWidth: 0 },
   viewportScanning: { borderWidth: 4, borderColor: Colors.primary,
-    shadowColor: Colors.primary, shadowOffset:
-        { width: 0, height: 0 }, shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
-  viewportDone: { borderWidth: 4, borderColor: '#2FA96B', shadowColor: '#2FA96B', shadowOffset:
-        { width: 0, height: 0 }, shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
-  viewportError: { borderWidth: 4, borderColor: '#E0574A', shadowColor: '#E0574A', shadowOffset:
-        { width: 0, height: 0 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 8 },
+    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.16,
+    shadowRadius: 8, elevation: 8 },
+  viewportDone: { borderWidth: 4, borderColor: '#2FA96B', shadowColor: '#2FA96B', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
+  viewportError: { borderWidth: 4, borderColor: '#E0574A', shadowColor: '#E0574A',
+    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 8 },
   cardPlaceholder: { position: 'absolute', left: 22, right: 22, top: 26, bottom: 26, borderRadius: 12,
     borderWidth: 2, borderColor: 'rgba(255,255,255,0.28)', borderStyle: 'dashed', padding: 12 },
   cardPlaceholderInner: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
@@ -393,18 +431,21 @@ const styles = StyleSheet.create({
   liveDotDone: { backgroundColor: '#2FA96B' },
   liveDotError: { backgroundColor: '#E0574A' },
   liveLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: '#FFFFFF', textTransform: 'uppercase' },
-  shutter: { position: 'absolute', bottom: -26, left: '50%', transform:
-        [{ translateX: -29 }], width: 58, height: 58, borderRadius: 29, borderWidth: 4, borderColor: '#FFFDF9',
-  backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.primary,
-  shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.42, shadowRadius: 20, elevation: 10 },
+  shutter: { position: 'absolute', bottom: -26, left: '50%', transform: [{ translateX: -29 }], width: 58, height: 58,
+    borderRadius: 29, borderWidth: 4, borderColor: '#FFFDF9', backgroundColor: Colors.primary,
+    alignItems: 'center', justifyContent: 'center', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.42, shadowRadius: 20, elevation: 10 },
   shutterDisabled: { backgroundColor: '#F5EFDC' },
-  shutterInner: { width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: Colors.text },
+  shutterInner: { width: 22, height: 22,
+    borderRadius: 11, borderWidth: 2, borderColor: Colors.text },
   statusContainer: { marginTop: 30, alignItems: 'center' },
   statusTitle: { fontSize: 18, fontWeight: '800', color: Colors.text, letterSpacing: -0.3 },
   statusHint: { fontSize: 13.5, fontWeight: '600', textAlign: 'center', color: '#7A746A', marginTop: 4 },
   statusHintError: { color: '#C0362C' },
   statusHintDone: { color: '#1F7A4C' },
+  sidePrompt: { marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: '#FFFCF2', borderWidth: 1.5,
+    borderColor: '#F0DE9C' },
+  sidePromptText: { fontSize: 13.5, fontWeight: '600', color: '#4A453D', textAlign: 'center' },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 18 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: '#F3C9C3',
     borderRadius: 16, backgroundColor: '#FEF3F1', padding: 13, marginTop: 18 },
