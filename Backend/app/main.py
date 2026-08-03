@@ -19,6 +19,7 @@ from Backend.app.routers import (
     health,
     notifications,
     selfies,
+    sim_swap,
     validation,
     verification,
     verifications,
@@ -41,14 +42,20 @@ app = FastAPI(
 
 # Same-origin in the container, so this is empty by default. Set
 # CORS_ALLOW_ORIGINS to run the Vite dev server against a local API.
-_cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
+# _cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
+
+_cors_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+
 if _cors_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
+        max_age=600,
     )
 
 app.include_router(health.router)
@@ -62,6 +69,26 @@ app.include_router(notifications.router)
 # given a second port the platform has nowhere to route.
 app.include_router(rica_main.router)
 app.include_router(documents.router)
+# The SIM swap and ICCID routers arrived unmounted, so their endpoints were
+# unreachable.
+app.include_router(sim_swap.router)
+
+# The ICCID barcode reader needs pyzbar, which is a wrapper over the native
+# zbar library — the Python wheel installs fine and then fails on import when
+# libzbar0 is absent. The container installs it (see the Dockerfile), but a
+# developer checkout or a CI runner usually will not have it, and one optional
+# endpoint must not stop the whole API from starting. Same treatment as the
+# other optional backends: warn, carry on without it.
+try:
+    from Backend.app.routers import iccid
+
+    # The router declares its own "/iccid" prefix; mounting it under /api/v1
+    # puts it with everything else the edge routes.
+    app.include_router(iccid.router, prefix="/api/v1")
+except ImportError as exc:
+    logging.getLogger(__name__).warning(
+        "ICCID barcode endpoint unavailable (%s). Install libzbar0 to enable it.", exc
+    )
 
 # Create the history/notification tables on startup. Cheap and idempotent; for
 # the default local SQLite backend this needs no external service.

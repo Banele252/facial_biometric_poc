@@ -112,8 +112,7 @@ function extractMessage(detail: unknown): string | null {
   if (typeof responseBody.detail === 'string') return responseBody.detail;
   if (Array.isArray(responseBody.detail) && responseBody.detail.length > 0) {
     const firstError = responseBody.detail[0];
-    if (typeof firstError === 'object' && firstError !== null && 'msg' in firstError
-        && typeof firstError.msg === 'string') {
+    if (typeof firstError === 'object' && firstError !== null && 'msg' in firstError && typeof firstError.msg === 'string') {
       return firstError.msg;
     }
   }
@@ -165,8 +164,7 @@ export async function request<T>(
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new ApiError(0,
-        'Request timed out', `The request exceeded ${REQUEST_TIMEOUT_MS} ms`);
+      throw new ApiError(0, 'Request timed out', `The request exceeded ${REQUEST_TIMEOUT_MS} ms`);
     }
     if (error instanceof Error) throw new ApiError(0, 'Network error', error.message);
     throw new ApiError(0, 'Network error', error);

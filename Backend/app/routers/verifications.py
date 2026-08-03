@@ -447,12 +447,35 @@ def _step_documents(journey: Journey) -> VerificationDecision | None:
     payload = journey.payload
 
     if not payload.document_image:
-        journey.add("document_ocr", "Document scan", "fail", "No document image provided")
-        return _reject(
-            journey,
-            stage="document",
-            reason="A photo of your ID or passport is required.",
+        # Skipped, not failed — the same treatment RICA gets when the caller
+        # did not supply a name and number. A client that has not yet wired up
+        # its document scan still gets a usable journey, and the checks array
+        # says plainly that the document evidence is missing rather than
+        # implying it passed. Clients that do send an image get the full
+        # comparison below.
+        journey.add(
+            "document_ocr",
+            "Document scan",
+            "skipped",
+            "No document image supplied",
         )
+        journey.add(
+            "document_face",
+            "Face vs document photo",
+            "skipped",
+            "No document image to compare against",
+        )
+        journey.add(
+            "document_details",
+            "Details vs document",
+            "skipped",
+            "No document image to compare against",
+        )
+        record_event(
+            "document_steps_skipped",
+            {"id_number": journey.id_number, "reason": "no document image supplied"},
+        )
+        return None
 
     try:
         journey.document_bytes, _content_type = storage_service.decode_image(payload.document_image)

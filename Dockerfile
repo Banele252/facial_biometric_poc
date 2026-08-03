@@ -34,9 +34,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12.9-slim-bookworm AS runtime
 
 # Patch base image CVEs, then drop apt caches to keep the layer small.
+# libzbar0 is the native library behind pyzbar, which reads the barcode on a
+# SIM to extract its ICCID. The Python wheel is only a wrapper — without the
+# shared library the import fails at runtime, not at build time.
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libzbar0 \
     && rm -rf /var/lib/apt/lists/*
 
 # High UID — Defender for DevOps flags low-numbered UIDs as host-user collisions.

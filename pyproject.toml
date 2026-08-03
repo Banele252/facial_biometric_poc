@@ -15,6 +15,11 @@ dependencies = [
     "azure-ai-vision-face>=1.0.0b2",
     "azure-core>=1.30.0",
     "psycopg[binary]>=3.3.4",
+    # Barcode reading for the SIM ICCID scan (Backend/app/routers/iccid.py).
+    # pyzbar is a wrapper over the native zbar library, so the image also needs
+    # libzbar0 installed — see the Dockerfile.
+    "pillow>=11.0.0",
+    "pyzbar>=0.1.9",
 ]
 
 [dependency-groups]

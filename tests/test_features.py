@@ -173,13 +173,25 @@ class TestVerificationGates:
 class TestDocumentSteps:
     """The three document checks the process puts before the RICA lookup."""
 
-    def test_missing_document_is_rejected(self, client):
+    def test_missing_document_is_skipped_not_failed(self, client, monkeypatch):
+        """A client that has not wired up its document scan still gets a journey.
+
+        Skipped rather than failed, the same treatment RICA gets when no name
+        and number are supplied — and the checks array says the document
+        evidence is missing rather than implying it passed.
+        """
+        monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
+        config.get_settings.cache_clear()
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json=_journey(selfie_id=selfie_id, document_image=None)
         ).json()
-        assert body["status"] == "rejected"
-        assert body["method"] == "document"
+
+        document_checks = [c for c in body["checks"] if c["name"].startswith("document")]
+        assert len(document_checks) == 3
+        assert all(c["status"] == "skipped" for c in document_checks)
+        # The journey carried on past the document steps to RICA.
+        assert "rica" in [c["name"] for c in body["checks"]]
 
     def test_document_that_does_not_match_the_customer_is_rejected(self, client):
         selfie_id = _pass_liveness(client)
