@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from Backend.app.config import get_settings
 from Backend.app.db import init_db
 from Backend.app.routers import (
+    documents,
     health,
     notifications,
     selfies,
@@ -22,6 +23,7 @@ from Backend.app.routers import (
     verification,
     verifications,
 )
+from Backend.internal_backend.db_logger import ensure_table
 from Backend.rica_service import main as rica_main
 
 logging.basicConfig(
@@ -59,10 +61,16 @@ app.include_router(notifications.router)
 # infrastructure deploys a single container, so it is mounted here rather than
 # given a second port the platform has nowhere to route.
 app.include_router(rica_main.router)
+app.include_router(documents.router)
 
 # Create the history/notification tables on startup. Cheap and idempotent; for
 # the default local SQLite backend this needs no external service.
 init_db()
+
+# The document endpoints log each call to Postgres when it is configured.
+# Best-effort by design: without Postgres this warns and the endpoints carry on
+# without database logging, rather than refusing to start.
+ensure_table()
 
 
 def _mount_frontend() -> None:
