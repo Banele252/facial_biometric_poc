@@ -478,7 +478,7 @@ def _step_documents(journey: Journey) -> VerificationDecision | None:
         return None
 
     try:
-        journey.document_bytes, _content_type = storage_service.decode_image(payload.document_image)
+        journey.document_bytes, _unused_content_type = storage_service.decode_image(payload.document_image)
     except storage_service.StorageError as exc:
         journey.add("document_ocr", "Document scan", "fail", str(exc))
         return _reject(journey, stage="document", reason=f"Document image unreadable: {exc}")
