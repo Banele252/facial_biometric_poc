@@ -12,18 +12,24 @@ rejection. Volume-based risk lands on REFER, because a risky-looking device
 should not by itself turn away a genuine customer — that judgement belongs to
 a human. See ``fraud_engine/decisioning.py``.
 
-Both stores are in-memory and do not survive a restart, so velocity and
-repeat-device signals only span the life of the process. That is the engine's
-own POC limitation, carried over rather than papered over: persisting them
-means giving the fraud engine its own tables, which is a decision for whoever
-takes this past the POC.
+The velocity and repeat-device stores are in-memory and do not survive a
+restart, so those two signals only span the life of the process. That is the
+engine's own POC limitation, carried over rather than papered over.
+
+The recent-rejections check is the exception and is persisted, because it is
+the one signal that is worthless in memory: the diagram's "check against recent
+(7 days) rejected requests" exists to catch someone who was refused and came
+back, which is precisely the case where the earlier rejection is likely to sit
+behind a restart or on another replica.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
+from Backend.app import repository
 from Backend.fraud_engine.decisioning import FraudDecision, decide
 from Backend.fraud_engine.device_risk_check import (
     InMemoryDeviceAttemptStore,
@@ -43,6 +49,13 @@ logger = logging.getLogger(__name__)
 _device_store = InMemoryDeviceAttemptStore()
 _velocity_store = InMemoryVelocityStore()
 _watchlist = Watchlist()
+
+# The diagram's first pre-check reads "recent (7 days) rejected requests".
+RECENT_REJECTION_WINDOW_DAYS = 7
+# One earlier rejection inside the window is a signal worth referring to a
+# human; it is not by itself proof of fraud, so it refers rather than rejects.
+# Repeated rejections are a different matter — see _assess_recent_rejections.
+MAX_RECENT_REJECTIONS = 1
 
 # Journey outcomes, matching the vocabulary used by the orchestrator.
 APPROVED = "approved"
@@ -83,8 +96,57 @@ def get_watchlist() -> Watchlist:
     return _watchlist
 
 
+def _assess_recent_rejections(
+    identity_reference: str, msisdn: str, device_id: str
+) -> tuple[int, str | None]:
+    """Count recent rejections and say what, if anything, they mean.
+
+    Returns the count and an outcome (``REJECTED``/``REVIEW``) or None when the
+    history is clean. Reading the repository is best-effort: a database that
+    cannot be reached should not take down a journey that has other evidence,
+    so a failure here logs and reports a clean history.
+    """
+    since = (datetime.now(UTC) - timedelta(days=RECENT_REJECTION_WINDOW_DAYS)).isoformat()
+    try:
+        count = repository.count_recent_rejections(
+            id_number=identity_reference,
+            since_iso=since,
+            msisdn=msisdn or None,
+            device_id=device_id or None,
+        )
+    except Exception as exc:  # database unavailable, table missing, etc.
+        logger.warning("Recent-rejection check unavailable: %s", exc)
+        return 0, None
+
+    if count > MAX_RECENT_REJECTIONS:
+        # Refused repeatedly inside a week and still trying. Past the point
+        # where a genuine customer with a bad camera is the likely explanation.
+        return count, REJECTED
+    if count > 0:
+        return count, REVIEW
+    return 0, None
+
+
 def run_fraud_checks(identity_reference: str, msisdn: str, device_id: str) -> FraudOutcome:
-    """Run device risk, fraud intelligence, scoring and decisioning."""
+    """Run the pre-checks: recent rejections, device risk, fraud intelligence."""
+    recent_rejections, rejection_outcome = _assess_recent_rejections(
+        identity_reference, msisdn, device_id
+    )
+    if rejection_outcome == REJECTED:
+        detail = (
+            f"{recent_rejections} rejected requests in the last {RECENT_REJECTION_WINDOW_DAYS} days"
+        )
+        logger.info(
+            "Fraud checks completed: recent_rejections=%s decision=REJECT", recent_rejections
+        )
+        return FraudOutcome(
+            outcome=REJECTED,
+            decision="REJECT",
+            risk_score=100.0,
+            reasons=(detail,),
+            detail=detail,
+        )
+
     device = assess_device_risk(
         device_id=device_id,
         identity_reference=identity_reference,
@@ -102,6 +164,15 @@ def run_fraud_checks(identity_reference: str, msisdn: str, device_id: str) -> Fr
 
     outcome = _DECISION_MAP.get(result.decision, REVIEW)
     reasons = tuple(str(r) for r in result.reasons)
+
+    # A single recent rejection does not override a clean assessment into a
+    # refusal, but it does stop it going straight through.
+    if rejection_outcome == REVIEW and outcome == APPROVED:
+        outcome = REVIEW
+        reasons = (
+            f"{recent_rejections} rejected request in the last {RECENT_REJECTION_WINDOW_DAYS} days",
+            *reasons,
+        )
 
     if outcome == APPROVED:
         detail = f"No fraud indicators (risk score {result.risk_score:.0f})"
