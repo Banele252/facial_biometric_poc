@@ -13,7 +13,10 @@ import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
 
 interface Props {
-  dispatch: (action: any) => void;
+  navigate?: (screen: string, params?: any) => void;
+  goBack?: () => void;
+  dispatch?: (action: any) => void;
+  routeParams?: Record<string, unknown>;
   simulateFailure?: boolean;
   showSteps?: boolean;
   showSecondaryAction?: boolean;
@@ -23,6 +26,8 @@ interface Props {
 }
 
 export default function LivenessDetectionScreen({
+  navigate,
+  goBack,
   dispatch,
   simulateFailure = false,
   showSteps = true,
@@ -37,8 +42,6 @@ export default function LivenessDetectionScreen({
   const [banner, setBanner] = useState('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Ref holds the latest advance callback so setTimeout can call it
-  // without creating a circular closure reference.
   const advanceRef = useRef<(() => void) | null>(null);
 
   const breatheAnim = useMemo(() => new Animated.Value(0), []);
@@ -102,7 +105,6 @@ export default function LivenessDetectionScreen({
     return undefined;
   }, [phase, breatheAnim, sweepAnim]);
 
-  // advance logic — no self-reference inside the closure
   const advance = useCallback(() => {
     setStep((prev) => {
       const next = prev + 1;
@@ -117,21 +119,36 @@ export default function LivenessDetectionScreen({
         setPhase('done');
         return prev;
       }
-      // Call through the ref to avoid the circular closure
       timerRef.current = setTimeout(() => advanceRef.current?.(), 2200);
       return next;
     });
   }, [simulateFailure, PROMPTS.length]);
 
-  // Keep the ref pointing at the latest advance callback after every render
   useEffect(() => {
     advanceRef.current = advance;
   }, [advance]);
 
+  /* ── Navigation helpers ── */
+  const handleBack = () => {
+    if (goBack) {
+      goBack();
+    } else if (dispatch) {
+      dispatch({ type: 'GO_BACK' });
+    }
+  };
+
+  const handleNavigate = (screen: string, params?: any) => {
+    if (navigate) {
+      navigate(screen, params);
+    } else if (dispatch) {
+      dispatch({ type: 'NAVIGATE', payload: { screen, params } });
+    }
+  };
+
   const start = () => {
     if (phase === 'running') return;
     if (phase === 'done') {
-      dispatch({ type: 'NAVIGATE', payload: { screen: 'FraudIntelligenceChecks' } });
+      handleNavigate('FraudIntelligenceChecks');
       return;
     }
     setPhase('running');
@@ -183,10 +200,7 @@ export default function LivenessDetectionScreen({
         <Card style={styles.cardContainer}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => dispatch({ type: 'GO_BACK' })}
-            >
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
               <Ionicons name="chevron-back" size={24} color={Colors.text} />
             </TouchableOpacity>
             <Typography variant="subtitle" style={styles.headerTitle}>
@@ -394,9 +408,9 @@ const styles = StyleSheet.create({
   circleFace: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center' },
   sweepLine: { position: 'absolute', left: 0, right: 0, height: 3, backgroundColor: 'rgba(47,169,107,0.9)',
     shadowColor: '#2FA96B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 16, elevation: 10 },
-  liveBadge: { position: 'absolute', bottom: 18, left: '50%', transform: [{ translateX: -50 }],
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 11,
-    borderRadius: 999, backgroundColor: 'rgba(18,16,13,0.72)' },
+  liveBadge: { position: 'absolute', bottom: 18, left: '50%', transform: [{ translateX: -50 }], flexDirection: 'row',
+    alignItems: 'center', gap: 6, paddingVertical: 5,
+    paddingHorizontal: 11, borderRadius: 999, backgroundColor: 'rgba(18,16,13,0.72)' },
   liveDot: { width: 7, height: 7, borderRadius: 3.5 },
   liveDotRunning: { backgroundColor: '#FF4D3D' },
   liveDotDone: { backgroundColor: '#2FA96B' },
@@ -405,13 +419,13 @@ const styles = StyleSheet.create({
   ringWrapper: { position: 'absolute', inset: 0 },
   ringTrack: { ...StyleSheet.absoluteFill, borderRadius: 129, borderWidth: 6, borderColor: '#EDE9E0' },
   ringProgress: { ...StyleSheet.absoluteFill, borderRadius: 129, borderWidth: 6 },
-  halo: { position: 'absolute', inset: 8, borderRadius: 121,
-    shadowOffset: { width: 0, height: 0 }, shadowRadius: 10, elevation: 8 },
+  halo: { position: 'absolute', inset: 8, borderRadius: 121, shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 10, elevation: 8 },
   promptContainer: { alignItems: 'center', gap: 12, marginBottom: 20 },
   promptLabel: { fontSize: 18, fontWeight: '800', color: Colors.text, letterSpacing: -0.4 },
   feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  feedbackDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2,
-    borderColor: '#7A746A', justifyContent: 'center', alignItems: 'center' },
+  feedbackDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#7A746A',
+    justifyContent: 'center', alignItems: 'center' },
   feedbackDotActive: { borderColor: '#2FA96B', backgroundColor: '#2FA96B' },
   feedbackText: { fontSize: 13.5, fontWeight: '600', color: '#7A746A' },
   feedbackTextError: { color: '#C0362C' },
@@ -419,8 +433,8 @@ const styles = StyleSheet.create({
   stepsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 20 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: '#F3C9C3',
     borderRadius: 16, backgroundColor: '#FEF3F1', padding: 13, width: '100%', marginBottom: 16 },
-  bannerIcon: { width: 30, height: 30, borderRadius: 9,
-    backgroundColor: '#FBE3E0', justifyContent: 'center', alignItems: 'center' },
+  bannerIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: '#FBE3E0',
+    justifyContent: 'center', alignItems: 'center' },
   bannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#7A2820', lineHeight: 19 },
   bannerClose: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center' },
   spacer: { flex: 1 },
