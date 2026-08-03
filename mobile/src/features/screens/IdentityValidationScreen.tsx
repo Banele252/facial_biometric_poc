@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, Container } from '@/components/ui';
 import { Colors } from '@/theme';
 import { useValidateId } from '@/hooks/useValidateId';
+import { useJourneyStore } from '@/store/useJourneyStore';
 
 interface Props {
   navigate: (screen: string, params?: any) => void;
@@ -22,6 +23,8 @@ interface Props {
 export default function IdentityValidationScreen({ navigate, goBack }: Props) {
   const { value, setValue, liveResult, status, serverMessage, submit, dismissError } =
       useValidateId();
+
+  const setIdNumber = useJourneyStore((s) => s.setIdNumber);
 
   const [focused, setFocused] = useState(false);
   const [touched, setTouched] = useState(false);
@@ -59,6 +62,10 @@ export default function IdentityValidationScreen({ navigate, goBack }: Props) {
     // Attempt to submit; on success, navigate to next screen
     const success = await submit();
     if (success) {
+      // Keep the number for the rest of the journey — the selfie, the document
+      // comparison, RICA and Home Affairs are all keyed on it, and without
+      // this it never leaves this screen.
+      setIdNumber(value.replace(/\D/g, ''));
       navigate('SimSwapDetails');
     }
   };

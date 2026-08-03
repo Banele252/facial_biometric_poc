@@ -8,6 +8,7 @@ import type {
   AttemptRecord,
   NotificationRecord,
   TransactionKind,
+  DocumentKind,
 } from '@/shared/api';
 
 export type JourneyStep =
@@ -56,6 +57,19 @@ interface JourneyState {
     consent: boolean;
     setConsent: (v: boolean) => void;
 
+    // ── Document ──
+    // Which document the customer chose on SAIDSelectionScreen. It decides
+    // whether the SA ID checksum runs and whether Home Affairs is consulted at
+    // all, so it has to reach the verification call rather than only styling
+    // that screen.
+    documentType: DocumentKind;
+    setDocumentType: (d: DocumentKind) => void;
+    // Base64 data URL of the scanned ID/passport, captured on
+    // IDDocumentScanScreen. The backend OCRs this, compares its photo to the
+    // live selfie and its details to what was typed.
+    documentImage: string | null;
+    setDocumentImage: (img: string | null) => void;
+
     // ── API Results ──
     validation: ValidationResponse | null;
     setValidation: (v: ValidationResponse | null) => void;
@@ -94,6 +108,8 @@ const initialState = {
   transaction: 'sim_swap' as TransactionKind,
   targetNetwork: '',
   consent: false,
+  documentType: 'SA_ID' as DocumentKind,
+  documentImage: null,
   validation: null as ValidationResponse | null,
   selfieId: null as string | null,
   liveness: null as LivenessResponse | null,
@@ -118,6 +134,8 @@ export const useJourneyStore = create<JourneyState>((set) => ({
   setTransaction: (transaction) => set({ transaction }),
   setTargetNetwork: (targetNetwork) => set({ targetNetwork }),
   setConsent: (consent) => set({ consent }),
+  setDocumentType: (documentType) => set({ documentType }),
+  setDocumentImage: (documentImage) => set({ documentImage }),
 
   setValidation: (validation) => set({ validation }),
   setSelfieId: (selfieId) => set({ selfieId }),

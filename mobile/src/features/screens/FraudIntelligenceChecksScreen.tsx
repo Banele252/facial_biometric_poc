@@ -11,6 +11,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { useJourneyStore } from '@/store/useJourneyStore';
+import { verifyIdentity, getDeviceId } from '@/shared/api';
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
@@ -45,6 +47,18 @@ export default function FraudIntelligenceChecksScreen({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [pulseAnim] = useState(() => new Animated.Value(1));
+
+  const idNumber = useJourneyStore((s) => s.idNumber);
+  const fullName = useJourneyStore((s) => s.fullName);
+  const msisdn = useJourneyStore((s) => s.msisdn);
+  const newSim = useJourneyStore((s) => s.newSim);
+  const transaction = useJourneyStore((s) => s.transaction);
+  const consent = useJourneyStore((s) => s.consent);
+  const documentType = useJourneyStore((s) => s.documentType);
+  const documentImage = useJourneyStore((s) => s.documentImage);
+  const selfieId = useJourneyStore((s) => s.selfieId);
+  const setDecision = useJourneyStore((s) => s.setDecision);
+  const record = useJourneyStore((s) => s.record);
 
   useEffect(() => {
     return () => {
@@ -88,10 +102,17 @@ export default function FraudIntelligenceChecksScreen({
     else if (dispatch) dispatch({ type: 'NAVIGATE', payload: { screen, params } });
   };
 
+  /* This is where the journey is actually decided. Everything the customer has
+   * given us so far — consent, document type, the scanned document, the selfie
+   * that passed liveness, their typed details — goes to the orchestrator in one
+   * call, which runs the fraud pre-checks, the document comparisons, RICA and
+   * Home Affairs and returns a single verdict.
+   *
+   * The tick-list below still animates while the request is in flight, because
+   * the call takes several seconds; it just no longer decides the outcome. */
   const runChecks = () => {
     if (phase === 'running') return;
 
-    /* WHEN DONE → NAVIGATE TO APPROVED SCREEN */
     if (phase === 'done') {
       handleNavigate('SIMSwapApproved');
       return;
@@ -101,23 +122,59 @@ export default function FraudIntelligenceChecksScreen({
     setCompleted([]);
     setBanner('');
 
+    // Walk the tick list purely as progress feedback.
     let index = 0;
-    const runNext = () => {
-      if (simulateFailure && index === 2) {
-        setPhase('error');
-        setBanner('Unusual activity detected. Please contact support.');
-        return;
-      }
-      if (index >= CHECKS.length) {
-        setPhase('done');
-        return;
-      }
+    const tick = () => {
+      if (index >= CHECKS.length) return;
       setCompleted((prev) => [...prev, CHECKS[index].key]);
       index += 1;
-      timerRef.current = setTimeout(runNext, CHECKS[index - 1].duration);
+      timerRef.current = setTimeout(tick, CHECKS[index - 1].duration);
     };
+    timerRef.current = setTimeout(tick, 400);
 
-    timerRef.current = setTimeout(runNext, 400);
+    void (async () => {
+      try {
+        const result = await verifyIdentity({
+          id_number: idNumber.trim(),
+          selfie_id: selfieId ?? '',
+          consent,
+          document_type: documentType,
+          document_image: documentImage ?? undefined,
+          full_name: fullName.trim() || undefined,
+          msisdn: msisdn.trim() || undefined,
+          new_sim_number: newSim.trim() || undefined,
+          device_id: getDeviceId(),
+          transaction,
+        });
+
+        if (timerRef.current) clearTimeout(timerRef.current);
+        setDecision(result);
+        setCompleted(CHECKS.map((c) => c.key));
+        for (const check of result.checks) {
+          record(
+            check.label,
+            check.status === 'pass' ? 'pass' : check.status === 'fail' ? 'fail' : 'info',
+            check.detail,
+          );
+        }
+
+        if (result.status === 'approved') {
+          setPhase('done');
+        } else {
+          // A rejection and a referral are different answers, and the customer
+          // is told which one they got in the backend's own words rather than
+          // a single catch-all message.
+          setPhase('error');
+          setBanner(result.reason);
+        }
+      } catch (err) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        setPhase('error');
+        setBanner(
+          err instanceof Error ? err.message : 'The checks could not be completed.',
+        );
+      }
+    })();
   };
 
   const dismissBanner = () => {

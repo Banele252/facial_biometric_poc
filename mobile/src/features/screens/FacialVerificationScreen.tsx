@@ -9,8 +9,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { useJourneyStore } from '@/store/useJourneyStore';
+import { captureSelfie } from '@/shared/api';
 
 interface Props {
   dispatch: (action: any) => void;
@@ -35,6 +38,10 @@ export default function FacialVerificationScreen({
   const [banner, setBanner] = useState('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const idNumber = useJourneyStore((s) => s.idNumber);
+  const setSelfieId = useJourneyStore((s) => s.setSelfieId);
+  const record = useJourneyStore((s) => s.record);
+
   const pulseAnim = useMemo(() => new Animated.Value(0), []);
 
   const cornerAnim = useMemo(
@@ -56,8 +63,12 @@ export default function FacialVerificationScreen({
   );
 
   useEffect(() => {
+    // Captured on mount: reading timerRef.current inside the cleanup would read
+    // whatever it points at when the component unmounts, not the timer this
+    // effect is responsible for.
+    const timer = timerRef;
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      if (timer.current) clearTimeout(timer.current);
     };
   }, []);
 
@@ -85,24 +96,53 @@ export default function FacialVerificationScreen({
     }
   }, [phase, pulseAnim]);
 
-  const startScan = () => {
+  /* Takes the selfie and registers it with the backend. The liveness check
+   * runs on the next screen against the id returned here, and the same stored
+   * image is later compared to the photo on the document and to the Home
+   * Affairs record — so this one capture feeds three separate checks. */
+  const startScan = async () => {
     if (phase === 'scanning') return;
     if (phase === 'done') {
       dispatch({ type: 'NAVIGATE', payload: { screen: 'LivenessDetection' } });
       return;
     }
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      setPhase('error');
+      setBanner('We need camera access to check that a live person is present.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.8,
+      base64: true,
+      cameraType: ImagePicker.CameraType.front,
+    });
+    if (result.canceled) return;
+
+    const asset = result.assets?.[0];
+    if (!asset?.base64) {
+      setPhase('error');
+      setBanner('That photo could not be read. Try again.');
+      return;
+    }
+
     setPhase('scanning');
     setBanner('');
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      if (simulateFailure) {
-        setPhase('error');
-        setBanner('We could not get a clear read. Move to brighter light and try again.');
-      } else {
-        setPhase('done');
-      }
-      timerRef.current = null;
-    }, 2600);
+    try {
+      const selfie = await captureSelfie(idNumber.trim(), `data:image/jpeg;base64,${asset.base64}`);
+      setSelfieId(selfie.selfie_id);
+      record('Selfie captured', 'info', selfie.content_type);
+      setPhase('done');
+    } catch (err) {
+      setPhase('error');
+      setBanner(
+        err instanceof Error
+          ? err.message
+          : 'We could not get a clear read. Move to brighter light and try again.',
+      );
+    }
   };
 
   const dismissBanner = () => {

@@ -16,6 +16,7 @@ import { Typography, Button, Container } from '@/components/ui';
 import { Colors } from '@/theme';
 import { NavigationAction } from '@/navigation/types';
 import { useSimSwapOrder } from '@/hooks/useSimSwapOrder';
+import { useJourneyStore } from '@/store/useJourneyStore';
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
@@ -118,6 +119,10 @@ export default function SimSwapDetailsScreen({
   const [touched, setTouched] = useState<Record<string, boolean>>(() => ({
     iccid: !!scannedIcid,
   }));
+  const setFullName = useJourneyStore((s) => s.setFullName);
+  const setMsisdn = useJourneyStore((s) => s.setMsisdn);
+  const setNewSim = useJourneyStore((s) => s.setNewSim);
+
   const [focus, setFocus] = useState<string>('');
   const [banner, setBanner] = useState('');
 
@@ -161,6 +166,14 @@ export default function SimSwapDetailsScreen({
     });
 
     if (success) {
+      // Route params only reach the next screen; the verification at the end
+      // of the journey needs all three, so they go to the store as well. The
+      // name is matched against both the scanned document and the SIM
+      // registration, so it has to be the name as typed.
+      setFullName(values.names);
+      setMsisdn(values.msisdn.replace(/\s/g, ''));
+      setNewSim(values.iccid.replace(/\s/g, ''));
+
       const params = {
         fullName: values.names,
         cellNumber: values.msisdn,

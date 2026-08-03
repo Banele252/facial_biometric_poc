@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Clipboard from 'expo-clipboard';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { useJourneyStore } from '@/store/useJourneyStore';
 
 interface Props {
   dispatch: (action: any) => void;
@@ -22,9 +23,9 @@ interface Props {
 
 export default function SIMSwapApprovedScreen({
   dispatch,
-  simNumber = '89927 01 1234 5678 9012',
-  msisdn = '083 123 4567',
-  reference = 'SW-4820-3391',
+  simNumber: simNumberProp,
+  msisdn: msisdnProp,
+  reference: referenceProp,
   showNextStep = true,
   showSecondaryAction = true,
   stepCount = 6,
@@ -32,6 +33,23 @@ export default function SIMSwapApprovedScreen({
 }: Props) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Show what actually happened, not a hardcoded sample. The props still win
+  // when supplied so the screen stays usable in isolation for design work.
+  const decision = useJourneyStore((s) => s.decision);
+  const storedMsisdn = useJourneyStore((s) => s.msisdn);
+  const storedNewSim = useJourneyStore((s) => s.newSim);
+
+  const simNumber = simNumberProp ?? storedNewSim ?? '—';
+  const msisdn = msisdnProp ?? storedMsisdn ?? '—';
+  // The authorisation token is the real reference for this swap — it is what
+  // the backend issued once every check passed and what the swap was
+  // processed against. Shortened for display; it is a credential, not an ID.
+  const reference =
+    referenceProp ??
+    (decision?.authorisation_token
+      ? decision.authorisation_token.slice(0, 12).toUpperCase()
+      : (decision?.attempt_id?.slice(0, 12).toUpperCase() ?? '—'));
 
   const copyRef = async () => {
     await Clipboard.setStringAsync(reference);

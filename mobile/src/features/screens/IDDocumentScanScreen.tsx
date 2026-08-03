@@ -13,6 +13,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { useJourneyStore } from '@/store/useJourneyStore';
+import { extractDocumentFields } from '@/shared/api';
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
@@ -21,13 +23,10 @@ interface Props {
   routeParams?: Record<string, unknown>;
 }
 
-/*Mock API*/
-async function mockVerifyIdentity(): Promise<boolean> {
-  await new Promise((resolve) => setTimeout(resolve, 900));
-   
-  console.log('[MOCK] POST /api/v1/verify-identity 200 OK');
-  return true;
-}
+/* The captured photo is kept, not just previewed: the backend OCRs it, matches
+ * its printed details against what the customer typed, and compares the photo
+ * on it to the live selfie. Discarding it here would leave three of the
+ * journey's checks with nothing to run against. */
 
 export function IDDocumentScanScreen({
   navigate,
@@ -37,14 +36,25 @@ export function IDDocumentScanScreen({
   const [phase, setPhase] = useState<'ready' | 'scanning' | 'done' | 'error'>('ready');
   const [side, setSide] = useState<'front' | 'back'>('front');
   const [banner, setBanner] = useState('');
-  const [verifying, setVerifying] = useState(false);
   const scanTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const fullName = useJourneyStore((s) => s.fullName);
+  const idNumber = useJourneyStore((s) => s.idNumber);
+  const documentType = useJourneyStore((s) => s.documentType);
+  const setDocumentImage = useJourneyStore((s) => s.setDocumentImage);
+  const record = useJourneyStore((s) => s.record);
+
+  const verifying = phase === 'scanning';
 
   const sweepAnim = useMemo(() => new Animated.Value(0), []);
 
   useEffect(() => {
+    // Captured on mount: reading scanTimer.current inside the cleanup would read
+    // whatever it points at when the component unmounts, not the timer this
+    // effect is responsible for.
+    const timer = scanTimer;
     return () => {
-      if (scanTimer.current) clearTimeout(scanTimer.current);
+      if (timer.current) clearTimeout(timer.current);
     };
   }, []);
 
@@ -103,41 +113,56 @@ export function IDDocumentScanScreen({
     if (phase === 'scanning' || verifying) return;
 
     if (phase === 'done') {
-      setVerifying(true);
-      const ok = await mockVerifyIdentity();
-      setVerifying(false);
-      if (ok) handleNavigate('FacialVerification');
+      handleNavigate('FacialVerification');
       return;
     }
 
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        quality: 0.8,
-      });
-      if (!result.canceled) startScanning();
+    const result =
+      status !== 'granted'
+        ? await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          quality: 0.8,
+          base64: true,
+        })
+        : await ImagePicker.launchCameraAsync({ quality: 0.8, base64: true });
+
+    if (result.canceled) return;
+
+    const asset = result.assets?.[0];
+    if (!asset?.base64) {
+      setPhase('error');
+      setBanner('That photo could not be read. Take it again.');
       return;
     }
-
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (!result.canceled) startScanning();
+    startScanning(`data:image/jpeg;base64,${asset.base64}`);
   };
 
-  const startScanning = () => {
+  /* Reads the document through the same OCR the journey runs, so a photo the
+   * backend cannot read is caught here — while the customer still has the card
+   * in their hand — rather than at the end of the journey. */
+  const startScanning = async (dataUrl: string) => {
     setPhase('scanning');
     setBanner('');
-    if (scanTimer.current) clearTimeout(scanTimer.current);
-    scanTimer.current = setTimeout(() => {
-      if (false) {
-        // Toggle to true to test error state
+
+    try {
+      const ocr = await extractDocumentFields(dataUrl, fullName, idNumber);
+      if (!ocr.success) {
         setPhase('error');
-        setBanner('The text came out blurry. Steady your phone and keep the card flat.');
-      } else {
-        setPhase('done');
+        setBanner(
+          ocr.error?.includes('corrupted') || ocr.error?.includes('unsupported')
+            ? 'That image could not be read. Keep the card flat and fill the frame.'
+            : 'The text came out blurry. Steady your phone and keep the card flat.',
+        );
+        return;
       }
-      scanTimer.current = null;
-    }, 2200);
+      setDocumentImage(dataUrl);
+      record('ID document read', 'pass', ocr.full_name ?? 'details extracted');
+      setPhase('done');
+    } catch (err) {
+      setPhase('error');
+      setBanner(err instanceof Error ? err.message : 'The scan could not be completed.');
+    }
   };
 
   const dismissBanner = () => {
@@ -145,9 +170,15 @@ export function IDDocumentScanScreen({
     setPhase('ready');
   };
 
+  /* The passport flow is the same scan — the backend branches on
+   * document_type, which was chosen back on the SA ID selection screen. Send
+   * the customer there to change it rather than dead-ending. */
   const handleUsePassport = () => {
-     
-    alert('Passport flow not yet implemented.');
+    if (documentType === 'PASSPORT') {
+      setBanner('You are already on the passport journey — photograph your passport page.');
+      return;
+    }
+    handleNavigate('SAIDSelection');
   };
 
   const isDone = phase === 'done';

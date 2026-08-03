@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { useJourneyStore } from '@/store/useJourneyStore';
 
 const FLAG_ICON = { uri: 'https://placehold.co/40x40?text=ZA' };
 const GLOBE_ICON = { uri: 'https://placehold.co/40x40?text=INT' };
@@ -16,8 +17,14 @@ interface Props {
 
 export function SAIDSelectionScreen({ navigate, goBack }: Props) {
   const [choice, setChoice] = useState<'sa' | 'foreign'>('sa');
+  const setDocumentType = useJourneyStore((s) => s.setDocumentType);
 
   const handleContinue = () => {
+    // This choice decides the rest of the journey: a passport skips the SA ID
+    // checksum and skips Home Affairs entirely, because Home Affairs holds no
+    // photo for a passport holder. Carrying it forward is what makes the
+    // question on this screen mean something.
+    setDocumentType(choice === 'sa' ? 'SA_ID' : 'PASSPORT');
     navigate('IdentityValidation');
   };
 

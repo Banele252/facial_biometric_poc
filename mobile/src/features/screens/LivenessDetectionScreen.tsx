@@ -11,6 +11,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { useJourneyStore } from '@/store/useJourneyStore';
+import { checkLiveness } from '@/shared/api';
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
@@ -40,6 +42,10 @@ export default function LivenessDetectionScreen({
   const [phase, setPhase] = useState<'ready' | 'running' | 'done' | 'error'>('ready');
   const [step, setStep] = useState(0);
   const [banner, setBanner] = useState('');
+
+  const selfieId = useJourneyStore((s) => s.selfieId);
+  const setLiveness = useJourneyStore((s) => s.setLiveness);
+  const record = useJourneyStore((s) => s.record);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const advanceRef = useRef<(() => void) | null>(null);
@@ -105,6 +111,33 @@ export default function LivenessDetectionScreen({
     return undefined;
   }, [phase, breatheAnim, sweepAnim]);
 
+  /* The prompts are the customer-facing part; the verdict comes from the
+   * backend running its liveness provider over the selfie captured on the
+   * previous screen. Prompting and then declaring success without asking would
+   * make this screen theatre. */
+  const runLivenessCheck = useCallback(async () => {
+    if (!selfieId) {
+      setPhase('error');
+      setBanner('We lost your photo. Go back and take it again.');
+      return;
+    }
+    try {
+      const result = await checkLiveness(selfieId);
+      setLiveness(result);
+      if (result.is_live) {
+        record('Live person confirmed', 'pass', `score ${result.score}`);
+        setPhase('done');
+      } else {
+        record('Liveness not confirmed', 'fail', result.detail);
+        setPhase('error');
+        setBanner(`${result.detail}. Move somewhere brighter and try again.`);
+      }
+    } catch (err) {
+      setPhase('error');
+      setBanner(err instanceof Error ? err.message : 'The check could not be completed.');
+    }
+  }, [selfieId, setLiveness, record]);
+
   const advance = useCallback(() => {
     setStep((prev) => {
       const next = prev + 1;
@@ -116,13 +149,13 @@ export default function LivenessDetectionScreen({
         return prev;
       }
       if (next >= PROMPTS.length) {
-        setPhase('done');
+        void runLivenessCheck();
         return prev;
       }
       timerRef.current = setTimeout(() => advanceRef.current?.(), 2200);
       return next;
     });
-  }, [simulateFailure, PROMPTS.length]);
+  }, [simulateFailure, PROMPTS.length, runLivenessCheck]);
 
   useEffect(() => {
     advanceRef.current = advance;
