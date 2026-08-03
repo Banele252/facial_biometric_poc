@@ -6,6 +6,7 @@ import { Typography, Button, Input, Card } from '@/components/ui';
 import { Colors, Spacing } from '@/theme';
 import { stamp, type LedgerEntry } from '@/shared/ledger-entry';
 import { Ledger, SelfieCapture } from '@/components';
+import { useJourneyStore } from '@/store/useJourneyStore';
 
 import {
   validateId,
@@ -72,6 +73,10 @@ const RUNNING_STEPS = [
 ];
 
 export default function MainFlow() {
+  // Given on RequestSimSwapScreen. Read from the store rather than re-asked
+  // here — the customer consents once, at the start of the journey.
+  const consent = useJourneyStore((s) => s.consent);
+
   const [step, setStep] = useState<Step>('id');
   const [idNumber, setIdNumber] = useState('');
   const [fullName, setFullName] = useState('');
@@ -185,6 +190,7 @@ export default function MainFlow() {
       const result = await verifyIdentity({
         id_number: idNumber.trim(),
         selfie_id: selfieId,
+        consent,
         full_name: fullName.trim() || undefined,
         msisdn: msisdn.trim() || undefined,
         new_sim_number: newSim.trim() || undefined,

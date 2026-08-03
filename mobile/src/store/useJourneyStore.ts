@@ -48,6 +48,14 @@ interface JourneyState {
     targetNetwork: string;
     setTargetNetwork: (n: string) => void;
 
+    // ── Consent ──
+    // Captured on RequestSimSwapScreen and sent with the verification. RICA
+    // and POPIA both require it before any check runs, and the backend
+    // refuses the journey without it — so it has to outlive the screen that
+    // collected it rather than staying in that screen's local state.
+    consent: boolean;
+    setConsent: (v: boolean) => void;
+
     // ── API Results ──
     validation: ValidationResponse | null;
     setValidation: (v: ValidationResponse | null) => void;
@@ -85,6 +93,7 @@ const initialState = {
   newSim: '',
   transaction: 'sim_swap' as TransactionKind,
   targetNetwork: '',
+  consent: false,
   validation: null as ValidationResponse | null,
   selfieId: null as string | null,
   liveness: null as LivenessResponse | null,
@@ -108,6 +117,7 @@ export const useJourneyStore = create<JourneyState>((set) => ({
   setNewSim: (newSim) => set({ newSim }),
   setTransaction: (transaction) => set({ transaction }),
   setTargetNetwork: (targetNetwork) => set({ targetNetwork }),
+  setConsent: (consent) => set({ consent }),
 
   setValidation: (validation) => set({ validation }),
   setSelfieId: (selfieId) => set({ selfieId }),

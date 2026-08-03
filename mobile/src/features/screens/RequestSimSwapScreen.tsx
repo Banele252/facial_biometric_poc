@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { useJourneyStore } from '@/store/useJourneyStore';
 
 interface Props {
   navigate: (screen: string, params?: any) => void;
@@ -13,9 +14,14 @@ interface Props {
 
 export function RequestSimSwapScreen({ navigate, goBack }: Props) {
   const [consented, setConsented] = useState(false);
+  const setConsent = useJourneyStore((s) => s.setConsent);
 
   const handleContinue = () => {
     if (!consented) return;
+    // The backend refuses to run any check without this, so the consent given
+    // here has to travel with the verification rather than stopping at this
+    // screen's local state.
+    setConsent(true);
     navigate('SAIDSelection');
   };
 

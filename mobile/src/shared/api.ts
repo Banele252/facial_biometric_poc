@@ -55,6 +55,9 @@ export interface VerificationDecision {
 export interface VerificationInput {
   id_number: string;
   selfie_id: string;
+  /** Required. RICA and POPIA both need the customer's consent before any
+   *  check runs, and the backend refuses the journey without it. */
+  consent: boolean;
   full_name?: string;
   msisdn?: string;
   new_sim_number?: string;
