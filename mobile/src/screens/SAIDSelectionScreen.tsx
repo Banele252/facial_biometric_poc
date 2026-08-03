@@ -14,17 +14,9 @@ interface Props {
 
 export default function SAIDSelectionScreen({ navigation }: Props) {
   const [choice, setChoice] = useState<Choice>('sa');
-  const [consent, setConsent] = useState(false);
 
-  // The choice on this screen decides the whole journey: a passport holder
-  // skips the SA ID checksum and the Home Affairs face match, because Home
-  // Affairs holds no photo for them. Carrying it forward as document_type is
-  // what makes this screen do something rather than just look like it does.
   const handleContinue = () => {
-    navigation.navigate('Main', {
-      documentType: choice === 'sa' ? 'SA_ID' : 'PASSPORT',
-      consent,
-    });
+    navigation.navigate('Main');
   };
 
   const getCardStyle = (selected: boolean) => ({
@@ -144,22 +136,6 @@ export default function SAIDSelectionScreen({ navigation }: Props) {
           </Pressable>
         </View>
 
-        {/* Consent — RICA and POPIA both require it before anything is
-            checked, and the backend refuses the journey without it. */}
-        <Pressable style={styles.consentRow} onPress={() => setConsent((on) => !on)}>
-          <View style={getDotStyle(consent)}>
-            <Ionicons
-              name="checkmark"
-              size={13}
-              color={consent ? '#14110C' : 'transparent'}
-            />
-          </View>
-          <Text style={styles.consentText}>
-            I agree to MTN verifying my identity for this request — my ID document,
-            my face and my SIM registration.
-          </Text>
-        </Pressable>
-
         {/* Security Note */}
         <View style={styles.securityRow}>
           <Ionicons name="lock-closed-outline" size={14} color="#C9A000" />
@@ -171,7 +147,7 @@ export default function SAIDSelectionScreen({ navigation }: Props) {
 
         {/* Actions */}
         <View style={styles.actionsContainer}>
-          <Button variant="primary" onPress={handleContinue} disabled={!consent}>
+          <Button variant="primary" onPress={handleContinue}>
                         Continue
           </Button>
           <Button variant="secondary" onPress={() => alert('Learn More pressed')}>
@@ -298,18 +274,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 15.5, lineHeight: 21, fontWeight: '700', color: '#14110C' },
   cardSubtitle: { fontSize: 13, fontWeight: '500', color: '#6B6559', marginTop: 2 },
-  consentRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#ECE8DF',
-    backgroundColor: '#FFFFFF',
-  },
-  consentText: { flex: 1, fontSize: 13, lineHeight: 19, color: '#4A463D' },
   securityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },
   securityText: { fontSize: 12.5, fontWeight: '500', color: '#6B6559' },
   actionsContainer: { flexDirection: 'column', gap: 10, marginBottom: 20 },
