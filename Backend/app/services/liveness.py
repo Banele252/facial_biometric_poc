@@ -179,6 +179,89 @@ def _extract_liveness(body: dict) -> tuple[str, float | None]:
     return status, score
 
 
+# ---------------------------------------------------------------------------
+# Capture quality pre-filter
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class CaptureQuality:
+    """Whether a capture is worth sending to the liveness provider at all."""
+
+    acceptable: bool
+    reason: str
+    faces_detected: int | None = None
+
+
+def screen_capture(raw: bytes, settings: Settings | None = None) -> CaptureQuality:
+    """Reject obviously unusable captures before spending a liveness credit.
+
+    Azure Face ``/detect`` is covered by our Limited Access grant and is cheap,
+    so it is worth asking it first whether there is exactly one reasonably
+    photographed face here.
+
+    This is emphatically **not** an anti-spoofing check. Detect happily finds a
+    face in a printed photo, a screen, or an AI-generated portrait — measured,
+    not assumed: a StyleGAN face comes back ``qualityForRecognition: high``,
+    indistinguishable from a real photograph. Deciding whether a real human is
+    present is the liveness provider's job. All this does is stop empty frames,
+    group shots and unusably poor images from getting that far.
+    """
+    settings = settings or get_settings()
+
+    # Only meaningful when Azure Face is configured. Anywhere else the capture
+    # passes through untouched rather than being blocked by a missing optional
+    # service.
+    if settings.document_provider != "azure" or not settings.azure_face_configured:
+        return CaptureQuality(acceptable=True, reason="Pre-filter not configured")
+
+    import requests
+
+    url = f"{str(settings.azure_face_api_endpoint).rstrip('/')}/face/v1.0/detect"
+    try:
+        response = requests.post(
+            url,
+            params={
+                "returnFaceId": "false",
+                "detectionModel": "detection_03",
+                "recognitionModel": "recognition_04",
+                "returnFaceAttributes": "occlusion,mask,qualityforrecognition,blur",
+            },
+            headers={
+                "Ocp-Apim-Subscription-Key": settings.azure_face_api_key or "",
+                "Content-Type": "application/octet-stream",
+            },
+            data=raw,
+            timeout=settings.request_timeout_seconds,
+        )
+        response.raise_for_status()
+        faces = response.json()
+    except Exception as exc:
+        # A pre-filter outage must not block the journey — the real check still
+        # runs behind it.
+        logger.warning("Capture pre-filter unavailable, allowing through: %s", exc)
+        return CaptureQuality(acceptable=True, reason="Pre-filter unavailable")
+
+    if not isinstance(faces, list) or len(faces) == 0:
+        return CaptureQuality(False, "No face found in the photo", 0)
+    if len(faces) > 1:
+        return CaptureQuality(
+            False, "More than one face in the photo — only you should be in frame", len(faces)
+        )
+
+    attrs = faces[0].get("faceAttributes") or {}
+    if (attrs.get("qualityForRecognition") or "").lower() == "low":
+        return CaptureQuality(False, "The photo is too poor to work with", 1)
+
+    occlusion = attrs.get("occlusion") or {}
+    if occlusion.get("eyeOccluded"):
+        return CaptureQuality(False, "Your eyes are covered — remove sunglasses and try again", 1)
+
+    mask = attrs.get("mask") or {}
+    if mask.get("noseAndMouthCovered"):
+        return CaptureQuality(False, "Your nose and mouth are covered — remove any mask", 1)
+
+    return CaptureQuality(True, "Capture is usable", 1)
+
+
 _PROVIDERS: dict[str, type[LivenessProvider]] = {
     MockLiveness.name: MockLiveness,
     AzureFaceLiveness.name: AzureFaceLiveness,
