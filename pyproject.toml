@@ -14,6 +14,13 @@ dependencies = [
     "azure-ai-documentintelligence>=1.0.0",
     "azure-ai-vision-face>=1.0.0b2",
     "azure-core>=1.30.0",
+    # Selfie storage when AZURE_STORAGE_CONNECTION_STRING is set. The code
+    # imports it lazily and raises a clear error when it is missing, which is
+    # exactly what the deployed app did — the connection string is configured
+    # on the Container App, so every selfie capture returned a 500 until this
+    # was declared. It is only optional in the sense that the local-directory
+    # default does not need it; any Blob-backed environment does.
+    "azure-storage-blob>=12.30.0",
     "psycopg[binary]>=3.3.4",
     # Barcode reading for the SIM ICCID scan (Backend/app/routers/iccid.py).
     # pyzbar is a wrapper over the native zbar library, so the image also needs
