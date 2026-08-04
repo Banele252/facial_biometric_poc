@@ -4,10 +4,10 @@ import {
   View,
   StyleSheet,
   ActivityIndicator,
-  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
@@ -94,7 +94,7 @@ export default function SIMSwapApprovedScreen({
 
   const copyRef = () => {
     const ref = approval?.attempt_id || approval?.id || 'N/A';
-    Clipboard.setString(ref);
+    void Clipboard.setStringAsync(ref);
     setCopied(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {

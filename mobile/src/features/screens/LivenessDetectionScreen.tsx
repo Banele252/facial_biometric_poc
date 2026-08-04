@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Container, Button } from '@/components/ui';
 import { API_BASE_URL } from '@/config/apiBase';
@@ -41,6 +42,7 @@ export default function LivenessDetectionScreen({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const circleRef = useRef<any>(null);
+  const cameraRef = useRef<CameraView | null>(null);
 
   const breatheScale = useMemo(() => new Animated.Value(1), []);
   const sweepTranslateY = useMemo(() => new Animated.Value(-118), []);
@@ -212,7 +214,19 @@ export default function LivenessDetectionScreen({
     return response.json();
   };
 
-  const launchMobileCamera = async (): Promise<string | null> => {
+  /**
+   * Grab a frame from the live preview above.
+   *
+   * This previously called ImagePicker.launchCameraAsync, which handed control
+   * to the system camera app — complete with a crop step — so the customer
+   * composed and approved a still image before it was checked. A liveness test
+   * on a picture the subject chose is not a liveness test.
+   *
+   * quality is 0.5 rather than 0.8: the frame is only ever compared against a
+   * face, and a full-resolution capture base64-encodes to several megabytes,
+   * which is a lot of string to hold on a mid-range handset.
+   */
+  const captureFromPreview = async (): Promise<string | null> => {
     if (!hasPermission) {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       setHasPermission(status === 'granted');
@@ -221,19 +235,15 @@ export default function LivenessDetectionScreen({
         return null;
       }
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: 'images',
-      quality: 0.8,
-      base64: true,
-      allowsEditing: true,
-      aspect: [4, 3],
-      cameraType: ImagePicker.CameraType.front,
-    });
-    if (!result.canceled && result.assets?.[0]) {
-      const asset = result.assets[0];
-      return asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+
+    const cam = cameraRef.current;
+    if (!cam) {
+      throw new Error('Camera is not ready yet. Give it a moment and try again.');
     }
-    return null;
+
+    const photo = await cam.takePictureAsync({ base64: true, quality: 0.5, skipProcessing: true });
+    if (!photo?.base64) return null;
+    return `data:image/jpeg;base64,${photo.base64}`;
   };
 
   /* Start liveness */
@@ -253,7 +263,7 @@ export default function LivenessDetectionScreen({
           imageData = captureWebFrame();
           if (!imageData) throw new Error('Camera not ready. Please allow camera access.');
         } else {
-          imageData = await launchMobileCamera();
+          imageData = await captureFromPreview();
           if (!imageData) {
             setPhase('ready');
             return;
@@ -341,6 +351,19 @@ export default function LivenessDetectionScreen({
             style={[styles.circleInner, { transform: [{ scale: breatheScale }] }]}
           >
             <View ref={circleRef} style={styles.circleBackground}>
+              {/* A live preview, not a snapshot. The system camera app used to
+                  be launched here, which meant the customer took a photo and
+                  handed it over — the opposite of what a liveness check is for.
+                  The frame is grabbed off this preview instead, so the person
+                  stays in front of the lens while the prompts run. */}
+              {Platform.OS !== 'web' && hasPermission && (
+                <CameraView
+                  ref={cameraRef}
+                  style={StyleSheet.absoluteFill}
+                  facing="front"
+                  mode="picture"
+                />
+              )}
               {!isChecking && !isDone && !isError && (
                 <View style={styles.faceOverlay}>
                   <View style={styles.headOutline} />
