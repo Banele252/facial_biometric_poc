@@ -1,0 +1,120 @@
+name: Mobile APK
+
+# Builds an installable Android APK from the Expo app.
+#
+# The build runs entirely on the runner — prebuild generates the native project,
+# Gradle assembles it — so it needs no Expo account, no EXPO_TOKEN and no build
+# queue. The APK lands as a workflow artifact you can download and sideload.
+#
+# Runs on demand, and on pushes that touch mobile/ so the app cannot quietly
+# stop building. Tags also produce a build, since that is when someone wants
+# something to hand out.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: >-
+          API the app should talk to. Baked into the bundle at build time —
+          Expo inlines EXPO_PUBLIC_ variables, so this cannot be changed after
+          the APK is built.
+        required: false
+        type: string
+        default: https://team21-ca.livelycoast-bbf4360d.southafricanorth.azurecontainerapps.io
+      build_type:
+        description: Gradle variant
+        required: false
+        type: choice
+        options: [release, debug]
+        default: release
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/mobile-apk.yaml']
+  pull_request:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/mobile-apk.yaml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  JAVA_VERSION: '17'
+
+jobs:
+  apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # React Native 0.86 / Expo SDK 57 need JDK 17. Newer JDKs fail in the
+      # Gradle plugin rather than anywhere obvious, so this is pinned.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      # The app reads process.env.EXPO_PUBLIC_API_BASE_URL, and Expo substitutes
+      # it at bundle time. Without it every request becomes a relative path,
+      # which resolves to nothing on a handset — so the APK is only useful if
+      # this is set before the bundle is built, not after.
+      - name: Point the app at the API
+        run: |
+          echo "EXPO_PUBLIC_API_BASE_URL=${API_BASE_URL}" > .env
+          echo "Building against ${API_BASE_URL}"
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url || 'https://team21-ca.livelycoast-bbf4360d.southafricanorth.azurecontainerapps.io' }}
+
+      # No android/ directory is committed — this is a managed Expo project, so
+      # the native project is generated here and thrown away with the runner.
+      - name: Generate the native Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: mobile/android
+
+      - name: Assemble APK
+        working-directory: mobile/android
+        run: ./gradlew assemble${{ inputs.build_type == 'debug' && 'Debug' || 'Release' }} --no-daemon
+
+      # Expo's template signs release builds with the debug keystore unless a
+      # real one is configured, so the output installs on a device but is not
+      # suitable for Play distribution. That is the right trade for a demo
+      # build; wiring a signing key is a separate decision.
+      - name: Locate the APK
+        id: find
+        working-directory: mobile/android
+        run: |
+          apk=$(find app/build/outputs/apk -name '*.apk' | head -1)
+          if [ -z "$apk" ]; then echo "No APK produced"; exit 1; fi
+          echo "path=mobile/android/$apk" >> "$GITHUB_OUTPUT"
+          echo "Built $apk ($(du -h "$apk" | cut -f1))"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: facial-biometric-poc-apk-${{ github.sha }}
+          path: ${{ steps.find.outputs.path }}
+          retention-days: 14
+          if-no-files-found: error
