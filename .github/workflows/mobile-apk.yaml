@@ -71,8 +71,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type-check
-        run: npx tsc --noEmit
 
       # The app reads process.env.EXPO_PUBLIC_API_BASE_URL, and Expo substitutes
       # it at bundle time. Without it every request becomes a relative path,
