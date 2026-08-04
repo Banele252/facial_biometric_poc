@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Platform, Text } from 'react-native';
+import { View, StyleSheet, Platform, Text, ScrollView } from 'react-native';
 
 interface Props {
     children: React.ReactNode;
@@ -17,8 +17,16 @@ export function DeviceFrame({ children }: Props) {
     return <>{children}</>;
   }
 
+  // The chassis is a fixed 960px tall. Centring it in a plain flex container
+  // clipped it on any viewport shorter than that — which is most laptops — with
+  // no way to reach the top or bottom. A scroll view keeps it centred when it
+  // fits and lets the page scroll when it does not.
   return (
-    <View style={styles.workspace}>
+    <ScrollView
+      style={styles.viewport}
+      contentContainerStyle={styles.workspace}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.chassis}>
         <View style={[styles.sideBtn, styles.actionBtn]} />
         <View style={[styles.sideBtn, styles.volUp]} />
@@ -32,22 +40,31 @@ export function DeviceFrame({ children }: Props) {
         </View>
       </View>
 
+      {/* In normal flow rather than absolutely positioned, so it cannot sit on
+          top of the chassis once the workspace scrolls. */}
       <View style={styles.hint}>
         <Text style={styles.hintText}>
                     Add to Home Screen for native feel
         </Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  workspace: {
+  viewport: {
     flex: 1,
+    backgroundColor: '#0F0F0F',
+  },
+  workspace: {
+    // Fills the viewport so the frame stays centred on a tall screen, and grows
+    // past it on a short one so the scroll view has somewhere to scroll to.
+    minHeight: '100%',
     backgroundColor: '#0F0F0F',
     alignItems: 'center',
     justifyContent: 'center',
-    // minHeight removed — flex:1 handles it on all platforms
+    paddingVertical: 24,
+    gap: 20,
   },
   chassis: {
     width: IPHONE.width + 28,
@@ -125,8 +142,6 @@ const styles = StyleSheet.create({
     height: 72,
   },
   hint: {
-    position: 'absolute',
-    bottom: 24,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 999,

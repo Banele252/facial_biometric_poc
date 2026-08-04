@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Container, Button } from '@/components/ui';
+import { API_BASE_URL } from '@/config/apiBase';
 
 const { width, height } = Dimensions.get('window');
 const GOLD = '#D4AF37';
@@ -47,9 +48,7 @@ export function IDDocumentScanScreen({
   /* ── Shared upload to selfies endpoint ── */
   const uploadDocument = async (imageData: string) => {
     try {
-      const baseUrl =
-          process.env.EXPO_PUBLIC_API_BASE_URL ||
-          'https://backend-poc-bcd0hnd5c9e0cwfm.southafricanorth-01.azurewebsites.net';
+      const baseUrl = API_BASE_URL;
 
       const idNumber = (routeParams?.id_number as string) || '8107255492089';
 

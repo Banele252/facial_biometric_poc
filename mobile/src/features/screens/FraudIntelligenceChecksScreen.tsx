@@ -13,6 +13,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { API_BASE_URL } from '@/config/apiBase';
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
@@ -48,9 +49,7 @@ export default function FraudIntelligenceChecksScreen({
 
   const pulseAnim = useMemo(() => new Animated.Value(1), []);
 
-  const baseUrl =
-      process.env.EXPO_PUBLIC_API_BASE_URL ||
-      'https://backend-poc-bcd0hnd5c9e0cwfm.southafricanorth-01.azurewebsites.net';
+  const baseUrl = API_BASE_URL;
 
   const idNumber = routeParams?.id_number as string;
   const selfieId = routeParams?.selfie_id as string;

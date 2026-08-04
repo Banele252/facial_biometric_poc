@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
+import { API_BASE_URL } from '@/config/apiBase';
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
@@ -41,9 +42,7 @@ export default function SIMSwapApprovedScreen({
   const [banner, setBanner] = useState(() => (idNumber ? '' : 'No ID number provided.'));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const baseUrl =
-      process.env.EXPO_PUBLIC_API_BASE_URL ||
-      'https://backend-poc-bcd0hnd5c9e0cwfm.southafricanorth-01.azurewebsites.net';
+  const baseUrl = API_BASE_URL;
 
   useEffect(() => {
     if (!idNumber) return; // early return — no setState inside effect body
