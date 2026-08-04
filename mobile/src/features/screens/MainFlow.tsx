@@ -12,7 +12,6 @@ import {
   captureSelfie,
   checkLiveness,
   verifyIdentity,
-  getHistory,
   getNotifications,
   getDeviceId,
   CHECK_LABELS,

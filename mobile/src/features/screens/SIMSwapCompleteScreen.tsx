@@ -1,20 +1,23 @@
-import React, { useState, useRef } from 'react';
+// src/features/screens/SIMSwapCompleteScreen.tsx
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
-  // @ts-ignore Clipboard is deprecated but still present in many Expo/RN builds
+  ActivityIndicator,
   Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
 
 interface Props {
-  dispatch: (action: any) => void;
-  reference?: string;
-  nextStepCount?: number;
+  navigate?: (screen: string, params?: any) => void;
+  goBack?: () => void;
+  dispatch?: (action: any) => void;
+  routeParams?: Record<string, unknown>;
   showConfetti?: boolean;
   showCopy?: boolean;
   showSecondaryAction?: boolean;
@@ -23,22 +26,77 @@ interface Props {
 }
 
 export default function SIMSwapCompleteScreen({
+  navigate,
+  goBack,
   dispatch,
-  reference = 'S1234567890',
-  nextStepCount = 3,
+  routeParams,
   showConfetti = true,
   showCopy = true,
   showSecondaryAction = true,
   stepCount = 6,
   activeStep = 6,
 }: Props) {
+  const idNumber = routeParams?.id_number as string;
+
+  const [loading, setLoading] = useState(() => !!idNumber);
+  const [history, setHistory] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [banner, setBanner] = useState(() => (idNumber ? '' : 'No ID number provided.'));
   const [containerWidth, setContainerWidth] = useState(300);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const baseUrl =
+      process.env.EXPO_PUBLIC_API_BASE_URL ||
+      'https://backend-poc-bcd0hnd5c9e0cwfm.southafricanorth-01.azurewebsites.net';
+
+  useEffect(() => {
+    if (!idNumber) return;
+
+    let cancelled = false;
+
+    const fetchHistory = async () => {
+      try {
+        const url = `${baseUrl}/api/v1/verifications/history?id_number=${encodeURIComponent(idNumber)}&limit=1`;
+        console.log('[SIMSwapComplete] GET', url);
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+        });
+
+        console.log('[SIMSwapComplete] status:', response.status);
+
+        if (!response.ok) {
+          const text = await response.text();
+          console.error('[SIMSwapComplete] error body:', text);
+          throw new Error(`History fetch failed (${response.status})`);
+        }
+
+        const data = await response.json();
+        console.log('[SIMSwapComplete] response:', data);
+
+        if (!cancelled) {
+          /* API returns AttemptRecord[] — take the most recent */
+          const records = Array.isArray(data) ? data : [data];
+          setHistory(records[0] || null);
+          setLoading(false);
+        }
+      } catch (err: any) {
+        console.error('[SIMSwapComplete] API error:', err);
+        if (!cancelled) {
+          setBanner(err.message || 'Failed to load completion details.');
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchHistory();
+    return () => { cancelled = true; };
+  }, [idNumber, baseUrl]);
+
   const copyRef = () => {
-     
-    Clipboard.setString(reference);
+    const ref = history?.id || history?.attempt_id || 'N/A';
+    Clipboard.setString(ref);
     setCopied(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
@@ -48,26 +106,47 @@ export default function SIMSwapCompleteScreen({
   };
 
   const handleDone = () => {
-    dispatch({ type: 'NAVIGATE', payload: { screen: 'Splash' } });
+    if (navigate) {
+      navigate('Splash');
+    } else if (dispatch) {
+      dispatch({ type: 'NAVIGATE', payload: { screen: 'Splash' } });
+    }
   };
 
-  const nextSteps = [
+  const handleBack = () => {
+    if (goBack) goBack();
+    else if (dispatch) dispatch({ type: 'GO_BACK' });
+  };
+
+  const reference = history?.id || history?.attempt_id || 'S1234567890';
+  const nextSteps = history?.next_steps || [
     'Insert your new SIM card',
     'Restart your phone if needed',
     'Dial *123# to confirm activation',
-  ].slice(0, nextStepCount);
+  ];
 
   const colors = ['#FFCB05', '#2FA96B', '#14110C', '#FF7A59', '#4A90D9'];
 
   const totalDots = stepCount;
   const activeDot = Math.min(Math.max(activeStep, 1), totalDots) - 1;
 
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.shell, styles.centered]}>
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Typography variant="body" style={{ marginTop: 16 }}>
+            Loading completion…
+        </Typography>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.shell}>
       <StatusBar style="dark" />
       <Container>
         <Card style={styles.cardContainer}>
-          {/* Confetti */}
           {showConfetti && (
             <View
               style={styles.confettiContainer}
@@ -96,14 +175,12 @@ export default function SIMSwapCompleteScreen({
             </View>
           )}
 
-          {/* Success Icon */}
           <View style={styles.iconContainer}>
             <View style={styles.icon}>
               <View style={styles.iconInner} />
             </View>
           </View>
 
-          {/* Headline */}
           <View style={styles.headlineContainer}>
             <Typography variant="h1" style={styles.headline}>
                 SIM Swap Complete
@@ -113,7 +190,14 @@ export default function SIMSwapCompleteScreen({
             </Typography>
           </View>
 
-          {/* Reference Card */}
+          {!!banner && (
+            <View style={[styles.banner, { marginBottom: 16 }]}>
+              <Typography variant="body" style={styles.bannerText}>
+                {banner}
+              </Typography>
+            </View>
+          )}
+
           <View style={styles.referenceContainer}>
             <View style={styles.referenceTextContainer}>
               <Typography
@@ -142,13 +226,12 @@ export default function SIMSwapCompleteScreen({
             )}
           </View>
 
-          {/* Next Steps */}
           <View style={styles.nextStepsContainer}>
             <Typography variant="body" style={styles.nextStepsTitle}>
                 What is next?
             </Typography>
             <View style={styles.nextStepsList}>
-              {nextSteps.map((text, i) => (
+              {nextSteps.map((text: string, i: number) => (
                 <View
                   key={i}
                   style={[
@@ -174,7 +257,6 @@ export default function SIMSwapCompleteScreen({
 
           <View style={styles.spacer} />
 
-          {/* Actions */}
           <View style={styles.actionContainer}>
             <Button onPress={handleDone} variant="primary">
                 Done
@@ -190,7 +272,6 @@ export default function SIMSwapCompleteScreen({
             )}
           </View>
 
-          {/* Step dots */}
           <View style={styles.dotsContainer}>
             {Array.from({ length: totalDots }).map((_, i) => (
               <View
@@ -206,199 +287,53 @@ export default function SIMSwapCompleteScreen({
 }
 
 const styles = StyleSheet.create({
-  shell: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  cardContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  confettiContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 60,
-    height: 300,
-    overflow: 'hidden',
-    pointerEvents: 'none',
-  },
-  iconContainer: {
-    width: 92,
-    height: 92,
-    marginTop: 44,
-    marginBottom: 24,
-  },
-  icon: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 46,
-    backgroundColor: '#1E9E5F',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#1E9E5F',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.32,
-    shadowRadius: 28,
-    elevation: 10,
-  },
-  iconInner: {
-    width: 42,
-    height: 42,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderColor: Colors.surface,
-    transform: [{ rotate: '45deg' }],
-  },
-  headlineContainer: {
-    alignItems: 'center',
-    gap: 9,
-    marginBottom: 24,
-  },
-  headline: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.6,
-    textAlign: 'center',
-  },
-  subline: {
-    fontSize: 14.5,
-    lineHeight: 22,
-    fontWeight: '500',
-    textAlign: 'center',
-    maxWidth: 268,
-  },
-  referenceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    borderWidth: 1.5,
-    borderColor: '#C4E7D2',
-    borderRadius: 20,
-    backgroundColor: '#F3FBF6',
-    padding: 16,
-    marginBottom: 16,
-  },
-  referenceTextContainer: {
-    flex: 1,
-    gap: 3,
-  },
-  referenceLabel: {
-    fontSize: 12.5,
-    color: '#57806A',
-  },
-  referenceValue: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#1B7A4B',
-    letterSpacing: 0.6,
-    fontVariant: ['tabular-nums'],
-  },
-  copyButton: {
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: '#C4E7D2',
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  copyButtonSuccess: {
-    borderColor: '#2FA96B',
-    backgroundColor: '#2FA96B',
-  },
-  copyButtonText: {
-    fontSize: 13.5,
-    color: '#1B7A4B',
-  },
-  nextStepsContainer: {
-    width: '100%',
-    borderWidth: 1.5,
-    borderColor: '#ECE8DF',
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    padding: 16,
-    paddingBottom: 6,
-    shadowColor: Colors.secondary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  nextStepsTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.2,
-    marginBottom: 4,
-  },
-  nextStepsList: {
-    marginTop: 4,
-  },
-  nextStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F4F1EA',
-  },
-  nextStepRowLast: {
-    borderBottomWidth: 0,
-  },
-  nextStepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    backgroundColor: '#FFF7DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nextStepNumberText: {
-    fontSize: 12,
-    color: Colors.text,
-  },
-  nextStepText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-    color: '#4A453D',
-  },
-  spacer: {
-    flex: 1,
-  },
-  actionContainer: {
-    gap: 10,
-    width: '100%',
-    marginTop: 24,
-  },
-  secondaryButton: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1.5,
-    borderColor: '#F0DE9C',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 22,
-  },
-  dot: {
-    height: 7,
-    borderRadius: 4,
-  },
-  dotActive: {
-    width: 22,
-    backgroundColor: Colors.primary,
-  },
-  dotInactive: {
-    width: 7,
-    backgroundColor: '#E2DFD7',
-  },
+  shell: { flex: 1, backgroundColor: Colors.background },
+  centered: { justifyContent: 'center', alignItems: 'center' },
+  cardContainer: { paddingHorizontal: 24, paddingVertical: 16, alignItems: 'center' },
+  confettiContainer: { position: 'absolute', left: 0, right: 0, top: 60, height: 300,
+    overflow: 'hidden', pointerEvents: 'none' },
+  iconContainer: { width: 92, height: 92, marginTop: 44, marginBottom: 24 },
+  icon: { ...StyleSheet.absoluteFill, borderRadius: 46, backgroundColor: '#1E9E5F',
+    justifyContent: 'center', alignItems: 'center', shadowColor: '#1E9E5F',
+    shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.32, shadowRadius: 28, elevation: 10 },
+  iconInner: { width: 42, height: 42, borderBottomWidth: 4, borderRightWidth: 4,
+    borderColor: Colors.surface, transform: [{ rotate: '45deg' }] },
+  headlineContainer: { alignItems: 'center', gap: 9, marginBottom: 24 },
+  headline: { fontSize: 26, lineHeight: 31, fontWeight: '800', color: Colors.text,
+    letterSpacing: -0.6, textAlign: 'center' },
+  subline: { fontSize: 14.5, lineHeight: 22, fontWeight: '500', textAlign: 'center', maxWidth: 268 },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5,
+    borderColor: '#F3C9C3', borderRadius: 16, backgroundColor: '#FEF3F1', padding: 13, width: '100%' },
+  bannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#7A2820', lineHeight: 19 },
+  referenceContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    width: '100%', borderWidth: 1.5, borderColor: '#C4E7D2', borderRadius: 20,
+    backgroundColor: '#F3FBF6', padding: 16, marginBottom: 16 },
+  referenceTextContainer: { flex: 1, gap: 3 },
+  referenceLabel: { fontSize: 12.5, color: '#57806A' },
+  referenceValue: { fontSize: 19, fontWeight: '800', color: '#1B7A4B', letterSpacing: 0.6,
+    fontVariant: ['tabular-nums'] },
+  copyButton: { height: 36, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1.5,
+    borderColor: '#C4E7D2', backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center' },
+  copyButtonSuccess: { borderColor: '#2FA96B', backgroundColor: '#2FA96B' },
+  copyButtonText: { fontSize: 13.5, color: '#1B7A4B' },
+  nextStepsContainer: { width: '100%', borderWidth: 1.5, borderColor: '#ECE8DF', borderRadius: 20,
+    backgroundColor: Colors.surface, padding: 16, paddingBottom: 6,
+    shadowColor: Colors.secondary, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04,
+    shadowRadius: 2, elevation: 2 },
+  nextStepsTitle: { fontSize: 13.5, fontWeight: '800', color: Colors.text, letterSpacing: -0.2, marginBottom: 4 },
+  nextStepsList: { marginTop: 4 },
+  nextStepRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F4F1EA' },
+  nextStepRowLast: { borderBottomWidth: 0 },
+  nextStepNumber: { width: 24, height: 24, borderRadius: 8, backgroundColor: '#FFF7DB',
+    justifyContent: 'center', alignItems: 'center' },
+  nextStepNumberText: { fontSize: 12, color: Colors.text },
+  nextStepText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500', color: '#4A453D' },
+  spacer: { flex: 1 },
+  actionContainer: { gap: 10, width: '100%', marginTop: 24 },
+  secondaryButton: { backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: '#F0DE9C' },
+  dotsContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingVertical: 22 },
+  dot: { height: 7, borderRadius: 4 },
+  dotActive: { width: 22, backgroundColor: Colors.primary },
+  dotInactive: { width: 7, backgroundColor: '#E2DFD7' },
 });
