@@ -46,7 +46,7 @@ export default function SIMSwapApprovedScreen({
       'https://backend-poc-bcd0hnd5c9e0cwfm.southafricanorth-01.azurewebsites.net';
 
   useEffect(() => {
-    if (!idNumber) return;
+    if (!idNumber) return; // early return — no setState inside effect body
 
     let cancelled = false;
 
@@ -72,7 +72,6 @@ export default function SIMSwapApprovedScreen({
         console.log('[SIMSwapApproved] response:', data);
 
         if (!cancelled) {
-          /* API returns NotificationRecord[] — pick the most recent approval notification */
           const notifications = Array.isArray(data) ? data : [data];
           const approvalNotification = notifications.find(
             (n: any) => n.type === 'approval' || n.message?.toLowerCase().includes('approved'),
@@ -118,7 +117,6 @@ export default function SIMSwapApprovedScreen({
     else if (dispatch) dispatch({ type: 'GO_BACK' });
   };
 
-  /* Fallback: NotificationRecord doesn't include sim_number/msisdn, so we mock realistically */
   const simNumber = approval?.new_sim_number || '89927 01 1234 5678 9012';
   const msisdn = approval?.msisdn || '083 123 4567';
   const reference = approval?.attempt_id || approval?.id || 'SW-4820-3391';
@@ -169,31 +167,36 @@ export default function SIMSwapApprovedScreen({
 
           <View style={styles.detailsContainer}>
             <View style={styles.detailRow}>
-              <Typography variant="caption" color="textSecondary" style={[styles.detailLabel, { fontWeight: '600' }]}>
+              <Typography variant="caption" color="textSecondary" style={styles.detailLabel}>
                   New SIM number
               </Typography>
-              <Typography variant="body" style={[styles.detailValue, { fontWeight: '800' }]}>
+              <Typography variant="body" style={styles.detailValue} numberOfLines={1}>
                 {simNumber}
               </Typography>
             </View>
             <View style={styles.detailRow}>
-              <Typography variant="caption" color="textSecondary" style={[styles.detailLabel, { fontWeight: '600' }]}>
+              <Typography variant="caption" color="textSecondary" style={styles.detailLabel}>
                   Your mobile number
               </Typography>
-              <Typography variant="body" style={[styles.detailValue, { fontWeight: '800' }]}>
+              <Typography variant="body" style={styles.detailValue} numberOfLines={1}>
                 {msisdn}
               </Typography>
             </View>
             <View style={styles.detailRow}>
-              <Typography variant="caption" color="textSecondary" style={[styles.detailLabel, { fontWeight: '600' }]}>
+              <Typography variant="caption" color="textSecondary" style={styles.detailLabel}>
                   Reference
               </Typography>
-              <Typography variant="body" style={[styles.detailValue, { fontWeight: '800' }]}>
+              <Typography
+                variant="body"
+                style={[styles.detailValue, styles.referenceValue]}
+                numberOfLines={1}
+                ellipsizeMode="middle"
+              >
                 {reference}
               </Typography>
             </View>
             <View style={[styles.detailRow, styles.detailRowLast]}>
-              <Typography variant="caption" color="textSecondary" style={[styles.detailLabel, { fontWeight: '600' }]}>
+              <Typography variant="caption" color="textSecondary" style={styles.detailLabel}>
                   Status
               </Typography>
               <View style={styles.statusBadge}>
@@ -264,31 +267,96 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: '#F3C9C3',
     borderRadius: 16, backgroundColor: '#FEF3F1', padding: 13, width: '100%' },
   bannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#7A2820', lineHeight: 19 },
-  detailsContainer: { width: '100%', borderWidth: 1.5, borderColor: '#ECE8DF', borderRadius: 20,
-    backgroundColor: Colors.surface, paddingVertical: 4, paddingHorizontal: 18,
-    shadowColor: Colors.secondary, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04,
-    shadowRadius: 2, elevation: 2 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F4F1EA' },
+
+  detailsContainer: {
+    width: '100%',
+    borderWidth: 1.5,
+    borderColor: '#ECE8DF',
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    paddingVertical: 4,
+    paddingHorizontal: 18,
+    shadowColor: Colors.secondary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F4F1EA',
+    gap: 12,
+  },
   detailRowLast: { borderBottomWidth: 0 },
-  detailLabel: { fontSize: 13, color: '#6B6559', flex: 1 },
-  detailValue: { fontSize: 14.5, color: Colors.text, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5,
-    paddingHorizontal: 11, borderRadius: 999, backgroundColor: '#E4F5EA', borderWidth: 1, borderColor: '#C4E7D2' },
+  detailLabel: {
+    fontSize: 13,
+    color: '#6B6559',
+    fontWeight: '600',
+    flexShrink: 0,
+  },
+  detailValue: {
+    fontSize: 14.5,
+    color: Colors.text,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    fontVariant: ['tabular-nums'],
+    flex: 1,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  referenceValue: {
+    fontFamily: 'monospace',
+    fontSize: 13.5,
+    letterSpacing: 0.4,
+  },
+
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    backgroundColor: '#E4F5EA',
+    borderWidth: 1,
+    borderColor: '#C4E7D2',
+  },
   statusDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#2FA96B' },
   statusText: { fontSize: 12.5, fontWeight: '700', color: '#1F7A4C' },
-  nextStepContainer: { flexDirection: 'row', alignItems: 'center', gap: 13, borderWidth: 1.5,
-    borderColor: '#F0DE9C', borderRadius: 16, backgroundColor: '#FFFCF2', padding: 14,
-    marginTop: 16, width: '100%' },
-  nextStepIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#FFF3C9',
-    justifyContent: 'center', alignItems: 'center' },
+
+  nextStepContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    borderWidth: 1.5,
+    borderColor: '#F0DE9C',
+    borderRadius: 16,
+    backgroundColor: '#FFFCF2',
+    padding: 14,
+    marginTop: 16,
+    width: '100%',
+  },
+  nextStepIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#FFF3C9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   nextStepIconInner: { width: 16, height: 16, borderWidth: 2,
     borderColor: Colors.text, borderRadius: 2 },
   nextStepText: { flex: 1, fontSize: 13.5, lineHeight: 20, fontWeight: '500', color: '#4A453D' },
+
   spacer: { flex: 1 },
   actionContainer: { gap: 10, width: '100%', marginTop: 24 },
   secondaryButton: { backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: '#F0DE9C' },
   copyButtonSuccess: { borderColor: '#2FA96B', backgroundColor: '#E4F5EA' },
+
   dotsContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingVertical: 22 },
   dot: { height: 7, borderRadius: 4 },
   dotActive: { width: 22, backgroundColor: Colors.primary },
