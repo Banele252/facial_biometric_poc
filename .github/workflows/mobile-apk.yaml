@@ -71,6 +71,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Restored now that tsconfig no longer sets the deprecated baseUrl — that
+      # made tsc exit non-zero on a warning and failed the job before it built
+      # anything, which is why this step had been removed rather than fixed.
+      - name: Type-check
+        run: npx tsc --noEmit
 
       # The app reads process.env.EXPO_PUBLIC_API_BASE_URL, and Expo substitutes
       # it at bundle time. Without it every request becomes a relative path,

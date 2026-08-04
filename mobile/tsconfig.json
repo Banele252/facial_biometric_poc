@@ -2,7 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",
+    // No baseUrl: it is deprecated and TypeScript 7 removes it, and while
+    // deprecated it makes `tsc` exit non-zero — which failed the APK pipeline
+    // at the type-check step before it ever reached the build. Paths without a
+    // baseUrl resolve relative to this file, which is what was wanted anyway.
     "paths": {
       "@/*": ["./src/*"]
     }
