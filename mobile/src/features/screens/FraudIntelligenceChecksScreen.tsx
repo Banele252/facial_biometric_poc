@@ -1,25 +1,24 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+// src/features/screens/FraudIntelligenceChecksScreen.tsx
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Animated,
   Easing,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Card, Container, Button } from '@/components/ui';
 import { Colors } from '@/theme';
-import { useJourneyStore } from '@/store/useJourneyStore';
-import { verifyIdentity, getDeviceId } from '@/shared/api';
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
   goBack?: () => void;
   dispatch?: (action: any) => void;
   routeParams?: Record<string, unknown>;
-  simulateFailure?: boolean;
   showSecondaryAction?: boolean;
   stepCount?: number;
   activeStep?: number;
@@ -36,7 +35,7 @@ export default function FraudIntelligenceChecksScreen({
   navigate,
   goBack,
   dispatch,
-  simulateFailure = false,
+  routeParams,
   showSecondaryAction = true,
   stepCount = 10,
   activeStep = 8,
@@ -44,21 +43,17 @@ export default function FraudIntelligenceChecksScreen({
   const [phase, setPhase] = useState<'ready' | 'running' | 'done' | 'error'>('ready');
   const [completed, setCompleted] = useState<string[]>([]);
   const [banner, setBanner] = useState('');
+  const [riskScore, setRiskScore] = useState<string>('—');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [pulseAnim] = useState(() => new Animated.Value(1));
+  const pulseAnim = useMemo(() => new Animated.Value(1), []);
 
-  const idNumber = useJourneyStore((s) => s.idNumber);
-  const fullName = useJourneyStore((s) => s.fullName);
-  const msisdn = useJourneyStore((s) => s.msisdn);
-  const newSim = useJourneyStore((s) => s.newSim);
-  const transaction = useJourneyStore((s) => s.transaction);
-  const consent = useJourneyStore((s) => s.consent);
-  const documentType = useJourneyStore((s) => s.documentType);
-  const documentImage = useJourneyStore((s) => s.documentImage);
-  const selfieId = useJourneyStore((s) => s.selfieId);
-  const setDecision = useJourneyStore((s) => s.setDecision);
-  const record = useJourneyStore((s) => s.record);
+  const baseUrl =
+      process.env.EXPO_PUBLIC_API_BASE_URL ||
+      'https://backend-poc-bcd0hnd5c9e0cwfm.southafricanorth-01.azurewebsites.net';
+
+  const idNumber = routeParams?.id_number as string;
+  const selfieId = routeParams?.selfie_id as string;
 
   useEffect(() => {
     return () => {
@@ -91,7 +86,6 @@ export default function FraudIntelligenceChecksScreen({
     return () => anim.stop();
   }, [phase, pulseAnim]);
 
-  /* ── Navigation helpers ── */
   const handleBack = () => {
     if (goBack) goBack();
     else if (dispatch) dispatch({ type: 'GO_BACK' });
@@ -102,80 +96,96 @@ export default function FraudIntelligenceChecksScreen({
     else if (dispatch) dispatch({ type: 'NAVIGATE', payload: { screen, params } });
   };
 
-  /* This is where the journey is actually decided. Everything the customer has
-   * given us so far — consent, document type, the scanned document, the selfie
-   * that passed liveness, their typed details — goes to the orchestrator in one
-   * call, which runs the fraud pre-checks, the document comparisons, RICA and
-   * Home Affairs and returns a single verdict.
-   *
-   * The tick-list below still animates while the request is in flight, because
-   * the call takes several seconds; it just no longer decides the outcome. */
-  const runChecks = () => {
+  const runChecks = useCallback(async () => {
     if (phase === 'running') return;
 
     if (phase === 'done') {
-      handleNavigate('SIMSwapApproved');
+      handleNavigate('SIMSwapApproved', { id_number: idNumber });
+      return;
+    }
+
+    if (!idNumber) {
+      setPhase('error');
+      setBanner('No ID number found. Please start from the beginning.');
       return;
     }
 
     setPhase('running');
     setCompleted([]);
     setBanner('');
+    setRiskScore('—');
 
-    // Walk the tick list purely as progress feedback.
+    /* Animate checklist locally while API runs */
     let index = 0;
-    const tick = () => {
+    const runNext = () => {
       if (index >= CHECKS.length) return;
       setCompleted((prev) => [...prev, CHECKS[index].key]);
       index += 1;
-      timerRef.current = setTimeout(tick, CHECKS[index - 1].duration);
+      timerRef.current = setTimeout(runNext, CHECKS[index - 1].duration);
     };
-    timerRef.current = setTimeout(tick, 400);
+    timerRef.current = setTimeout(runNext, 400);
 
-    void (async () => {
-      try {
-        const result = await verifyIdentity({
-          id_number: idNumber.trim(),
-          selfie_id: selfieId ?? '',
-          consent,
-          document_type: documentType,
-          document_image: documentImage ?? undefined,
-          full_name: fullName.trim() || undefined,
-          msisdn: msisdn.trim() || undefined,
-          new_sim_number: newSim.trim() || undefined,
-          device_id: getDeviceId(),
-          transaction,
-        });
+    try {
+      const url = `${baseUrl}/api/v1/verifications`;
+      console.log('[FraudIntelligence] POST', url, { id_number: idNumber, selfie_id: selfieId });
 
-        if (timerRef.current) clearTimeout(timerRef.current);
-        setDecision(result);
-        setCompleted(CHECKS.map((c) => c.key));
-        for (const check of result.checks) {
-          record(
-            check.label,
-            check.status === 'pass' ? 'pass' : check.status === 'fail' ? 'fail' : 'info',
-            check.detail,
-          );
-        }
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify({
+          id_number: idNumber,
+          transaction: 'sim_swap',
+          allow_fallback: true,
+          consent: true,
+          selfie_id: selfieId || null,
+        }),
+      });
 
-        if (result.status === 'approved') {
-          setPhase('done');
-        } else {
-          // A rejection and a referral are different answers, and the customer
-          // is told which one they got in the backend's own words rather than
-          // a single catch-all message.
-          setPhase('error');
-          setBanner(result.reason);
-        }
-      } catch (err) {
-        if (timerRef.current) clearTimeout(timerRef.current);
-        setPhase('error');
-        setBanner(
-          err instanceof Error ? err.message : 'The checks could not be completed.',
-        );
+      console.log('[FraudIntelligence] status:', response.status);
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('[FraudIntelligence] error body:', text);
+        throw new Error(`Verification failed (${response.status})`);
       }
-    })();
-  };
+
+      const data = await response.json();
+      console.log('[FraudIntelligence] response:', data);
+
+      if (timerRef.current) clearTimeout(timerRef.current);
+
+      /* Map backend checks to UI if available */
+      if (data.checks && Array.isArray(data.checks)) {
+        const passedChecks = data.checks
+          .filter((c: any) => c.status === 'passed' || c.status === 'success')
+          .map((c: any) => c.name || c.key);
+        setCompleted(passedChecks.length > 0 ? passedChecks : CHECKS.map((c) => c.key));
+      } else {
+        setCompleted(CHECKS.map((c) => c.key));
+      }
+
+      if (data.status === 'approved' || data.status === 'success') {
+        setPhase('done');
+        setRiskScore('Low');
+        timerRef.current = setTimeout(() => {
+          handleNavigate('SIMSwapApproved', { id_number: idNumber });
+        }, 600);
+      } else {
+        setPhase('error');
+        setRiskScore('High');
+        setBanner(data.reason || 'Unusual activity detected. Please contact support.');
+      }
+    } catch (err: any) {
+      console.error('[FraudIntelligence] API error:', err);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setPhase('error');
+      setBanner(err.message || 'Network error. Please try again.');
+      setRiskScore('—');
+    }
+  }, [phase, idNumber, selfieId, baseUrl]);
 
   const dismissBanner = () => {
     setBanner('');
@@ -195,7 +205,6 @@ export default function FraudIntelligenceChecksScreen({
       <StatusBar style="dark" />
       <Container>
         <Card style={styles.cardContainer}>
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
               <Ionicons name="chevron-back" size={24} color={Colors.text} />
@@ -206,7 +215,6 @@ export default function FraudIntelligenceChecksScreen({
             <View style={styles.headerSpacer} />
           </View>
 
-          {/* Headline */}
           <View style={styles.headlineContainer}>
             <View style={[styles.titleAccent, { backgroundColor: Colors.primary }]} />
             <Typography variant="h1" style={styles.headline}>
@@ -218,22 +226,13 @@ export default function FraudIntelligenceChecksScreen({
             </Typography>
           </View>
 
-          {/* Shield */}
           <View style={styles.shieldContainer}>
             <Animated.View
               style={[
                 styles.shield,
                 {
-                  backgroundColor: isError
-                    ? '#FEF3F1'
-                    : isDone
-                      ? '#E4F5EA'
-                      : '#FFF7DB',
-                  borderColor: isError
-                    ? '#F3C9C3'
-                    : isDone
-                      ? '#C4E7D2'
-                      : '#F0DE9C',
+                  backgroundColor: isError ? '#FEF3F1' : isDone ? '#E4F5EA' : '#FFF7DB',
+                  borderColor: isError ? '#F3C9C3' : isDone ? '#C4E7D2' : '#F0DE9C',
                   transform: [{ scale: pulseAnim }],
                 },
               ]}
@@ -246,7 +245,7 @@ export default function FraudIntelligenceChecksScreen({
             </Animated.View>
             <Typography variant="h2" style={styles.statusLabel}>
               {isDone
-                ? 'Risk score: Low'
+                ? `Risk score: ${riskScore}`
                 : isError
                   ? 'Risk score: High'
                   : isRunning
@@ -255,7 +254,6 @@ export default function FraudIntelligenceChecksScreen({
             </Typography>
           </View>
 
-          {/* Checklist */}
           <View style={styles.checksList}>
             {CHECKS.map((check) => {
               const passed = completed.includes(check.key);
@@ -295,7 +293,6 @@ export default function FraudIntelligenceChecksScreen({
             })}
           </View>
 
-          {/* Error Banner */}
           {!!banner && (
             <View style={styles.banner}>
               <View style={styles.bannerIcon}>
@@ -312,7 +309,6 @@ export default function FraudIntelligenceChecksScreen({
 
           <View style={styles.spacer} />
 
-          {/* Actions */}
           <View style={styles.actionContainer}>
             <Button
               onPress={runChecks}
@@ -320,13 +316,15 @@ export default function FraudIntelligenceChecksScreen({
               disabled={isRunning}
               style={isRunning ? styles.buttonDisabled : styles.buttonPrimary}
             >
-              {isRunning
-                ? 'Checking…'
-                : isDone
-                  ? 'Continue'
-                  : isError
-                    ? 'Try again'
-                    : 'Start checks'}
+              {isRunning ? (
+                <ActivityIndicator color="#14110C" />
+              ) : isDone ? (
+                'Continue'
+              ) : isError ? (
+                'Try again'
+              ) : (
+                'Start checks'
+              )}
             </Button>
             {showSecondaryAction && (
               <Button onPress={() => {}} variant="outline" style={styles.secondaryButton}>
@@ -335,7 +333,6 @@ export default function FraudIntelligenceChecksScreen({
             )}
           </View>
 
-          {/* Step dots */}
           <View style={styles.dotsContainer}>
             {Array.from({ length: totalDots }).map((_, i) => (
               <View
@@ -365,12 +362,12 @@ const styles = StyleSheet.create({
   shield: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   statusLabel: { fontSize: 16, fontWeight: '700', color: Colors.text },
   checksList: { gap: 10, marginBottom: 20 },
-  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 14,
-    borderRadius: 14, borderWidth: 1.5, borderColor: '#ECE8DF', backgroundColor: Colors.surface },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10,
+    paddingHorizontal: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#ECE8DF', backgroundColor: Colors.surface },
   checkRowPassed: { borderColor: '#C4E7D2', backgroundColor: '#F3FBF6' },
   checkRowCurrent: { borderColor: '#F0DE9C', backgroundColor: '#FFFCF2' },
-  checkIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E2DFD7', alignItems: 'center',
-    justifyContent: 'center' },
+  checkIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E2DFD7',
+    alignItems: 'center', justifyContent: 'center' },
   pulsingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary },
   checkLabel: { fontSize: 14, fontWeight: '500', color: '#6B6559', flex: 1 },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: '#F3C9C3',

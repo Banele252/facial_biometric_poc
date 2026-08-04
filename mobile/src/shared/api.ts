@@ -7,11 +7,6 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 export type TransactionKind = 'sim_swap' | 'number_port';
 
-/** Which document the customer is presenting. A passport skips the SA ID
- *  checksum and the Home Affairs face match — Home Affairs holds no photo for
- *  a passport holder, so their identity rests on the document checks and RICA. */
-export type DocumentKind = 'SA_ID' | 'PASSPORT';
-
 export interface ValidationResponse {
   id_number_length: number;
   valid: boolean;
@@ -54,22 +49,12 @@ export interface VerificationDecision {
   notification_type: string;
   match_score: number | null;
   mode: string | null;
-  document_type: DocumentKind;
-  /** Issued only once every check has passed. Null on any other outcome. */
-  authorisation_token: string | null;
   checks: CheckResult[];
 }
 
 export interface VerificationInput {
   id_number: string;
   selfie_id: string;
-  /** Required. RICA and POPIA both need the customer's consent before any
-   *  check runs, and the backend refuses the journey without it. */
-  consent: boolean;
-  document_type: DocumentKind;
-  /** Base64 data URL of the scanned ID/passport. Omitting it does not fail the
-   *  journey — the backend reports the three document checks as skipped. */
-  document_image?: string;
   full_name?: string;
   msisdn?: string;
   new_sim_number?: string;
@@ -244,61 +229,4 @@ export function getHistory(idNumber: string): Promise<AttemptRecord[]> {
 export function getNotifications(idNumber: string): Promise<NotificationRecord[]> {
   const query = new URLSearchParams({ id_number: idNumber });
   return request<NotificationRecord[]>(`/api/v1/notifications?${query.toString()}`, { method: 'GET' });
-}
-// ── Document OCR ────────────────────────────────────────────────────────────
-// Multipart, so it cannot go through `request` above (which sets a JSON
-// Content-Type). Left to fetch's own boundary generation — setting
-// Content-Type by hand on a FormData body omits the boundary and the server
-// rejects the request.
-
-export interface OCRResponse {
-  success: boolean;
-  document_type: string | null;
-  full_name: string | null;
-  document_number: string | null;
-  date_of_birth: string | null;
-  country_region: string | null;
-  field_confidence: Record<string, unknown>;
-  error: string | null;
-}
-
-/**
- * Reads the identity fields off a photographed document, using the same OCR
- * the journey runs. Called from the scan screen so an unreadable photo is
- * caught while the customer still has the card in their hand, rather than at
- * the end of the journey.
- *
- * `fullName` and `idNumber` are only consulted by the mock provider, which
- * cannot read an image; the Azure provider ignores them.
- */
-export async function extractDocumentFields(
-  dataUrl: string,
-  fullName: string,
-  idNumber: string,
-): Promise<OCRResponse> {
-  const form = new FormData();
-  // React Native's FormData takes this {uri, name, type} shape rather than a
-  // Blob — a data URL works as the uri.
-  form.append('document_image', {
-    uri: dataUrl,
-    name: 'document.jpg',
-    type: 'image/jpeg',
-  } as unknown as Blob);
-  form.append('user_full_name', fullName);
-  form.append('user_id_number', idNumber);
-
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/api/v1/documents/ocr`, {
-      method: 'POST',
-      body: form,
-    });
-  } catch {
-    throw new Error(`Could not reach the API at ${API_BASE_URL}.`);
-  }
-
-  if (!response.ok) {
-    throw new Error(`Document scan failed (HTTP ${response.status})`);
-  }
-  return (await response.json()) as OCRResponse;
 }

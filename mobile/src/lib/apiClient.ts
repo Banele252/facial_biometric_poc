@@ -7,11 +7,6 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 export type TransactionKind = 'sim_swap' | 'number_port';
 
-/** Which document the customer is presenting. A passport skips the SA ID
- *  checksum and the Home Affairs face match — Home Affairs holds no photo for
- *  a passport holder, so their identity rests on the document checks and RICA. */
-export type DocumentKind = 'SA_ID' | 'PASSPORT';
-
 export interface ValidationResponse {
   id_number_length: number;
   valid: boolean;
@@ -54,22 +49,12 @@ export interface VerificationDecision {
   notification_type: string;
   match_score: number | null;
   mode: string | null;
-  document_type: DocumentKind;
-  /** Issued only once every check has passed. Null on any other outcome. */
-  authorisation_token: string | null;
   checks: CheckResult[];
 }
 
 export interface VerificationInput {
   id_number: string;
   selfie_id: string;
-  /** Required. RICA and POPIA both need the customer's consent before any
-   *  check runs, and the backend refuses the journey without it. */
-  consent: boolean;
-  document_type: DocumentKind;
-  /** Base64 data URL of the scanned ID/passport. Omitting it does not fail the
-   *  journey — the backend reports the three document checks as skipped. */
-  document_image?: string;
   full_name?: string;
   msisdn?: string;
   new_sim_number?: string;

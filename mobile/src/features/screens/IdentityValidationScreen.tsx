@@ -4,27 +4,29 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, Container } from '@/components/ui';
-import { Colors } from '@/theme';
 import { useValidateId } from '@/hooks/useValidateId';
-import { useJourneyStore } from '@/store/useJourneyStore';
 
 interface Props {
   navigate: (screen: string, params?: any) => void;
   goBack: () => void;
 }
 
+const { width, height } = Dimensions.get('window');
+const GOLD = '#D4AF37';
+
 export default function IdentityValidationScreen({ navigate, goBack }: Props) {
   const { value, setValue, liveResult, status, serverMessage, submit, dismissError } =
       useValidateId();
-
-  const setIdNumber = useJourneyStore((s) => s.setIdNumber);
 
   const [focused, setFocused] = useState(false);
   const [touched, setTouched] = useState(false);
@@ -34,7 +36,7 @@ export default function IdentityValidationScreen({ navigate, goBack }: Props) {
   const ok = liveResult.level === 'valid';
   const showError = liveResult.level === 'error' && (touched || !focused);
 
-  /* ─── visual formatting 000000 0000 000 ─── */
+  /* ─── ID formatting: 000000 0000 000 ─── */
   const format = useCallback((d: string) => {
     const a = d.slice(0, 6);
     const b = d.slice(6, 10);
@@ -59,175 +61,236 @@ export default function IdentityValidationScreen({ navigate, goBack }: Props) {
       triggerShake();
       return;
     }
-    // Attempt to submit; on success, navigate to next screen
     const success = await submit();
     if (success) {
-      // Keep the number for the rest of the journey — the selfie, the document
-      // comparison, RICA and Home Affairs are all keyed on it, and without
-      // this it never leaves this screen.
-      setIdNumber(value.replace(/\D/g, ''));
       navigate('SimSwapDetails');
     }
   };
 
-  // Also trigger shake when server returns an error (optional)
   useEffect(() => {
     if (serverMessage) {
       triggerShake();
     }
   }, [serverMessage, triggerShake]);
 
-  const borderColor = showError ? '#E0574A' : ok ? '#2FA96B' : focused ? Colors.primary : Colors.border;
+  const borderColor = showError
+    ? '#E0574A'
+    : ok
+      ? '#2FA96B'
+      : focused
+        ? '#FFCB05'
+        : '#ECE8DF';
 
   return (
     <SafeAreaView style={styles.shell}>
       <StatusBar style="dark" />
 
-      <View style={styles.patternTop} />
-      <View style={styles.patternBottom} />
+      {/* Gold dot pattern — top right */}
+      <View style={styles.dotsPattern}>
+        {[...Array(5)].map((_, row) => (
+          <View key={row} style={styles.dotRow}>
+            {[...Array(5)].map((_, col) => (
+              <View key={col} style={styles.dot} />
+            ))}
+          </View>
+        ))}
+      </View>
 
+      {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={goBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={22} color="#14110C" />
         </Pressable>
-        <Typography variant="body" style={{ fontWeight: '700' }}>
+        <Typography variant="body" style={styles.topBarTitle}>
             Identity Validation
         </Typography>
         <View style={styles.placeholder} />
       </View>
 
-      <Container style={styles.container}>
-        <>
-          <View style={styles.titleContainer}>
-            <View style={styles.accentLine} />
-            <Typography variant="h1" align="left" style={{ fontWeight: '800' }}>
-                Enter your ID number to continue
-            </Typography>
-          </View>
-
-          <View style={styles.inputWrapper}>
-            <View style={styles.labelRow}>
-              <Typography variant="caption" style={{ fontWeight: '700' }}>
-                  SA ID Number
-              </Typography>
-              <Typography
-                variant="caption"
-                color={ok ? 'success' : showError ? 'error' : 'textLight'}
-                style={{ fontWeight: '600' }}
-              >
-                {value.length}/13
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Container style={styles.container}>
+            {/* Title */}
+            <View style={styles.titleContainer}>
+              <View style={styles.accentLine} />
+              <Typography variant="h1" style={styles.headline}>
+                  Enter your ID number to{'\n'}continue
               </Typography>
             </View>
 
-            <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-              <View style={[styles.field, { borderColor: borderColor }]}>
-                <TextInput
-                  value={format(value)}
-                  onChangeText={(text) => {
-                    const cleaned = text.replace(/\D/g, '').slice(0, 13);
-                    setValue(cleaned);
-                    dismissError();
-                  }}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => { setFocused(false); setTouched(true); }}
-                  placeholder="000000 0000 000"
-                  keyboardType="numeric"
-                  style={styles.input}
-                  placeholderTextColor={Colors.textLight}
-                />
-                <View style={[styles.statusIcon, { backgroundColor: ok ? '#E4F5EA' :
-                  showError ? '#FBE3E0' : 'transparent' }]}>
-                  {ok && <Ionicons name="checkmark" size={16} color="#1F9254" />}
-                  {showError && <Ionicons name="close" size={16} color="#C0362C" />}
-                </View>
+            {/* Input Section */}
+            <View style={styles.inputSection}>
+              <View style={styles.labelRow}>
+                <Typography variant="caption" style={styles.fieldLabel}>
+                    SA ID Number
+                </Typography>
+                <Typography
+                  variant="caption"
+                  style={[
+                    styles.counter,
+                    ok && styles.counterOk,
+                    showError && styles.counterError,
+                  ]}
+                >
+                  {value.length}/13
+                </Typography>
               </View>
-            </Animated.View>
 
-            <View style={styles.helperRow}>
-              {showError && <Ionicons name="information-circle-outline" size={14} color="#C0362C" />}
+              <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+                <View
+                  style={[
+                    styles.inputWrap,
+                    { borderColor },
+                    ok && styles.inputWrapValid,
+                    showError && styles.inputWrapError,
+                  ]}
+                >
+                  <TextInput
+                    value={format(value)}
+                    onChangeText={(text) => {
+                      const cleaned = text.replace(/\D/g, '').slice(0, 13);
+                      setValue(cleaned);
+                      dismissError();
+                    }}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => {
+                      setFocused(false);
+                      setTouched(true);
+                    }}
+                    placeholder="000000 0000 000"
+                    keyboardType="numeric"
+                    style={styles.input}
+                    placeholderTextColor="#A39B88"
+                    maxLength={15}
+                  />
+                  <View
+                    style={[
+                      styles.statusIcon,
+                      ok && styles.statusIconValid,
+                      showError && styles.statusIconError,
+                    ]}
+                  >
+                    {ok && (
+                      <Ionicons name="checkmark" size={16} color="#1F9254" />
+                    )}
+                    {showError && (
+                      <Ionicons name="close" size={16} color="#C0362C" />
+                    )}
+                  </View>
+                </View>
+              </Animated.View>
+
               <Typography
                 variant="caption"
-                color={showError ? 'error' : ok ? 'success' : 'textLight'}
+                style={[
+                  styles.helper,
+                  ok && styles.helperValid,
+                  showError && styles.helperError,
+                ]}
               >
                 {liveResult.text}
               </Typography>
             </View>
-          </View>
 
-          {!serverMessage && (
-            <View style={styles.infoCard}>
-              <View style={styles.shieldIcon}>
-                <Ionicons name="shield-checkmark" size={16} color={Colors.text} />
+            {/* Server Error Banner */}
+            {serverMessage && (
+              <View style={styles.banner}>
+                <View style={styles.bannerIcon}>
+                  <Ionicons name="alert-circle" size={16} color="#C0362C" />
+                </View>
+                <Typography
+                  variant="caption"
+                  style={{
+                    flex: 1,
+                    lineHeight: 20,
+                    fontWeight: '600',
+                    color: '#7A2820',
+                  }}
+                >
+                  {serverMessage}
+                </Typography>
+                <Pressable
+                  onPress={dismissError}
+                  style={styles.bannerClose}
+                >
+                  <Ionicons name="close" size={16} color="#7A2820" />
+                </Pressable>
               </View>
-              <Typography variant="caption" color="textSecondary" style={{ flex: 1 }}>
-                    We use this only to validate your identity. It is never shared.
-              </Typography>
-            </View>
-          )}
+            )}
+          </Container>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          {serverMessage && (
-            <View style={styles.banner}>
-              <View style={styles.bannerIcon}>
-                <Ionicons name="warning" size={16} color="#C0362C" />
-              </View>
-              <Typography variant="caption" color="error" style={{ flex: 1, fontWeight: '600' }}>
-                {serverMessage}
-              </Typography>
-              <Pressable onPress={dismissError}>
-                <Ionicons name="close" size={16} color="#7A2820" />
-              </Pressable>
-            </View>
-          )}
-
-          <View style={{ flex: 1 }} />
-
-          <View style={styles.actions}>
-            <Button variant="primary" onPress={handleSubmit} disabled={!ok || submitting}>
-              {submitting ? <ActivityIndicator color={Colors.text} /> : 'Continue'}
+      {/* Bottom Actions */}
+      <View style={styles.bottomActions}>
+        <Container style={styles.bottomContainer}>
+          <View style={styles.buttonGroup}>
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={handleSubmit}
+              disabled={!ok || submitting}
+              style={
+                ok && !submitting
+                  ? [styles.primaryBtn, styles.primaryBtnActive]
+                  : styles.primaryBtn
+              }
+            >
+              {submitting ? 'Checking…' : 'Continue'}
             </Button>
-            <Button variant="secondary" onPress={() => alert('I do not have my ID with me')}>
+            <Button
+              variant="secondary"
+              size="lg"
+              onPress={() => {}}
+              style={styles.secondaryBtn}
+            >
                 I do not have my ID with me
             </Button>
+            <View style={styles.homeIndicator} />
           </View>
+        </Container>
 
-          <View style={styles.dotsContainer}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <View
-                key={i}
-                style={{
-                  width: i === 2 ? 22 : 7,
-                  height: 7,
-                  borderRadius: 4,
-                  backgroundColor: i === 2 ? Colors.primary : '#E2DFD7',
-                }}
-              />
-            ))}
-          </View>
-        </>
-      </Container>
+        {/* Progress dots — 4 dots, 3rd active */}
+        <View style={styles.dotsContainer}>
+          {[0, 1, 2, 3].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.progressDot,
+                i === 2 ? styles.progressDotActive : styles.progressDotInactive,
+              ]}
+            />
+          ))}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: Colors.surface },
-  patternTop: {
+  shell: { flex: 1, backgroundColor: '#FBF7EE' },
+  dotsPattern: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 210,
-    height: 210,
-    backgroundColor: 'rgba(255,203,5,0.05)',
-    opacity: 0.5,
+    top: height * 0.06,
+    right: width * 0.06,
+    zIndex: 0,
   },
-  patternBottom: {
-    position: 'absolute',
-    bottom: -80,
-    left: -60,
-    width: 320,
-    height: 320,
-    backgroundColor: 'rgba(255,203,5,0.15)',
-    borderRadius: 160,
+  dotRow: { flexDirection: 'row', marginBottom: 6 },
+  dot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 1.75,
+    backgroundColor: GOLD,
+    marginHorizontal: 5,
+    opacity: 0.35,
   },
   topBar: {
     flexDirection: 'row',
@@ -238,53 +301,91 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFEBE1',
-    backgroundColor: Colors.surface,
+    borderColor: '#E8E4DA',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholder: { width: 42, height: 42 },
-  container: { flex: 1, paddingTop: 34, paddingBottom: 26 },
+  topBarTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#14110C',
+  },
+  placeholder: { width: 40, height: 40 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 20 },
+  container: { paddingTop: 20 },
   titleContainer: {
     flexDirection: 'row',
-    gap: 13,
-    alignItems: 'stretch',
-    marginBottom: 26,
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 32,
   },
   accentLine: {
     width: 4,
     borderRadius: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FFCB05',
+    marginTop: 6,
+    height: 28,
   },
-  inputWrapper: { gap: 9 },
+  headline: {
+    fontWeight: '800',
+    fontSize: 26,
+    lineHeight: 32,
+    color: '#14110C',
+    letterSpacing: -0.5,
+  },
+  inputSection: { marginBottom: 16 },
   labelRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  field: {
+  fieldLabel: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#14110C',
+    letterSpacing: -0.1,
+  },
+  counter: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#B0AA9D',
+  },
+  counterOk: { color: '#1F9254' },
+  counterError: { color: '#C0362C' },
+  inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    height: 58,
-    paddingHorizontal: 16,
+    height: 54,
+    paddingHorizontal: 18,
     borderRadius: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: '#ECE8DF',
+  },
+  inputWrapValid: {
+    borderColor: '#2FA96B',
+    backgroundColor: '#FFFFFF',
+  },
+  inputWrapError: {
+    borderColor: '#E0574A',
+    backgroundColor: '#FEF3F1',
   },
   input: {
     flex: 1,
-    fontFamily: 'Figtree, system-ui, sans-serif',
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.6,
-    color: Colors.text,
+    color: '#14110C',
     padding: 0,
+    minWidth: 0,
   },
   statusIcon: {
     width: 26,
@@ -292,42 +393,29 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
-  helperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 18,
+  statusIconValid: { backgroundColor: '#E4F5EA' },
+  statusIconError: { backgroundColor: '#FBE3E0' },
+  helper: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#9C968A',
+    minHeight: 15,
   },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 13,
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  shieldIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#FFF7DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  helperValid: { color: '#1F9254' },
+  helperError: { color: '#C0362C' },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 18,
-    padding: 13,
-    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#F3C9C3',
+    borderRadius: 16,
     backgroundColor: '#FEF3F1',
+    padding: 13,
+    marginTop: 16,
   },
   bannerIcon: {
     width: 30,
@@ -337,11 +425,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actions: { gap: 10 },
+  bannerClose: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bottomActions: {
+    paddingTop: 12,
+    paddingBottom: 24,
+    backgroundColor: '#FBF7EE',
+    borderTopWidth: 1,
+    borderTopColor: '#EFEBE1',
+  },
+  bottomContainer: { paddingHorizontal: 24 },
+  buttonGroup: { gap: 12, width: '100%' },
+  primaryBtn: {
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#F5EFDC',
+    color: '#A39B88',
+  },
+  primaryBtnActive: {
+    backgroundColor: '#FFCB05',
+    color: '#14110C',
+  },
+  secondaryBtn: {
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1.5,
+    borderColor: '#F0DE9C',
+    backgroundColor: '#FFFFFF',
+    color: '#14110C',
+  },
+  homeIndicator: {
+    width: 134,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(20,17,12,0.25)',
+    alignSelf: 'center',
+    marginTop: 8,
+  },
   dotsContainer: {
     flexDirection: 'row',
     gap: 8,
     justifyContent: 'center',
-    paddingTop: 22,
+    alignItems: 'center',
+    paddingTop: 18,
   },
+  progressDot: { height: 7, borderRadius: 4 },
+  progressDotActive: { width: 22, backgroundColor: '#FFCB05' },
+  progressDotInactive: { width: 7, backgroundColor: '#E2DFD7' },
 });

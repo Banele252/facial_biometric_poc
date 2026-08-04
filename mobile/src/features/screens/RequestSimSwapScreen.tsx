@@ -1,215 +1,410 @@
+// src/features/screens/RequestSimSwapScreen.tsx
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Pressable,
+  Dimensions,
+  TouchableOpacity,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Card, Container, Button } from '@/components/ui';
-import { Colors } from '@/theme';
-import { useJourneyStore } from '@/store/useJourneyStore';
+import { Typography, Button, Container } from '@/components/ui';
+
+const { width, height } = Dimensions.get('window');
 
 interface Props {
-  navigate: (screen: string, params?: any) => void;
-  goBack: () => void;
+  navigate?: (screen: string, params?: any) => void;
+  goBack?: () => void;
 }
 
+const GOLD = '#D4AF37';
+
+const FEATURES = [
+  {
+    icon: 'shield-checkmark-outline' as const,
+    title: 'Secure',
+    subtitle: 'OTP and ID checks on every swap',
+  },
+  {
+    icon: 'flash-outline' as const,
+    title: 'Easy to do',
+    subtitle: 'Three steps, about two minutes',
+  },
+  {
+    icon: 'home-outline' as const,
+    title: 'No store visit',
+    subtitle: 'Finish the whole thing from home',
+  },
+];
+
 export function RequestSimSwapScreen({ navigate, goBack }: Props) {
-  const [consented, setConsented] = useState(false);
-  const setConsent = useJourneyStore((s) => s.setConsent);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const handleContinue = () => {
-    if (!consented) return;
-    // The backend refuses to run any check without this, so the consent given
-    // here has to travel with the verification rather than stopping at this
-    // screen's local state.
-    setConsent(true);
-    navigate('SAIDSelection');
-  };
-
-  const handleNotNow = () => {
-    navigate('Splash');
+    if (!consentChecked) return;
+    navigate?.('SAIDSelection');
   };
 
   return (
     <SafeAreaView style={styles.shell}>
       <StatusBar style="dark" />
-      <Container>
-        <Card style={styles.cardContainer}>
-          <View style={styles.header}>
-            <Pressable style={styles.backButton} onPress={goBack}>
-              <Ionicons name="chevron-back" size={24} color={Colors.text} />
-            </Pressable>
-            <Typography variant="subtitle" style={styles.headerTitle}>
-                SIM Swap
+
+      {/* Gold dot pattern — top right */}
+      <View style={styles.dotsPattern}>
+        {[...Array(6)].map((_, row) => (
+          <View key={row} style={styles.dotRow}>
+            {[...Array(6)].map((_, col) => (
+              <View key={col} style={styles.dot} />
+            ))}
+          </View>
+        ))}
+      </View>
+
+      {/* Top bar */}
+      <View style={styles.topBar}>
+        <Pressable onPress={goBack} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={22} color="#14110C" />
+        </Pressable>
+        <Typography variant="body" style={styles.topBarTitle}>
+            SIM Swap
+        </Typography>
+        <View style={styles.shieldIcon}>
+          <Ionicons name="shield-checkmark-outline" size={22} color="#14110C" />
+        </View>
+      </View>
+
+      <Container style={styles.container}>
+        {/* Title with yellow accent bar */}
+        <View style={styles.titleContainer}>
+          <View style={styles.accentLine} />
+          <View style={{ flex: 1 }}>
+            <Typography variant="h1" align="left" style={styles.headline}>
+                Request a SIM Swap
             </Typography>
-            <View style={styles.shieldIcon}>
-              <Ionicons name="shield-checkmark" size={18} color={Colors.text} />
-            </View>
-          </View>
-
-          <View style={styles.headlineContainer}>
-            <View style={[styles.titleAccent, { backgroundColor: Colors.primary }]} />
-            <View style={styles.headlineTextContainer}>
-              <Typography variant="h1" style={styles.headline}>
-                  Request a SIM Swap
-              </Typography>
-              <Typography variant="body" color="textSecondary" style={styles.headlineSub}>
-                  Replace your SIM card quickly and securely.
-              </Typography>
-            </View>
-          </View>
-
-          <View style={styles.benefitsContainer}>
-            <View style={styles.benefitItem}>
-              <View style={styles.benefitIcon}>
-                <Ionicons name="shield-checkmark" size={16} color={Colors.text} />
-              </View>
-              <View style={styles.benefitTextContainer}>
-                <Typography variant="body" style={styles.benefitTitle}>
-                    Secure
-                </Typography>
-                <Typography variant="caption" color="textSecondary" style={styles.benefitDetail}>
-                    OTP and ID checks on every swap
-                </Typography>
-              </View>
-            </View>
-
-            <View style={styles.benefitItem}>
-              <View style={styles.benefitIcon}>
-                <Ionicons name="flash" size={16} color={Colors.text} />
-              </View>
-              <View style={styles.benefitTextContainer}>
-                <Typography variant="body" style={styles.benefitTitle}>
-                    Easy to do
-                </Typography>
-                <Typography variant="caption" color="textSecondary" style={styles.benefitDetail}>
-                    Three steps, about two minutes
-                </Typography>
-              </View>
-            </View>
-
-            <View style={[styles.benefitItem, styles.benefitItemLast]}>
-              <View style={styles.benefitIcon}>
-                <Ionicons name="home" size={16} color={Colors.text} />
-              </View>
-              <View style={styles.benefitTextContainer}>
-                <Typography variant="body" style={styles.benefitTitle}>
-                    No store visit
-                </Typography>
-                <Typography variant="caption" color="textSecondary" style={styles.benefitDetail}>
-                    Finish the whole thing from home
-                </Typography>
-              </View>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.consentCard, consented && styles.consentCardActive]}
-            onPress={() => setConsented((v) => !v)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.consentIcon}>
-              <Ionicons
-                name={consented ? 'checkbox' : 'square-outline'}
-                size={22}
-                color={consented ? Colors.primary : '#B0AA9D'}
-              />
-            </View>
-            <View style={styles.consentTextContainer}>
-              <Typography variant="body" style={styles.consentTitle}>
-                  Identity Verification Consent
-              </Typography>
-              <Typography variant="caption" color="textSecondary" style={styles.consentDetail}>
-                  I consent to MTN verifying my identity using secure
-                  technology and third-party services to process my
-                  SIM Swap request.
-              </Typography>
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.otpNote}>
-            <Ionicons name="lock-closed" size={14} color="#C9A000" />
-            <Typography variant="caption" color="textSecondary" style={styles.otpText}>
-                You&apos;ll confirm with a one-time PIN.
+            <Typography variant="body" style={styles.subline}>
+                Replace your SIM card{'\n'}quickly and securely.
             </Typography>
           </View>
+        </View>
 
-          <View style={styles.spacer} />
+        {/* Feature card */}
+        <View style={styles.featureCard}>
+          {FEATURES.map((feature, index) => (
+            <View key={feature.title}>
+              <View style={styles.featureRow}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name={feature.icon} size={20} color="#14110C" />
+                </View>
+                <View style={styles.featureText}>
+                  <Typography variant="body" style={styles.featureTitle}>
+                    {feature.title}
+                  </Typography>
+                  <Typography variant="caption" style={styles.featureSubtitle}>
+                    {feature.subtitle}
+                  </Typography>
+                </View>
+              </View>
+              {index < FEATURES.length - 1 && (
+                <View style={styles.divider} />
+              )}
+            </View>
+          ))}
+        </View>
 
-          <View style={styles.actionContainer}>
+        {/* Consent Card */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setConsentChecked((prev) => !prev)}
+          style={[
+            styles.consentCard,
+            consentChecked && styles.consentCardActive,
+          ]}
+        >
+          <Typography variant="body" style={styles.consentTitle}>
+              Identity Verification Consent
+          </Typography>
+          <View style={styles.consentBody}>
+            <View style={[
+              styles.checkbox,
+              consentChecked && styles.checkboxActive,
+            ]}>
+              {consentChecked && (
+                <Ionicons name="checkmark" size={14} color="#14110C" />
+              )}
+            </View>
+            <Typography variant="caption" style={styles.consentText}>
+                I consent to MTN verifying my identity using secure technology
+              and third-party services to process my SIM Swap request.
+            </Typography>
+          </View>
+        </TouchableOpacity>
+      </Container>
+
+      {/* Bottom buttons */}
+      <View style={styles.bottomActions}>
+        <Container style={styles.bottomContainer}>
+          <View style={styles.buttonGroup}>
             <Button
-              onPress={handleContinue}
               variant="primary"
-              disabled={!consented}
+              size="lg"
+              onPress={handleContinue}
+              disabled={!consentChecked}
               style={[
-                styles.buttonPrimary,
-                consented && styles.buttonPrimaryGlow,
+                styles.primaryBtn,
+                !consentChecked && styles.primaryBtnDisabled,
               ]}
             >
                 Continue
             </Button>
-            <Button onPress={handleNotNow} variant="outline" style={styles.secondaryButton}>
+            <Button
+              variant="secondary"
+              size="lg"
+              onPress={() => goBack?.()}
+            >
                 Not now
             </Button>
+            <View style={styles.homeIndicator} />
           </View>
+        </Container>
 
-          <View style={styles.dotsContainer}>
-            {Array.from({ length: 10 }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  i === 0 ? styles.dotActive : styles.dotInactive,
-                ]}
-              />
-            ))}
-          </View>
-        </Card>
-      </Container>
+        {/* Progress dots — 4 dots, first active */}
+        <View style={styles.dotsContainer}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.progressDot,
+                i === 0 ? styles.progressDotActive : styles.progressDotInactive,
+              ]}
+            />
+          ))}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: Colors.background },
-  cardContainer: { paddingHorizontal: 24, paddingVertical: 16, alignItems: 'stretch' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  backButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: '#EFEBE1',
-    backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 15.5, fontWeight: '700', color: Colors.text },
-  shieldIcon: { width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#FFF7DB', alignItems: 'center', justifyContent: 'center' },
-  headlineContainer: { flexDirection: 'row', alignItems: 'stretch', gap: 13, marginBottom: 28 },
-  titleAccent: { width: 4, borderRadius: 4 },
-  headlineTextContainer: { flex: 1, gap: 10 },
-  headline: { fontSize: 27, lineHeight: 32, fontWeight: '800', color: Colors.text, letterSpacing: -0.7 },
-  headlineSub: { fontSize: 14.5, lineHeight: 22, fontWeight: '500', maxWidth: 260 },
-  benefitsContainer: { borderWidth: 1.5, borderColor: Colors.border, borderRadius: 20,
-    backgroundColor: Colors.surface, paddingVertical: 6, paddingHorizontal: 18 },
-  benefitItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: '#F4F1EA' },
-  benefitItemLast: { borderBottomWidth: 0 },
-  benefitIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#FFF7DB',
-    alignItems: 'center', justifyContent: 'center' },
-  benefitTextContainer: { flex: 1 },
-  benefitTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
-  benefitDetail: { fontSize: 12.5, fontWeight: '500', marginTop: 1 },
-  consentCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, marginTop: 18, padding: 16,
-    borderRadius: 18, borderWidth: 1.5, borderColor: '#ECE8DF', backgroundColor: Colors.surface },
-  consentCardActive: { borderColor: Colors.primary, backgroundColor: '#FFF8E1' },
-  consentIcon: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  consentTextContainer: { flex: 1, gap: 4 },
-  consentTitle: { fontSize: 14, fontWeight: '700', color: Colors.text },
-  consentDetail: { fontSize: 12.5, fontWeight: '500', lineHeight: 18 },
-  otpNote: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },
-  otpText: { fontSize: 12.5, fontWeight: '500' },
-  spacer: { flex: 1 },
-  actionContainer: { gap: 10, marginTop: 24 },
-  buttonPrimary: { backgroundColor: '#F5EFDC', color: '#A39B88' },
-  buttonPrimaryGlow: { backgroundColor: Colors.primary, color: Colors.text },
-  secondaryButton: { backgroundColor: Colors.surface, borderWidth: 1.5,
-    borderColor: Colors.borderLight },
-  dotsContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingVertical: 22 },
-  dot: { height: 7, borderRadius: 4 },
-  dotActive: { width: 22, backgroundColor: Colors.primary },
-  dotInactive: { width: 7, backgroundColor: '#E2DFD7' },
+  shell: {
+    flex: 1,
+    backgroundColor: '#FBF7EE',
+  },
+  dotsPattern: {
+    position: 'absolute',
+    top: height * 0.06,
+    right: width * 0.06,
+    zIndex: 0,
+  },
+  dotRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  dot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 1.75,
+    backgroundColor: GOLD,
+    marginHorizontal: 5,
+    opacity: 0.35,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    zIndex: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E8E4DA',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topBarTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#14110C',
+  },
+  shieldIcon: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  container: {
+    flex: 1,
+    paddingTop: 20,
+    paddingHorizontal: 24,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 28,
+  },
+  accentLine: {
+    width: 4,
+    borderRadius: 4,
+    backgroundColor: '#FFCB05',
+    marginTop: 6,
+    height: 28,
+  },
+  headline: {
+    fontWeight: '800',
+    fontSize: 26,
+    lineHeight: 32,
+    color: '#14110C',
+  },
+  subline: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#6B6559',
+    lineHeight: 22,
+    marginTop: 6,
+  },
+  featureCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EFEBE1',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 18,
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF7DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  featureText: {
+    flex: 1,
+    gap: 2,
+  },
+  featureTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#14110C',
+    lineHeight: 22,
+  },
+  featureSubtitle: {
+    fontWeight: '500',
+    fontSize: 14,
+    color: '#8A8376',
+    lineHeight: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F0EBE3',
+    marginLeft: 60,
+  },
+  consentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#EFEBE1',
+    padding: 16,
+    marginBottom: 16,
+  },
+  consentCardActive: {
+    borderColor: '#FFCB05',
+    backgroundColor: '#FFFCF2',
+  },
+  consentTitle: {
+    fontWeight: '700',
+    fontSize: 15,
+    color: '#14110C',
+    marginBottom: 12,
+  },
+  consentBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#D1CCC4',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  checkboxActive: {
+    backgroundColor: '#FFCB05',
+    borderColor: '#FFCB05',
+  },
+  consentText: {
+    flex: 1,
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontWeight: '500',
+    color: '#6B6559',
+  },
+  bottomActions: {
+    paddingTop: 12,
+    paddingBottom: 24,
+    backgroundColor: '#FBF7EE',
+    borderTopWidth: 1,
+    borderTopColor: '#EFEBE1',
+  },
+  bottomContainer: {
+    paddingHorizontal: 24,
+  },
+  buttonGroup: {
+    gap: 12,
+    width: '100%',
+  },
+  primaryBtn: {
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#FFCB05',
+  },
+  primaryBtnDisabled: {
+    backgroundColor: '#F5EFDC',
+  },
+  homeIndicator: {
+    width: 134,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(20,17,12,0.25)',
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 18,
+  },
+  progressDot: {
+    height: 7,
+    borderRadius: 4,
+  },
+  progressDotActive: {
+    width: 22,
+    backgroundColor: '#FFCB05',
+  },
+  progressDotInactive: {
+    width: 7,
+    backgroundColor: '#E2DFD7',
+  },
 });
