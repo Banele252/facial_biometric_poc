@@ -253,10 +253,20 @@ export default function LivenessDetectionScreen({
     setBanner('');
 
     try {
-      let sid = selfieId;
+      let sid: string | undefined;
 
-      /* Capture fresh face if on web or no selfie_id yet */
-      if (Platform.OS === 'web' || !sid) {
+      /* Always capture here, from the live preview on this screen.
+       *
+       * This used to reuse the selfie_id from the previous screen whenever one
+       * existed, which on a phone it always does — so the liveness check ran
+       * against the still photograph taken on FacialVerification rather than
+       * against the person currently in front of the camera. The customer took
+       * a picture, and then a "liveness check" inspected that picture. Anyone
+       * holding up a photo would pass both steps with the same image.
+       *
+       * Capturing fresh is the whole point: the frame analysed is one the
+       * subject did not get to review or approve. */
+      {
         let imageData: string | null = null;
 
         if (Platform.OS === 'web') {
