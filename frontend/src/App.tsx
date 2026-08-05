@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import SelfieCapture from './SelfieCapture'
+import CameraCapture from './CameraCapture'
 import Ledger from './Ledger'
 import { stamp, type LedgerEntry } from './ledger-entry'
 import {
@@ -13,6 +13,7 @@ import {
   verifyIdentity,
   type AttemptRecord,
   type DecisionStatus,
+  type DocumentKind,
   type LivenessResponse,
   type NotificationRecord,
   type TransactionKind,
@@ -20,16 +21,28 @@ import {
   type VerificationDecision,
 } from './api'
 
-type Step = 'id' | 'face' | 'confirm' | 'done'
+type Step = 'start' | 'id' | 'document' | 'face' | 'confirm' | 'done'
 
 /* The journey is an ordered sequence — each stage gates the next — so the
  * numbering carries real information rather than decorating the layout. */
 const STEPS: { key: Step; label: string }[] = [
-  { key: 'id', label: 'Identity' },
+  { key: 'start', label: 'Start' },
+  { key: 'id', label: 'Details' },
+  { key: 'document', label: 'ID scan' },
   { key: 'face', label: 'Face scan' },
   { key: 'confirm', label: 'Confirm' },
   { key: 'done', label: 'Result' },
 ]
+
+/* The process allows the customer to re-enter an ID that failed validation
+ * rather than ending the journey there. After this many tries the screen stops
+ * suggesting another attempt and offers a branch instead — the loop in the
+ * diagram is a loop, but it is not infinite. */
+const MAX_ID_ATTEMPTS = 3
+
+/* "Multiple tries, reminders to the customer to use sufficient light" — the
+ * reminder is shown from the second failed scan, when it is actually useful. */
+const LIGHTING_REMINDER_AFTER = 1
 
 /* One place for every outcome's wording, so the seal, the heading and the
  * ledger line can never drift from each other. "review" exists because the
@@ -75,14 +88,17 @@ const WILL_RECORD = [
  * this order; we cannot observe its progress mid-request, so they are listed as
  * "what is running" rather than animated as if we knew which one was live. */
 const RUNNING_STEPS = [
-  'Checking the ID number',
+  'Screening the request',
+  'Reading your ID document',
+  'Comparing your face to your document photo',
   'Matching the SIM registration (RICA)',
-  'Verifying the ID with the external provider',
   'Comparing your face to Home Affairs',
 ]
 
 export default function App() {
-  const [step, setStep] = useState<Step>('id')
+  const [step, setStep] = useState<Step>('start')
+  const [documentType, setDocumentType] = useState<DocumentKind>('SA_ID')
+  const [consent, setConsent] = useState(false)
   const [idNumber, setIdNumber] = useState('')
   const [fullName, setFullName] = useState('')
   const [msisdn, setMsisdn] = useState('')
@@ -90,8 +106,11 @@ export default function App() {
   const [transaction, setTransaction] = useState<TransactionKind>('sim_swap')
   const [targetNetwork, setTargetNetwork] = useState('')
   const [validation, setValidation] = useState<ValidationResponse | null>(null)
+  const [idAttempts, setIdAttempts] = useState(0)
+  const [documentImage, setDocumentImage] = useState<string | null>(null)
   const [selfieId, setSelfieId] = useState<string | null>(null)
   const [liveness, setLiveness] = useState<LivenessResponse | null>(null)
+  const [faceAttempts, setFaceAttempts] = useState(0)
   const [decision, setDecision] = useState<VerificationDecision | null>(null)
   const [notifications, setNotifications] = useState<NotificationRecord[]>([])
   const [history, setHistory] = useState<AttemptRecord[]>([])
@@ -100,13 +119,17 @@ export default function App() {
   const [loading, setLoading] = useState(false)
 
   const stepIndex = STEPS.findIndex((s) => s.key === step)
+  const isPassport = documentType === 'PASSPORT'
+  const documentNoun = isPassport ? 'passport' : 'SA ID'
 
   function record(label: string, kind: LedgerEntry['kind'], detail?: string) {
     setEntries((prev) => [...prev, stamp(label, kind, detail)])
   }
 
   function startOver() {
-    setStep('id')
+    setStep('start')
+    setDocumentType('SA_ID')
+    setConsent(false)
     setIdNumber('')
     setFullName('')
     setMsisdn('')
@@ -114,8 +137,11 @@ export default function App() {
     setTransaction('sim_swap')
     setTargetNetwork('')
     setValidation(null)
+    setIdAttempts(0)
+    setDocumentImage(null)
     setSelfieId(null)
     setLiveness(null)
+    setFaceAttempts(0)
     setDecision(null)
     setNotifications([])
     setHistory([])
@@ -123,8 +149,26 @@ export default function App() {
     setError(null)
   }
 
+  function onStart() {
+    record(
+      `Consent given · ${isPassport ? 'Passport' : 'SA ID'}`,
+      'pass',
+      'RICA and POPIA consent recorded',
+    )
+    setStep('id')
+  }
+
   async function onValidate(event: FormEvent) {
     event.preventDefault()
+    // A passport number has no SA checksum to run against it, so the process
+    // sends passport holders straight past this check to the document scan —
+    // the number is verified against the scanned document instead.
+    if (isPassport) {
+      record('Passport number accepted', 'info', 'No SA ID checksum applies')
+      setStep('document')
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
@@ -132,8 +176,9 @@ export default function App() {
       setValidation(result)
       if (result.valid) {
         record('ID number accepted', 'pass', `${result.id_number_length} digits · all checks passed`)
-        setStep('face')
+        setStep('document')
       } else {
+        setIdAttempts((n) => n + 1)
         record('ID number rejected', 'fail', result.failed_checks.join(', '))
       }
     } catch (err) {
@@ -141,6 +186,12 @@ export default function App() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function onDocumentCapture(dataUrl: string) {
+    setDocumentImage(dataUrl)
+    record('ID document captured', 'info', `${documentNoun} · ready to read`)
+    setStep('face')
   }
 
   async function onCapture(dataUrl: string) {
@@ -158,9 +209,11 @@ export default function App() {
         record('Live person confirmed', 'pass', `score ${live.score} · ${live.provider}`)
         setStep('confirm')
       } else {
+        setFaceAttempts((n) => n + 1)
         record('Liveness not confirmed', 'fail', `score ${live.score} · ${live.detail}`)
       }
     } catch (err) {
+      setFaceAttempts((n) => n + 1)
       setError(err instanceof Error ? err.message : 'The scan could not be completed. Try again.')
     } finally {
       setLoading(false)
@@ -168,13 +221,16 @@ export default function App() {
   }
 
   async function onConfirm() {
-    if (!selfieId) return
+    if (!selfieId || !documentImage) return
     setLoading(true)
     setError(null)
     try {
       const result = await verifyIdentity({
         id_number: idNumber.trim(),
         selfie_id: selfieId,
+        consent,
+        document_type: documentType,
+        document_image: documentImage,
         full_name: fullName.trim() || undefined,
         msisdn: msisdn.trim() || undefined,
         new_sim_number: newSim.trim() || undefined,
@@ -250,9 +306,66 @@ export default function App() {
             </p>
           )}
 
+          {step === 'start' && (
+            <section className="card">
+              <p className="eyebrow">Step 1 of 6 · Start</p>
+              <h1 className="card-title">Let&apos;s verify your identity</h1>
+              <p className="card-lede">
+                Tell us which document you are using. We need your permission before
+                we check anything.
+              </p>
+
+              <fieldset className="choice">
+                <legend className="field-label">Which document do you have?</legend>
+                {(
+                  [
+                    ['SA_ID', 'South African ID'],
+                    ['PASSPORT', 'Passport'],
+                  ] as [DocumentKind, string][]
+                ).map(([value, label]) => (
+                  <label key={value} className={documentType === value ? 'is-on' : ''}>
+                    <input
+                      type="radio"
+                      name="document-type"
+                      value={value}
+                      checked={documentType === value}
+                      onChange={() => setDocumentType(value)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </fieldset>
+
+              <label className="consent" htmlFor="consent">
+                <input
+                  id="consent"
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                />
+                <span>
+                  I agree to MTN verifying my identity for this request, including
+                  checking my ID document, my face and my SIM registration.
+                  <span className="field-hint">
+                    Required by RICA and POPIA. Nothing is checked until you agree.
+                  </span>
+                </span>
+              </label>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={onStart}
+                disabled={!consent}
+              >
+                Agree and continue
+              </button>
+            </section>
+          )}
+
           {step === 'id' && (
             <section className="card">
-              <p className="eyebrow">Step 1 of 4 · Identity</p>
+              <p className="eyebrow">Step 2 of 6 · Details</p>
               <h1 className="card-title">Your SIM swap details</h1>
               <p className="card-lede">
                 We check these against the registration on your SIM before anything
@@ -281,19 +394,23 @@ export default function App() {
                   ))}
                 </fieldset>
                 <label className="field" htmlFor="id-number">
-                  <span className="field-label">SA ID number</span>
+                  <span className="field-label">
+                    {isPassport ? 'Passport number' : 'SA ID number'}
+                  </span>
                   <input
                     id="id-number"
-                    className="field-input"
+                    className={isPassport ? 'field-input field-input-text' : 'field-input'}
                     name="id-number"
-                    inputMode="numeric"
+                    inputMode={isPassport ? 'text' : 'numeric'}
                     autoComplete="off"
-                    placeholder="0000000000000"
-                    maxLength={13}
+                    placeholder={isPassport ? 'As printed on your passport' : '0000000000000'}
+                    maxLength={isPassport ? 32 : 13}
                     value={idNumber}
                     onChange={(e) => setIdNumber(e.target.value)}
                   />
-                  <span className="field-hint">{idNumber.trim().length} / 13 digits</span>
+                  {!isPassport && (
+                    <span className="field-hint">{idNumber.trim().length} / 13 digits</span>
+                  )}
                 </label>
 
                 <label className="field" htmlFor="full-name">
@@ -360,30 +477,52 @@ export default function App() {
               </form>
 
               {validation && !validation.valid && (
-                <ul className="checks">
-                  {Object.entries(validation.checks).map(([name, passed]) => (
-                    <li key={name} className={passed ? 'pass' : 'fail'}>
-                      <span className="mark" aria-hidden="true">
-                        {passed ? '✓' : '✗'}
-                      </span>
-                      <span>{CHECK_LABELS[name] ?? name}</span>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="checks">
+                    {Object.entries(validation.checks).map(([name, passed]) => (
+                      <li key={name} className={passed ? 'pass' : 'fail'}>
+                        <span className="mark" aria-hidden="true">
+                          {passed ? '✓' : '✗'}
+                        </span>
+                        <span>{CHECK_LABELS[name] ?? name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* The recapture loop: a mistyped digit is the usual cause, so
+                      the customer gets to correct it rather than start again. */}
+                  <p className="field-hint">
+                    {idAttempts < MAX_ID_ATTEMPTS
+                      ? `Check the number and try again. Attempt ${idAttempts} of ${MAX_ID_ATTEMPTS}.`
+                      : 'That number still is not valid. Check your document, or continue with a passport instead.'}
+                  </p>
+                </>
               )}
+            </section>
+          )}
+
+          {step === 'document' && (
+            <section className="card">
+              <p className="eyebrow">Step 3 of 6 · ID scan</p>
+              <h1 className="card-title">Photograph your {documentNoun}</h1>
+              <p className="card-lede">
+                Lay it flat in good light and fill the frame. We read your name and
+                number off it, and compare its photo to your face.
+              </p>
+
+              <CameraCapture subject="document" onCapture={onDocumentCapture} disabled={loading} />
             </section>
           )}
 
           {step === 'face' && (
             <section className="card">
-              <p className="eyebrow">Step 2 of 4 · Face scan</p>
+              <p className="eyebrow">Step 4 of 6 · Face scan</p>
               <h1 className="card-title">Scan your face</h1>
               <p className="card-lede">
                 Hold your phone at eye level in good light. Stay still — we check that a
                 live person is present, not a photo.
               </p>
 
-              <SelfieCapture onCapture={onCapture} disabled={loading} />
+              <CameraCapture subject="face" onCapture={onCapture} disabled={loading} />
 
               {loading && <p className="field-hint">Checking that you are live…</p>}
 
@@ -398,12 +537,19 @@ export default function App() {
                   </span>
                 </p>
               )}
+
+              {faceAttempts > LIGHTING_REMINDER_AFTER && (
+                <p className="field-hint">
+                  Still not working? Face a window or a lamp so the light falls on your
+                  face rather than behind you, and take off hats or sunglasses.
+                </p>
+              )}
             </section>
           )}
 
           {step === 'confirm' && !loading && (
             <section className="card">
-              <p className="eyebrow">Step 3 of 4 · Confirm</p>
+              <p className="eyebrow">Step 5 of 6 · Confirm</p>
               <h1 className="card-title">Confirm your SIM swap</h1>
               <p className="card-lede">
                 Your face matched a live capture. Confirming runs the remaining
@@ -416,6 +562,15 @@ export default function App() {
                 </span>
                 <span>
                   Live person confirmed — score {liveness?.score} via {liveness?.provider}.
+                </span>
+              </p>
+
+              <p className="verdict verdict-pass">
+                <span className="verdict-mark" aria-hidden="true">
+                  ✓
+                </span>
+                <span>
+                  Your {documentNoun} was captured and is ready to be read.
                 </span>
               </p>
 
@@ -434,7 +589,7 @@ export default function App() {
               so it gets a real screen rather than a button spinner. */}
           {step === 'confirm' && loading && (
             <section className="card" aria-live="polite" aria-busy="true">
-              <p className="eyebrow">Step 3 of 4 · Running checks</p>
+              <p className="eyebrow">Step 5 of 6 · Running checks</p>
               <h1 className="card-title">Checking your identity</h1>
               <p className="card-lede">
                 This takes about fifteen seconds. Keep this screen open.
@@ -458,6 +613,13 @@ export default function App() {
               </div>
               <h1 className="outcome-title">{OUTCOME_COPY[decision.status].title}</h1>
               <p className="outcome-reason">{decision.reason}</p>
+
+              {decision.authorisation_token && (
+                <p className="match-readout">
+                  <span>Authorisation reference</span>
+                  <strong>{decision.authorisation_token.slice(0, 12)}…</strong>
+                </p>
+              )}
 
               {decision.match_score !== null && (
                 <p className="match-readout">

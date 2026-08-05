@@ -10,17 +10,21 @@ Identity theft is when an unauthorised individual uses another user's identity t
 
 ```
 Backend/
-  app/                  FastAPI application (routers, config)
-  internal_backend/     Offline SA ID validation rules
+  app/                  FastAPI application (routers, services, config)
+  internal_backend/     SA ID rules, OCR, document matching
   external_backend/     VerifyNow provider client
+  rica_service/         Mock RICA registry
+  fraud_engine/         Device risk, velocity, watchlist, decisioning
+  sim_swap_service/     SIM swap orders and activation
 frontend/               React + Vite + TypeScript SPA
+mobile/                 Expo / React Native app
 tests/                  pytest suite
 Dockerfile              Multi-stage build — one image serves API + SPA
 ```
 
 The frontend bundle is built at image-build time and served by the same FastAPI
 process, so the API and UI ship as a single container in a single Container App
-revision.
+revision. The mobile app is a separate client against the same API.
 
 ## Running locally
 
@@ -36,6 +40,23 @@ uv run python main.py
 # UI on :5173, proxying /api to the API
 cd frontend && npm install && npm run dev
 ```
+
+The journey runs end to end with no cloud credentials at all — the document,
+liveness and OCR steps fall back to local heuristics (see the provider table
+below). Only the Home Affairs steps need VerifyNow, and they are skipped for
+passport holders.
+
+For the mobile app:
+
+```bash
+cd mobile
+cp .env.example .env       # point EXPO_PUBLIC_API_URL at the API
+npm install && npm start
+```
+
+A phone cannot reach `localhost` — that address is the phone — so
+`EXPO_PUBLIC_API_URL` has to name an address the device can route to. See
+`mobile/.env.example`.
 
 Or run the production shape in one container:
 
@@ -55,44 +76,77 @@ docker run --rm -p 8000:8000 --env-file .env facial-biometric-poc
 | GET    | `/api/v1/credits`        | Remaining VerifyNow credit balance            |
 | POST   | `/api/v1/selfies`        | Capture a selfie (HT2-11)                      |
 | POST   | `/api/v1/selfies/{id}/liveness` | Run the liveness check on a selfie (HT2-12) |
-| POST   | `/api/v1/verifications`  | Orchestrated decision with fallback (HT2-15)  |
+| POST   | `/api/v1/verifications`  | Orchestrated decision — the whole journey     |
 | GET    | `/api/v1/verifications/history` | Verification attempt history (HT2-14), `?status=rejected` for failures |
+| POST   | `/api/v1/documents/ocr`  | Read identity fields off a scanned document   |
+| POST   | `/api/v1/documents/input-match` | Compare typed details to the document   |
+| POST   | `/api/v1/documents/face-match` | Compare a selfie to the document photo   |
+| POST   | `/api/v1/documents/verify` | The three document checks in one call        |
+| POST   | `/api/v1/face-match`     | Single uploaded selfie vs Home Affairs        |
 | GET    | `/api/v1/notifications`  | In-app approval/rejection inbox (HT2-24/25)   |
 | GET    | `/docs`                  | OpenAPI UI (disabled in production)           |
 
 ## Verification journey
 
-The SPA walks a customer through **details → selfie → liveness → verification →
-decision**, then shows the resulting notification and history.
-`POST /api/v1/verifications` runs the whole chain server-side and returns both
-the decision and a per-step `checks` array:
+Both clients walk the customer through **document type and consent → details →
+ID scan → face scan → confirm → decision**, then show the resulting notification
+and history. `POST /api/v1/verifications` runs the whole chain server-side, in
+the order of the process diagram, and returns the decision plus a per-step
+`checks` array:
 
-1. **ID precheck** — structural and Luhn validation. No external call.
-2. **Liveness gate** — the captured selfie must already have passed.
-3. **RICA registration** — does the claimed name own the number being swapped?
-   A mismatch ends the journey before any provider call, so the fraud case
-   costs nothing. Skipped when no name and number are supplied.
-4. **ID verification** — VerifyNow `said_verification`. A failure here is not
-   fatal; the face match is the stronger signal and still runs.
-5. **Home Affairs face match** — VerifyNow `/facematch`, comparing the selfie
-   against the ID photo Home Affairs holds.
+1. **Consent** — RICA and POPIA require it before anything is checked. Without
+   it the journey does not start.
+2. **ID precheck** — structural and Luhn validation. No external call. Skipped
+   for a passport, which has no SA ID checksum.
+3. **Liveness gate** — the captured selfie must already have passed.
+4. **Fraud pre-checks** — rejected requests in the last 7 days, device history,
+   IMEI reputation, velocity. These run *before* any biometric work, so a
+   request already known to be risky costs no provider call.
+5. **Document checks** — OCR the scanned ID or passport, compare the live face
+   to the document photo, compare the typed details to the document.
+6. **RICA registration** — does the claimed name own the number being swapped?
+7. **Home Affairs** — VerifyNow `said_verification` and `/facematch`. Skipped
+   for a passport: Home Affairs holds no photo for a passport holder, so their
+   identity rests on the document checks and RICA.
+8. **Authorisation token** — issued only once every check has passed, and spent
+   by the SIM swap. The step that changes a customer's SIM presents evidence
+   rather than trusting its caller.
+9. **SIM swap or number port**, then activation.
 
 The attempt is recorded (history), a notification is sent (HT2-24/25), and every
-step is written to the audit trail. If the provider is unreachable, a
-structurally valid, live applicant is approved through a **fallback** path
-flagged for manual review (HT2-15) rather than being failed.
+step is written to the audit trail. Every rejection is also written to the fraud
+intelligence repository, which is what step 4 reads on a later attempt.
 
 The face match answers `Approved`, `In Review` or `Declined`, so **`review` is a
 third outcome** alongside approved and rejected — an *In Review* customer is
 neither approved nor turned away.
 
-Storage, liveness and notifications are pluggable with dependency-free defaults:
+### When the provider is unreachable
+
+The process diagram rejects: "Home affairs integration not available after
+multiple tries" runs to the failure message. The journey retries
+`PROVIDER_MAX_ATTEMPTS` times (default 3) and then rejects.
+
+Setting `ALLOW_PROVIDER_FALLBACK=true` restores the older HT2-15 behaviour —
+approve on the evidence already gathered (liveness, a document matching the
+customer's face and details, and a RICA match) and flag for manual review. It is
+off by default, because an outage becoming an approval should be a decision
+somebody made rather than a default.
+
+Storage, liveness, OCR and the document face match are pluggable with
+dependency-free defaults, so the whole journey runs without any cloud account:
 
 | Concern | Default (no deps) | Target provider | Enable with |
 |---|---|---|---|
 | History / inbox / audit | local SQLite | Azure Postgres | `DATABASE_URL=postgresql://…` (needs `psycopg`) |
 | Selfie storage | local directory | Azure Blob | `AZURE_STORAGE_CONNECTION_STRING` (needs `azure-storage-blob`) |
 | Liveness | `mock` heuristic | Azure AI Face | `LIVENESS_PROVIDER=azure_face` |
+| OCR + document face match | `mock` heuristic | Azure Document Intelligence + AI Face | `DOCUMENT_PROVIDER=azure` |
+
+The mocks are plausibility gates, not biometrics. They are built so both
+outcomes stay reachable — a capture that looks like a real photograph passes, a
+degenerate frame fails — because a mock that always approves cannot demonstrate
+a rejection branch.
 
 ### Provider mode and credits
 

@@ -82,6 +82,24 @@ def check_liveness(selfie_id: str) -> LivenessResponse:
         ) from exc
 
     settings = get_settings()
+
+    # Screen the capture before the provider sees it. A frame with no face, or
+    # five of them, is a wasted provider call and — in production — a wasted
+    # credit. It says nothing about whether a real person is present; that is
+    # the provider's decision below.
+    quality = liveness_service.screen_capture(raw, settings)
+    if not quality.acceptable:
+        repository.set_selfie_liveness(
+            selfie_id, status="not_live", score=0.0, provider="prefilter"
+        )
+        return LivenessResponse(
+            selfie_id=selfie_id,
+            is_live=False,
+            score=0.0,
+            provider="prefilter",
+            detail=quality.reason,
+        )
+
     provider = liveness_service.get_liveness_provider(settings)
     try:
         result = provider.check(raw, selfie["content_type"], settings.liveness_min_score)

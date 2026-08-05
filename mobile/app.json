@@ -6,33 +6,38 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FBF7EE"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.facialbiometricpoc"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mtn.facialbiometricpoc",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.mtn.facialbiometricpoc",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#FFFFFF"
-      },
-      "package": "com.yourcompany.facialbiometricpoc"
+      }
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "name": "Facial Biometric POC",
-      "shortName": "Biometric POC",
-      "display": "standalone",
-      "themeColor": "#FFCB05",
-      "backgroundColor": "#FFFDF9",
-      "scope": "/",
-      "startUrl": "/",
-      "orientation": "portrait"
-    }
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Facial Biometric POC to access your camera to scan SIM barcodes and verify your identity."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FBF7EE"
+        }
+      ]
+    ]
   }
 }

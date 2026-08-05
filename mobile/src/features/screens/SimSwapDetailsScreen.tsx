@@ -1,5 +1,5 @@
-// src/screens/SimSwapDetailsScreen.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+// src/features/screens/SimSwapDetailsScreen.tsx
+import React, { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,13 +18,13 @@ import { Colors } from '@/theme';
 import { NavigationAction } from '@/navigation/types';
 import { useSimSwapOrder } from '@/hooks/useSimSwapOrder';
 
+const { width, height } = Dimensions.get('window');
+
 interface Props {
-  dispatch: React.Dispatch<NavigationAction>;
-  route?: {
-    params?: {
-      scannedIcid?: string;
-    };
-  };
+  navigate?: (screen: string, params?: any) => void;
+  goBack?: () => void;
+  dispatch?: React.Dispatch<NavigationAction>;
+  routeParams?: Record<string, unknown>;
 }
 
 interface FieldDef {
@@ -43,7 +44,7 @@ const FIELDS: FieldDef[] = [
   {
     id: 'names',
     label: 'Full Names',
-    placeholder: 'Firstname Surname',
+    placeholder: 'Firstname Lastname',
     helper: 'As registered on your MTN account.',
     errorMsg: 'Enter your full names as registered.',
     maxLength: 48,
@@ -64,7 +65,7 @@ const FIELDS: FieldDef[] = [
   {
     id: 'iccid',
     label: 'New SIM card serial number (ICCID)',
-    placeholder: '8901 4103 2111 1851 0720',
+    placeholder: '8901410321111851 0720',
     helper: 'Printed on the SIM card body.',
     errorMsg: 'The ICCID must be 19 or 20 digits.',
     maxLength: 24,
@@ -102,28 +103,26 @@ function validateField(def: FieldDef, value: string): boolean {
   return true;
 }
 
-export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
-  const [values, setValues] = useState<Record<string, string>>({
+export default function SimSwapDetailsScreen({
+  navigate,
+  goBack,
+  dispatch,
+  routeParams,
+}: Props) {
+  const scannedIcid = (routeParams?.scannedIcid as string) || '';
+
+  const [values, setValues] = useState<Record<string, string>>(() => ({
     names: '',
     msisdn: '',
-    iccid: route?.params?.scannedIcid ?? '',
-  });
-  const [touched, setTouched] = useState<Record<string, boolean>>({
-    iccid: !!route?.params?.scannedIcid,
-  });
+    iccid: scannedIcid,
+  }));
+  const [touched, setTouched] = useState<Record<string, boolean>>(() => ({
+    iccid: !!scannedIcid,
+  }));
   const [focus, setFocus] = useState<string>('');
   const [banner, setBanner] = useState('');
 
   const { submit, status, serverMessage, dismissError } = useSimSwapOrder();
-
-  /* Sync scanned ICCID when navigating back with result */
-  useEffect(() => {
-    const scanned = route?.params?.scannedIcid;
-    if (scanned) {
-      setValues((prev) => ({ ...prev, iccid: scanned }));
-      setTouched((prev) => ({ ...prev, iccid: true }));
-    }
-  }, [route?.params?.scannedIcid]);
 
   const handleInput = useCallback(
     (def: FieldDef, text: string) => {
@@ -163,45 +162,61 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
     });
 
     if (success) {
-      dispatch({
-        type: 'NAVIGATE',
-        payload: {
-          screen: 'IDDocumentScan',
-          params: {
-            fullName: values.names,
-            cellNumber: values.msisdn,
-            iccid: values.iccid,
-          },
-        },
-      });
+      const params = {
+        fullName: values.names,
+        cellNumber: values.msisdn,
+        iccid: values.iccid,
+      };
+      if (navigate) {
+        navigate('IDDocumentScan', params);
+      } else if (dispatch) {
+        dispatch({
+          type: 'NAVIGATE',
+          payload: { screen: 'IDDocumentScan', params },
+        });
+      }
     }
   };
 
   const dismissBanner = () => setBanner('');
 
   const openBarcodeScanner = () => {
-    dispatch({
-      type: 'NAVIGATE',
-      payload: { screen: 'SimBarcodeScan' },
-    });
+    if (navigate) {
+      navigate('SimBarcodeScan');
+    } else if (dispatch) {
+      dispatch({ type: 'NAVIGATE', payload: { screen: 'SimBarcodeScan' } });
+    }
+  };
+
+  const handleBack = () => {
+    if (goBack) {
+      goBack();
+    } else if (dispatch) {
+      dispatch({ type: 'GO_BACK' });
+    }
   };
 
   return (
     <SafeAreaView style={styles.shell}>
       <StatusBar style="dark" />
 
-      <View style={styles.patternTop} />
-      <View style={styles.patternBottom} />
+      {/* Gold dot pattern — top right */}
+      <View style={styles.dotsPattern}>
+        {[...Array(5)].map((_, row) => (
+          <View key={row} style={styles.dotRow}>
+            {[...Array(6)].map((_, col) => (
+              <View key={col} style={styles.dot} />
+            ))}
+          </View>
+        ))}
+      </View>
 
       <View style={styles.topBar}>
-        <Pressable
-          onPress={() => dispatch({ type: 'GO_BACK' })}
-          style={styles.backButton}
-        >
+        <Pressable onPress={handleBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </Pressable>
         <Typography variant="body" style={{ fontWeight: '700' }}>
-            SIM Swap
+            SIM Swap Details
         </Typography>
         <View style={styles.placeholder} />
       </View>
@@ -225,14 +240,7 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
                   align="left"
                   style={{ fontWeight: '800', fontSize: 22, lineHeight: 27 }}
                 >
-                    Capture your SIM swap request details
-                </Typography>
-                <Typography
-                  variant="body"
-                  color="textSecondary"
-                  style={{ marginTop: 8, lineHeight: 20, fontSize: 13.5 }}
-                >
-                    Enter them exactly as they appear on your account.
+                    Capture your SIM swap details
                 </Typography>
               </View>
             </View>
@@ -319,7 +327,7 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
 
             <View style={styles.hintCard}>
               <View style={styles.hintIcon}>
-                <Ionicons name="card" size={16} color="#14110C" />
+                <Ionicons name="document-text-outline" size={16} color="#14110C" />
               </View>
               <Typography
                 variant="caption"
@@ -362,55 +370,45 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
                 </Pressable>
               </View>
             )}
-
-            <View style={styles.securityRow}>
-              <Ionicons name="lock-closed" size={14} color="#C9A000" />
-              <Typography
-                variant="caption"
-                style={{
-                  fontWeight: '500',
-                  color: '#6B6559',
-                  fontSize: 12.5,
-                }}
-              >
-                  Your information is secure with us.
-              </Typography>
-            </View>
           </Container>
         </ScrollView>
       </KeyboardAvoidingView>
 
       <View style={styles.bottomActions}>
-        <Container>
-          <Button
-            variant="primary"
-            onPress={handleContinue}
-            disabled={status === 'loading'}
-            style={
-              allValid && status !== 'loading'
-                ? [styles.primaryBtn, styles.primaryBtnActive]
-                : styles.primaryBtn
-            }
-          >
-            {status === 'loading' ? 'Checking…' : 'Continue'}
-          </Button>
+        <Container style={styles.bottomContainer}>
+          <View style={styles.buttonGroup}>
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={handleContinue}
+              disabled={status === 'loading'}
+              style={
+                allValid && status !== 'loading'
+                  ? [styles.primaryBtn, styles.primaryBtnActive]
+                  : styles.primaryBtn
+              }
+            >
+              {status === 'loading' ? 'Checking…' : 'Continue'}
+            </Button>
 
-          <Button
-            variant="outline"
-            onPress={openBarcodeScanner}
-            style={styles.secondaryBtn}
-          >
-              Scan SIM barcode
-          </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onPress={openBarcodeScanner}
+              style={styles.secondaryBtn}
+            >
+                Scan SIM barcode
+            </Button>
+          </View>
         </Container>
 
         <View style={styles.dotsContainer}>
-          {Array.from({ length: 10 }).map((_, i) => (
+          {Array.from({ length: 5 }).map((_, i) => (
             <View
               key={i}
               style={[
-                styles.dot,
-                i === 3 ? styles.dotActive : styles.dotInactive,
+                styles.progressDot,
+                i === 0 ? styles.progressDotActive : styles.progressDotInactive,
               ]}
             />
           ))}
@@ -420,25 +418,27 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
   );
 }
 
+const GOLD = '#D4AF37';
+
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: '#FFFDF9' },
-  patternTop: {
+  dotsPattern: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 210,
-    height: 210,
-    backgroundColor: 'rgba(255,203,5,0.05)',
-    opacity: 0.5,
+    top: height * 0.10,
+    right: width * 0.06,
+    zIndex: 0,
   },
-  patternBottom: {
-    position: 'absolute',
-    bottom: -80,
-    left: -60,
-    width: 320,
-    height: 320,
-    backgroundColor: 'rgba(255,203,5,0.15)',
-    borderRadius: 160,
+  dotRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  dot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 1.75,
+    backgroundColor: GOLD,
+    marginHorizontal: 5,
+    opacity: 0.4,
   },
   topBar: {
     flexDirection: 'row',
@@ -585,18 +585,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  securityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-  },
   bottomActions: {
     paddingTop: 12,
     paddingBottom: 24,
     backgroundColor: '#FFFDF9',
     borderTopWidth: 1,
     borderTopColor: '#EFEBE1',
+  },
+  bottomContainer: {
+    paddingHorizontal: 24,
+  },
+  buttonGroup: {
+    gap: 12,
+    width: '100%',
   },
   primaryBtn: {
     height: 54,
@@ -623,15 +624,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 18,
   },
-  dot: {
+  progressDot: {
     height: 7,
     borderRadius: 4,
   },
-  dotActive: {
+  progressDotActive: {
     width: 22,
     backgroundColor: '#FFCB05',
   },
-  dotInactive: {
+  progressDotInactive: {
     width: 7,
     backgroundColor: '#E2DFD7',
   },

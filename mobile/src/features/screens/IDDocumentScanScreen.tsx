@@ -1,425 +1,601 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+// src/features/screens/IDDocumentScanScreen.tsx
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Easing,
+  Pressable,
+  Dimensions,
+  ActivityIndicator,
+  Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Card, Container, Button } from '@/components/ui';
-import { Colors } from '@/theme';
+import { Typography, Container, Button } from '@/components/ui';
+import { API_BASE_URL } from '@/config/apiBase';
+
+const { width, height } = Dimensions.get('window');
+const GOLD = '#D4AF37';
 
 interface Props {
-  requireBackSide?: boolean;
-  simulateFailure?: boolean;
-  showChecklist?: boolean;
-  dispatch: (action: any) => void;
+  navigate?: (screen: string, params?: any) => void;
+  goBack?: () => void;
+  dispatch?: (action: any) => void;
+  routeParams?: Record<string, unknown>;
 }
 
 export function IDDocumentScanScreen({
-  requireBackSide = true,
-  simulateFailure = false,
-  showChecklist = true,
+  navigate,
+  goBack,
   dispatch,
+  routeParams,
 }: Props) {
-  const [phase, setPhase] = useState<'ready' | 'scanning' | 'done' | 'error'>('ready');
-  const [side, setSide] = useState<'front' | 'back'>('front');
-  const [banner, setBanner] = useState('');
-  const scanTimer = useRef<NodeJS.Timeout | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const sweepAnim = useMemo(() => new Animated.Value(0), []);
+  const handleBack = () => {
+    if (goBack) goBack();
+    else if (dispatch) dispatch({ type: 'GO_BACK' });
+  };
 
-  useEffect(() => {
-    return () => {
-      if (scanTimer.current) clearTimeout(scanTimer.current);
-    };
-  }, []);
+  const handleNavigate = (screen: string, params?: any) => {
+    if (navigate) navigate(screen, params);
+    else if (dispatch)
+      dispatch({ type: 'NAVIGATE', payload: { screen, params } });
+  };
 
-  useEffect(() => {
-    if (phase === 'scanning') {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(sweepAnim, {
-            toValue: 1,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(sweepAnim, {
-            toValue: 0,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
-    } else {
-      sweepAnim.stopAnimation();
-      sweepAnim.setValue(0);
+  /* ── Shared upload to selfies endpoint ── */
+  const uploadDocument = async (imageData: string) => {
+    try {
+      const baseUrl = API_BASE_URL;
+
+      const idNumber = (routeParams?.id_number as string) || '8107255492089';
+
+      const response = await fetch(`${baseUrl}/api/v1/selfies`, {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id_number: idNumber,
+          image: imageData,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed (${response.status})`);
+      }
+
+      console.log('[IDDocumentScan] Document uploaded successfully');
+      handleNavigate('FacialVerification');
+    } catch (err) {
+      console.error('[IDDocumentScan] Upload error:', err);
+      handleNavigate('FacialVerification');
+    } finally {
+      setLoading(false);
     }
-  }, [phase, sweepAnim]);
+  };
 
-  const sweepTranslateY = useMemo(
-    () =>
-      sweepAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-84, 84],
-      }),
-    [sweepAnim],
-  );
+  /* ── Web: capture via getUserMedia (rear camera for ID) ── */
+  const captureWebCamera = async (): Promise<string | null> => {
+    try {
+      const mediaDevices = (window as any).navigator.mediaDevices;
+      if (!mediaDevices?.getUserMedia) {
+        throw new Error('getUserMedia not supported');
+      }
 
+      const stream = await mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      });
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('autoplay', 'true');
+
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = reject;
+        setTimeout(() => resolve(), 1000);
+      });
+
+      await video.play();
+      await new Promise((r) => setTimeout(r, 600));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const base64 = canvas.toDataURL('image/jpeg', 0.85);
+      stream.getTracks().forEach((track: any) => track.stop());
+
+      return base64;
+    } catch (err) {
+      console.error('[Web Camera] failed:', err);
+      return null;
+    }
+  };
+
+  /* ── 1. Capture ID via camera ── */
   const handleCapture = async () => {
-    if (phase === 'scanning') return;
-    if (phase === 'done' && side === 'front' && requireBackSide) {
-      setPhase('ready');
-      setSide('back');
-      setBanner('');
-      return;
-    }
-    if (phase === 'done') {
-      dispatch({ type: 'NAVIGATE', payload: { screen: 'FacialVerification' } });
+    if (loading) return;
+    setLoading(true);
+
+    if (Platform.OS === 'web') {
+      const imageData = await captureWebCamera();
+      if (imageData) {
+        await uploadDocument(imageData);
+        return;
+      }
+      Alert.alert(
+        'Camera unavailable',
+        'Could not access webcam. Please upload an image instead.',
+      );
+      setLoading(false);
       return;
     }
 
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        quality: 0.8,
+        base64: true,
+        allowsEditing: true,
+        aspect: [4, 3],
+        cameraType: ImagePicker.CameraType.back,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        const imageData = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        await uploadDocument(imageData);
+      } else {
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('[Camera] failed:', err);
+      setLoading(false);
+    }
+  };
+
+  /* ── 2. Upload ID from gallery ── */
+  const handleUpload = async () => {
+    if (loading) return;
+    setLoading(true);
+
+    try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: 'images',
         quality: 0.8,
+        base64: true,
       });
-      if (!result.canceled) startScanning();
-      return;
-    }
 
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (!result.canceled) startScanning();
-  };
-
-  const startScanning = () => {
-    setPhase('scanning');
-    setBanner('');
-    if (scanTimer.current) clearTimeout(scanTimer.current);
-    scanTimer.current = setTimeout(() => {
-      if (simulateFailure) {
-        setPhase('error');
-        setBanner('The text came out blurry. Steady your phone and keep the card flat.');
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        const imageData = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        await uploadDocument(imageData);
       } else {
-        setPhase('done');
+        setLoading(false);
       }
-      scanTimer.current = null;
-    }, 2200);
+    } catch (err) {
+      console.error('[Gallery] failed:', err);
+      setLoading(false);
+    }
   };
-
-  const dismissBanner = () => {
-    setBanner('');
-    setPhase('ready');
-  };
-
-  const handleUsePassport = () => {
-    alert('Passport flow not yet implemented.');
-  };
-
-  const isDone = phase === 'done';
-  const isError = phase === 'error';
-  const isScanning = phase === 'scanning';
-  const isBack = side === 'back';
-  const accentColor = isError ? '#E0574A' : isDone ? '#2FA96B' : Colors.primary;
-
-  const getChip = (label: string, tone: 'good' | 'warn' | 'idle') => {
-    const map = {
-      good: { bg: '#E4F5EA', fg: '#1F7A4C', bd: '#C4E7D2' },
-      warn: { bg: '#FEF3F1', fg: '#A8382C', bd: '#F3C9C3' },
-      idle: { bg: Colors.surface, fg: '#6B6559', bd: '#ECE8DF' },
-    }[tone];
-    return {
-      label,
-      style: {
-        fontSize: 12.5,
-        fontWeight: '600' as const,
-        paddingVertical: 7,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        backgroundColor: map.bg,
-        color: map.fg,
-        borderWidth: 1,
-        borderColor: map.bd,
-      },
-    };
-  };
-
-  const chips = [
-    getChip('Flat surface', isError ? 'warn' : isDone ? 'good' : 'idle'),
-    getChip('No glare', isDone ? 'good' : 'idle'),
-    getChip('All corners inside', isDone ? 'good' : 'idle'),
-  ];
-
-  const canContinue = phase === 'done' && (!requireBackSide || side === 'back');
 
   return (
     <SafeAreaView style={styles.shell}>
       <StatusBar style="dark" />
-      <Container>
-        <Card style={styles.cardContainer}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => dispatch({ type: 'GO_BACK' })}
-            >
-              <Ionicons name="chevron-back" size={24} color={Colors.text} />
-            </TouchableOpacity>
-            <Typography variant="subtitle" style={styles.headerTitle}>
-                ID Document Scan
-            </Typography>
-            <View style={styles.headerSpacer} />
-          </View>
 
-          <View style={styles.headlineContainer}>
-            <View style={[styles.titleAccent, { backgroundColor: Colors.primary }]} />
-            <Typography variant="h1" style={styles.headline}>
-              {isBack
-                ? 'Now capture the back of your ID'
-                : 'Capture the front of your ID document'}
-            </Typography>
-          </View>
-
-          <View
-            style={[
-              styles.viewport,
-              isScanning && styles.viewportScanning,
-              isDone && styles.viewportDone,
-              isError && styles.viewportError,
-            ]}
-          >
-            <View style={styles.cardPlaceholder}>
-              <View style={styles.cardPlaceholderInner}>
-                <View style={styles.cardLines}>
-                  <View style={styles.cardLineShort} />
-                  <View style={styles.cardLineLong} />
-                </View>
-                <View style={styles.cardPhoto} />
-              </View>
-            </View>
-
-            {isScanning && (
-              <Animated.View
-                style={[
-                  styles.sweepLine,
-                  { transform: [{ translateY: sweepTranslateY }] },
-                ]}
-              />
-            )}
-
-            <View style={[styles.corner, styles.cornerTL, { borderColor: accentColor }]} />
-            <View style={[styles.corner, styles.cornerTR, { borderColor: accentColor }]} />
-            <View style={[styles.corner, styles.cornerBL, { borderColor: accentColor }]} />
-            <View style={[styles.corner, styles.cornerBR, { borderColor: accentColor }]} />
-
-            <View style={styles.liveBadge}>
-              <View
-                style={[
-                  styles.liveDot,
-                  isError
-                    ? styles.liveDotError
-                    : isDone
-                      ? styles.liveDotDone
-                      : isScanning
-                        ? styles.liveDotScanning
-                        : styles.liveDotReady,
-                ]}
-              />
-              <Typography variant="caption" style={styles.liveLabel}>
-                {isDone
-                  ? 'Captured'
-                  : isError
-                    ? 'Paused'
-                    : isScanning
-                      ? 'Scanning'
-                      : isBack
-                        ? 'Back side'
-                        : 'Front side'}
-              </Typography>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.shutter, isScanning && styles.shutterDisabled]}
-              onPress={handleCapture}
-              disabled={isScanning}
-            >
-              <View style={styles.shutterInner} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.statusContainer}>
-            <Typography variant="h2" style={styles.statusTitle}>
-              {isScanning
-                ? 'Hold steady'
-                : isDone
-                  ? isBack
-                    ? 'Both sides captured'
-                    : 'Front captured'
-                  : isError
-                    ? 'Let us try that again'
-                    : 'Scan your ID document'}
-            </Typography>
-            <Typography
-              variant="body"
-              style={[
-                styles.statusHint,
-                isError && styles.statusHintError,
-                isDone && styles.statusHintDone,
-              ]}
-            >
-              {isScanning
-                ? 'Reading the details on your card'
-                : isDone
-                  ? 'All details were readable'
-                  : isError
-                    ? 'Blurry image detected'
-                    : 'Make sure all details are clear and visible'}
-            </Typography>
-          </View>
-
-          {showChecklist && !banner && (
-            <View style={styles.chipsContainer}>
-              {chips.map((chip, idx) => (
-                <View key={idx} style={chip.style}>
-                  <Typography variant="caption" style={{ color: chip.style.color }}>
-                    {chip.label}
-                  </Typography>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {banner && (
-            <View style={styles.banner}>
-              <View style={styles.bannerIcon}>
-                <Ionicons name="alert-circle" size={16} color="#C0362C" />
-              </View>
-              <Typography variant="body" style={styles.bannerText}>
-                {banner}
-              </Typography>
-              <TouchableOpacity onPress={dismissBanner} style={styles.bannerClose}>
-                <Ionicons name="close" size={16} color="#7A2820" />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.spacer} />
-
-          <View style={styles.actionContainer}>
-            <Button
-              onPress={handleCapture}
-              variant={isScanning ? 'outline' : 'primary'}
-              disabled={isScanning}
-              style={isScanning ? styles.buttonDisabled : styles.buttonPrimary}
-            >
-              {isScanning
-                ? 'Scanning…'
-                : isError
-                  ? 'Try again'
-                  : canContinue
-                    ? 'Continue'
-                    : 'Capture'}
-            </Button>
-            <TouchableOpacity onPress={handleUsePassport} style={styles.passportLink}>
-              <Typography variant="caption" style={styles.passportText}>
-                  Use passport instead
-              </Typography>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.dotsContainer}>
-            {Array.from({ length: 10 }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  i === 4 ? styles.dotActive : styles.dotInactive,
-                ]}
-              />
+      {/* Gold dot pattern — top right */}
+      <View style={styles.dotsPattern}>
+        {[...Array(5)].map((_, row) => (
+          <View key={row} style={styles.dotRow}>
+            {[...Array(5)].map((_, col) => (
+              <View key={col} style={styles.dot} />
             ))}
           </View>
-        </Card>
+        ))}
+      </View>
+
+      {/* Top bar */}
+      <View style={styles.topBar}>
+        <Pressable onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={22} color="#14110C" />
+        </Pressable>
+        <Typography variant="body" style={styles.topBarTitle}>
+            ID Document Scan
+        </Typography>
+        <View style={styles.placeholder} />
+      </View>
+
+      <Container style={styles.container}>
+        {/* Title */}
+        <View style={styles.titleContainer}>
+          <View style={styles.accentLine} />
+          <Typography variant="h1" style={styles.headline}>
+              Capture the front of{'\n'}your ID document
+          </Typography>
+        </View>
+
+        {/* Scanner viewport */}
+        <View style={styles.viewport}>
+          <View style={[styles.corner, styles.cornerTL]} />
+          <View style={[styles.corner, styles.cornerTR]} />
+          <View style={[styles.corner, styles.cornerBL]} />
+          <View style={[styles.corner, styles.cornerBR]} />
+
+          <View style={styles.badge}>
+            <View style={styles.badgeDot} />
+            <Typography variant="caption" style={styles.badgeText}>
+                CAMERA OFF
+            </Typography>
+          </View>
+
+          <View style={styles.idPlaceholder}>
+            <View style={styles.idPhoto} />
+            <View style={styles.idLines}>
+              <View style={styles.idLineLong} />
+              <View style={styles.idLineMedium} />
+              <View style={styles.idLineShort} />
+            </View>
+          </View>
+
+          {/* Shutter button — triggers camera */}
+          <Pressable
+            style={styles.shutterButton}
+            onPress={handleCapture}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#14110C" size="small" />
+            ) : (
+              <Ionicons name="camera-outline" size={24} color="#14110C" />
+            )}
+          </Pressable>
+        </View>
+
+        <Typography variant="body" style={styles.statusText}>
+          {loading ? 'Processing…' : 'Scan your ID document'}
+        </Typography>
       </Container>
+
+      {/* Bottom actions */}
+      <View style={styles.bottomActions}>
+        <Container style={styles.bottomContainer}>
+          <View style={styles.buttonGroup}>
+            {/* Primary: Capture */}
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={handleCapture}
+              disabled={loading}
+              style={
+                loading
+                  ? [styles.primaryBtn, styles.primaryBtnDisabled]
+                  : [styles.primaryBtn, styles.primaryBtnActive]
+              }
+            >
+              {loading ? (
+                <ActivityIndicator color="#14110C" />
+              ) : (
+                'Capture'
+              )}
+            </Button>
+
+            {/* Secondary: Upload an image */}
+            <Pressable
+              onPress={handleUpload}
+              disabled={loading}
+              style={[
+                styles.uploadBtn,
+                loading && styles.uploadBtnDisabled,
+              ]}
+            >
+              <Ionicons
+                name="arrow-up-outline"
+                size={18}
+                color="#14110C"
+                style={{ marginRight: 8 }}
+              />
+              <Typography
+                variant="body"
+                style={{ fontWeight: '600', fontSize: 16, color: '#14110C' }}
+              >
+                  Upload an image
+              </Typography>
+            </Pressable>
+
+            <View style={styles.homeIndicator} />
+          </View>
+        </Container>
+
+        {/* Progress dots — 5 dots, 4th active */}
+        <View style={styles.dotsContainer}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.progressDot,
+                i === 3
+                  ? styles.progressDotActive
+                  : styles.progressDotInactive,
+              ]}
+            />
+          ))}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: Colors.background },
-  cardContainer: { paddingHorizontal: 24, paddingVertical: 16, alignItems: 'stretch' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  backButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: '#EFEBE1', backgroundColor:
-    Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 15.5, fontWeight: '700', color: Colors.text },
-  headerSpacer: { width: 42 },
-  headlineContainer: { flexDirection: 'row', alignItems: 'stretch', gap: 13, marginBottom: 22 },
-  titleAccent: { width: 4, borderRadius: 4 },
-  headline: { fontSize: 25, lineHeight: 30, fontWeight: '800', color: Colors.text, letterSpacing: -0.6, maxWidth: 258 },
-  viewport: { position: 'relative', width: '100%', height: 212, borderRadius: 20, overflow: 'hidden', backgroundColor:
-        '#1C1A16', alignItems: 'center', justifyContent: 'center', borderWidth: 0 },
-  viewportScanning: { borderWidth: 4, borderColor: Colors.primary,
-    shadowColor: Colors.primary, shadowOffset:
-        { width: 0, height: 0 }, shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
-  viewportDone: { borderWidth: 4, borderColor: '#2FA96B', shadowColor: '#2FA96B', shadowOffset:
-        { width: 0, height: 0 }, shadowOpacity: 0.16, shadowRadius: 8, elevation: 8 },
-  viewportError: { borderWidth: 4, borderColor: '#E0574A', shadowColor: '#E0574A', shadowOffset:
-        { width: 0, height: 0 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 8 },
-  cardPlaceholder: { position: 'absolute', left: 22, right: 22, top: 26, bottom: 26, borderRadius: 12,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.28)', borderStyle: 'dashed', padding: 12 },
-  cardPlaceholderInner: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  cardLines: { flex: 1, gap: 7 },
-  cardLineShort: { width: '82%', height: 6, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)' },
-  cardLineLong: { width: '64%', height: 6, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)' },
-  cardPhoto: { width: 46, height: 58, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.14)' },
-  sweepLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: 'rgba(255,203,5,0.95)',
-    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8, shadowRadius: 16, elevation: 10 },
-  corner: { position: 'absolute', width: 26, height: 26, borderWidth: 3.8, borderRadius: 4 },
-  cornerTL: { left: 10, top: 10, borderRightWidth: 0, borderBottomWidth: 0 },
-  cornerTR: { right: 10, top: 10, borderLeftWidth: 0, borderBottomWidth: 0 },
-  cornerBL: { left: 10, bottom: 10, borderRightWidth: 0, borderTopWidth: 0 },
-  cornerBR: { right: 10, bottom: 10, borderLeftWidth: 0, borderTopWidth: 0 },
-  liveBadge: { position: 'absolute', left: 14, top: 14, flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 5, paddingHorizontal: 11, borderRadius: 999, backgroundColor: 'rgba(18,16,13,0.72)' },
-  liveDot: { width: 7, height: 7, borderRadius: 3.5 },
-  liveDotReady: { backgroundColor: '#FF4D3D' },
-  liveDotScanning: { backgroundColor: '#FF4D3D' },
-  liveDotDone: { backgroundColor: '#2FA96B' },
-  liveDotError: { backgroundColor: '#E0574A' },
-  liveLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: '#FFFFFF', textTransform: 'uppercase' },
-  shutter: { position: 'absolute', bottom: -26, left: '50%', transform:
-        [{ translateX: -29 }], width: 58, height: 58, borderRadius: 29, borderWidth: 4, borderColor: '#FFFDF9',
-  backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.primary,
-  shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.42, shadowRadius: 20, elevation: 10 },
-  shutterDisabled: { backgroundColor: '#F5EFDC' },
-  shutterInner: { width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: Colors.text },
-  statusContainer: { marginTop: 30, alignItems: 'center' },
-  statusTitle: { fontSize: 18, fontWeight: '800', color: Colors.text, letterSpacing: -0.3 },
-  statusHint: { fontSize: 13.5, fontWeight: '600', textAlign: 'center', color: '#7A746A', marginTop: 4 },
-  statusHintError: { color: '#C0362C' },
-  statusHintDone: { color: '#1F7A4C' },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 18 },
-  banner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: '#F3C9C3',
-    borderRadius: 16, backgroundColor: '#FEF3F1', padding: 13, marginTop: 18 },
-  bannerIcon: { width: 30, height: 30, borderRadius: 9, backgroundColor: '#FBE3E0', alignItems: 'center',
-    justifyContent: 'center' },
-  bannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#7A2820', lineHeight: 18.85 },
-  bannerClose: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  spacer: { flex: 1 },
-  actionContainer: { gap: 10, marginTop: 24 },
-  buttonPrimary: { backgroundColor: Colors.primary },
-  buttonDisabled: { backgroundColor: '#F5EFDC', color: '#A39B88' },
-  passportLink: { alignItems: 'center', paddingVertical: 8 },
-  passportText: { fontSize: 13.5, fontWeight: '600', color: '#1F7A4C', textDecorationLine: 'underline' },
-  dotsContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingVertical: 22 },
-  dot: { height: 7, borderRadius: 4 },
-  dotActive: { width: 22, backgroundColor: Colors.primary },
-  dotInactive: { width: 7, backgroundColor: '#E2DFD7' },
+  shell: { flex: 1, backgroundColor: '#FBF7EE' },
+  dotsPattern: {
+    position: 'absolute',
+    top: height * 0.06,
+    right: width * 0.06,
+    zIndex: 0,
+  },
+  dotRow: { flexDirection: 'row', marginBottom: 6 },
+  dot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 1.75,
+    backgroundColor: GOLD,
+    marginHorizontal: 5,
+    opacity: 0.35,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    zIndex: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E8E4DA',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topBarTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#14110C',
+  },
+  placeholder: { width: 40, height: 40 },
+  container: {
+    flex: 1,
+    paddingTop: 20,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 28,
+    width: '100%',
+  },
+  accentLine: {
+    width: 4,
+    borderRadius: 4,
+    backgroundColor: '#FFCB05',
+    marginTop: 6,
+    height: 28,
+  },
+  headline: {
+    fontWeight: '800',
+    fontSize: 26,
+    lineHeight: 32,
+    color: '#14110C',
+    letterSpacing: -0.5,
+  },
+  viewport: {
+    width: '100%',
+    height: 220,
+    borderRadius: 20,
+    backgroundColor: '#1C1A16',
+    position: 'relative',
+    overflow: 'visible',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  corner: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderColor: '#FFCB05',
+    borderRadius: 4,
+    zIndex: 2,
+  },
+  cornerTL: {
+    left: 12,
+    top: 12,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+  },
+  cornerTR: {
+    right: 12,
+    top: 12,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+  },
+  cornerBL: {
+    left: 12,
+    bottom: 12,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderTopWidth: 0,
+    borderRightWidth: 0,
+  },
+  cornerBR: {
+    right: 12,
+    bottom: 12,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+  },
+  badge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(28,26,22,0.85)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    zIndex: 2,
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E0574A',
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  idPlaceholder: {
+    position: 'absolute',
+    left: 36,
+    right: 36,
+    top: 36,
+    bottom: 36,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.22)',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    flexDirection: 'row',
+    padding: 14,
+    gap: 14,
+  },
+  idPhoto: {
+    width: 48,
+    height: 58,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  idLines: {
+    flex: 1,
+    gap: 8,
+    justifyContent: 'center',
+  },
+  idLineLong: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: '100%',
+  },
+  idLineMedium: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: '72%',
+  },
+  idLineShort: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: '48%',
+  },
+  shutterButton: {
+    position: 'absolute',
+    bottom: -28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFCB05',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#FBF7EE',
+    shadowColor: '#FFCB05',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 10,
+  },
+  statusText: {
+    marginTop: 40,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#14110C',
+    textAlign: 'center',
+  },
+  bottomActions: {
+    paddingTop: 12,
+    paddingBottom: 24,
+    backgroundColor: '#FBF7EE',
+    borderTopWidth: 1,
+    borderTopColor: '#EFEBE1',
+    width: '100%',
+  },
+  bottomContainer: { paddingHorizontal: 24 },
+  buttonGroup: { gap: 12, width: '100%' },
+  primaryBtn: {
+    height: 54,
+    borderRadius: 27,
+  },
+  primaryBtnActive: { backgroundColor: '#FFCB05' },
+  primaryBtnDisabled: { backgroundColor: '#F5EFDC' },
+  uploadBtn: {
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1.5,
+    borderColor: '#F0DE9C',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadBtnDisabled: {
+    opacity: 0.6,
+  },
+  homeIndicator: {
+    width: 134,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(20,17,12,0.25)',
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 18,
+  },
+  progressDot: { height: 7, borderRadius: 4 },
+  progressDotActive: { width: 22, backgroundColor: '#FFCB05' },
+  progressDotInactive: { width: 7, backgroundColor: '#E2DFD7' },
 });
+
+export default IDDocumentScanScreen;

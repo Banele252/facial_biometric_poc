@@ -7,6 +7,7 @@ unchanged — it is now behind functions that resolve configuration when called.
 """
 
 import os
+import uuid
 
 import requests
 from dotenv import load_dotenv
@@ -26,16 +27,21 @@ class VerifyNowError(RuntimeError):
     """Raised when the VerifyNow API cannot be reached or is misconfigured."""
 
 
-def _headers(mode: str = "production") -> dict[str, str]:
+def _headers(mode: str = "production", idempotency_key: str | None = None) -> dict[str, str]:
     headers = {
         "x-api-key": os.getenv("VERIFY_NOW_API_KEY", ""),
         "Content-Type": "application/json",
     }
-    # Only production POSTs require idempotency. Reusing one key across
-    # different sandbox requests would be wrong anyway, since a key may only be
-    # replayed for an identical body.
+    # Only production POSTs require idempotency. A key may only be replayed for
+    # an identical body, so the single static key this used to read from the
+    # environment was actively wrong: every verification reused it, and the
+    # provider replayed the first response for all of them.
+    #
+    # Callers that can retry should pass a key that is stable for one logical
+    # request — then a retry after a timeout replays rather than billing twice.
+    # Anything else gets a fresh key, which is correct if not retry-safe.
     if mode != "sandbox":
-        headers["Idempotency-Key"] = os.getenv("Idempotency_id_key", "")
+        headers["Idempotency-Key"] = idempotency_key or str(uuid.uuid4())
     return headers
 
 
@@ -46,12 +52,18 @@ def _base_url() -> str:
     return base_url.rstrip("/")
 
 
-def _post(endpoint: str, payload: dict, mode: str, timeout: float) -> dict:
+def _post(
+    endpoint: str,
+    payload: dict,
+    mode: str,
+    timeout: float,
+    idempotency_key: str | None = None,
+) -> dict:
     """POST a JSON payload to VerifyNow and return the decoded body."""
     try:
         resp = requests.post(
             url=f"{_base_url()}{endpoint}",
-            headers=_headers(mode),
+            headers=_headers(mode, idempotency_key),
             json=payload,
             timeout=timeout,
         )
@@ -75,13 +87,19 @@ def _post(endpoint: str, payload: dict, mode: str, timeout: float) -> dict:
         raise VerifyNowError("VerifyNow returned a non-JSON response") from exc
 
 
-def verify_said(id_number: str, mode: str = "production", timeout: float = 15.0) -> dict:
+def verify_said(
+    id_number: str,
+    mode: str = "production",
+    timeout: float = 15.0,
+    idempotency_key: str | None = None,
+) -> dict:
     """Run a said_verification report against VerifyNow for the given ID number."""
     return _post(
         VERIFY_ENDPOINT,
         {"reportType": "said_verification", "idNumber": id_number, "mode": mode},
         mode,
         timeout,
+        idempotency_key,
     )
 
 
@@ -90,6 +108,7 @@ def face_match(
     selfie_image_base64: str,
     mode: str = "sandbox",
     timeout: float = 30.0,
+    idempotency_key: str | None = None,
 ) -> dict:
     """Match a selfie against the Home Affairs ID photo for the given ID number.
 
@@ -106,6 +125,7 @@ def face_match(
         },
         mode,
         timeout,
+        idempotency_key,
     )
 
 
