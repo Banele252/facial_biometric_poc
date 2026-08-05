@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import SelfieCapture from './SelfieCapture'
-import DocumentCapture from './DocumentCapture'
+import CameraCapture from './CameraCapture'
 import Ledger from './Ledger'
 import { stamp, type LedgerEntry } from './ledger-entry'
 import {
@@ -510,7 +509,7 @@ export default function App() {
                 number off it, and compare its photo to your face.
               </p>
 
-              <DocumentCapture onCapture={onDocumentCapture} disabled={loading} />
+              <CameraCapture subject="document" onCapture={onDocumentCapture} disabled={loading} />
             </section>
           )}
 
@@ -523,7 +522,7 @@ export default function App() {
                 live person is present, not a photo.
               </p>
 
-              <SelfieCapture onCapture={onCapture} disabled={loading} />
+              <CameraCapture subject="face" onCapture={onCapture} disabled={loading} />
 
               {loading && <p className="field-hint">Checking that you are live…</p>}
 

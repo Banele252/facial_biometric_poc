@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from pydantic import BaseModel
 
+from Backend.app.routers.uploads import read_image
 from Backend.app.services.documents import (
     ClaimedIdentity,
     DocumentType,
@@ -36,28 +37,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
 SERVICE_NAME = "internal_backend"
-
-# Same limits as the other upload endpoint. Enforced here too: an unbounded
-# `await upload.read()` in a request handler is a denial of service waiting to
-# be found, and these routes are reachable from the same edge.
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-ALLOWED_IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
-
-
-async def _read_image(upload: UploadFile, field: str) -> bytes:
-    """Read an uploaded image, rejecting the wrong type or an oversized body."""
-    if upload.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field}: unsupported image type {upload.content_type}",
-        )
-    raw = await upload.read()
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field}: image exceeds the maximum allowed size (10MB)",
-        )
-    return raw
 
 
 class FallbackVerifyResponse(BaseModel):
@@ -79,7 +58,7 @@ async def ocr_extract(
     to return a document that agrees with the customer. The Azure provider
     ignores them and reads what is on the document.
     """
-    document_bytes = await _read_image(document_image, "document_image")
+    document_bytes = await read_image(document_image, "document_image")
     result = extract_document_fields(
         document_bytes,
         ClaimedIdentity(full_name=user_full_name, document_number=user_id_number),
@@ -117,7 +96,7 @@ async def document_match_endpoint(
     document_image: UploadFile = File(...),
 ) -> dict:
     """Compare the customer's typed details against the OCR'd document."""
-    document_bytes = await _read_image(document_image, "document_image")
+    document_bytes = await read_image(document_image, "document_image")
     claimed = ClaimedIdentity(full_name=user_full_name, document_number=user_id_number)
     ocr_result = extract_document_fields(document_bytes, claimed)
     match_result = match_input_to_document(
@@ -159,8 +138,8 @@ async def document_face_match_endpoint(
     document_image: UploadFile = File(...),
 ) -> dict:
     """Compare a live selfie against the photo on the document."""
-    selfie_bytes = await _read_image(selfie_image, "selfie_image")
-    document_bytes = await _read_image(document_image, "document_image")
+    selfie_bytes = await read_image(selfie_image, "selfie_image")
+    document_bytes = await read_image(document_image, "document_image")
     result = match_selfie_to_document(selfie_bytes, document_bytes)
     response = {
         "success": result.success,
@@ -202,8 +181,8 @@ async def verify_documents(
     The same sequence the journey runs between its fraud pre-checks and the
     RICA lookup, without the rest of the journey around it.
     """
-    document_bytes = await _read_image(document_image, "document_image")
-    selfie_bytes = await _read_image(selfie_image, "selfie_image")
+    document_bytes = await read_image(document_image, "document_image")
+    selfie_bytes = await read_image(selfie_image, "selfie_image")
     claimed = ClaimedIdentity(full_name=user_full_name, document_number=user_id_number)
 
     ocr_result = extract_document_fields(document_bytes, claimed)

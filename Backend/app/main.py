@@ -42,8 +42,6 @@ app = FastAPI(
 
 # Same-origin in the container, so this is empty by default. Set
 # CORS_ALLOW_ORIGINS to run the Vite dev server against a local API.
-# _cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
-
 _cors_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 

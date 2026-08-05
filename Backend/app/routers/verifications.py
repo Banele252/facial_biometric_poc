@@ -61,7 +61,7 @@ from Backend.app.services.documents import (
     match_input_to_document,
     match_selfie_to_document,
 )
-from Backend.app.services.face_match import run_face_match
+from Backend.app.services.face_match import run_face_match_bytes
 from Backend.app.services.fraud import run_fraud_checks
 from Backend.app.services.notifications import notify_decision
 from Backend.app.services.number_port import create_port_request
@@ -196,6 +196,21 @@ class Journey:
         self.checks.append(
             CheckResult(name=name, label=label, status=status_value, detail=detail, score=score)
         )
+
+    def load_selfie_bytes(self) -> bytes:
+        """The stored selfie, fetched once per journey.
+
+        Two steps need the raw image — the document comparison and the Home
+        Affairs match — and the document step is skipped entirely when no
+        document was supplied. Caching here means neither step has to know
+        whether the other ran, and the image is pulled from storage once rather
+        than once per consumer.
+        """
+        if not self.selfie_bytes:
+            self.selfie_bytes = storage_service.get_storage(self.settings).load(
+                self.selfie["storage_ref"]  # type: ignore[index]
+            )
+        return self.selfie_bytes
 
     def idempotency_key(self, operation: str) -> str:
         """A key stable for one logical provider call within this journey.
@@ -483,12 +498,10 @@ def _step_documents(journey: Journey) -> VerificationDecision | None:
         journey.add("document_ocr", "Document scan", "fail", str(exc))
         return _reject(journey, stage="document", reason=f"Document image unreadable: {exc}")
 
-    # The selfie is compared against the document photo, so it has to be loaded
-    # back out of storage here rather than only referenced.
+    # The selfie is compared against the document photo, so the raw image is
+    # needed here, not just its reference.
     try:
-        journey.selfie_bytes = storage_service.get_storage(journey.settings).load(
-            journey.selfie["storage_ref"]  # type: ignore[index]
-        )
+        journey.load_selfie_bytes()
     except Exception as exc:
         logger.error("Failed to load stored selfie for the document match: %s", exc)
         raise HTTPException(
@@ -711,12 +724,16 @@ def _step_home_affairs(journey: Journey) -> VerificationDecision | None:
 
     # Home Affairs face match.
     try:
+        # The document step already pulled these bytes out of storage. Passing
+        # them on rather than the storage reference avoids a second download —
+        # which, against Blob, also means a second client and container round
+        # trip for an image we are already holding.
         match = _call_provider(
             journey,
             "face_match",
-            lambda: run_face_match(
+            lambda: run_face_match_bytes(
                 journey.id_number,
-                journey.selfie["storage_ref"],  # type: ignore[index]
+                journey.load_selfie_bytes(),
                 settings,
                 idempotency_key=journey.idempotency_key("face_match"),
             ),

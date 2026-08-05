@@ -207,10 +207,13 @@ def screen_capture(raw: bytes, settings: Settings | None = None) -> CaptureQuali
     """
     settings = settings or get_settings()
 
-    # Only meaningful when Azure Face is configured. Anywhere else the capture
-    # passes through untouched rather than being blocked by a missing optional
-    # service.
-    if settings.document_provider != "azure" or not settings.azure_face_configured:
+    # Gated on the Face credentials alone. It used to also require
+    # DOCUMENT_PROVIDER=azure, which tied this to an unrelated setting: turning
+    # that flag on for OCR testing silently changed liveness pre-filtering, and
+    # configuring Face without it silently disabled the pre-filter. Anywhere
+    # Face is unconfigured the capture passes through untouched rather than
+    # being blocked by a missing optional service.
+    if not settings.azure_face_configured:
         return CaptureQuality(acceptable=True, reason="Pre-filter not configured")
 
     import requests

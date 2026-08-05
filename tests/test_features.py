@@ -241,7 +241,7 @@ class TestVerificationDecision:
     def test_face_match_approval(self, client, monkeypatch):
         self._configure(monkeypatch)
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.run_face_match", self._match("approved")
+            "Backend.app.routers.verifications.run_face_match_bytes", self._match("approved")
         )
         selfie_id = _pass_liveness(client)
         body = client.post("/api/v1/verifications", json=_journey(selfie_id=selfie_id)).json()
@@ -258,7 +258,7 @@ class TestVerificationDecision:
     def test_face_match_rejection(self, client, monkeypatch):
         self._configure(monkeypatch)
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.run_face_match",
+            "Backend.app.routers.verifications.run_face_match_bytes",
             self._match("rejected", score=12.0, provider_status="Declined"),
         )
         selfie_id = _pass_liveness(client)
@@ -272,7 +272,7 @@ class TestVerificationDecision:
         """ "In Review" is neither approval nor rejection and must not be coerced."""
         self._configure(monkeypatch)
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.run_face_match",
+            "Backend.app.routers.verifications.run_face_match_bytes",
             self._match("review", score=68.0, provider_status="In Review"),
         )
         selfie_id = _pass_liveness(client)
@@ -288,7 +288,7 @@ class TestVerificationDecision:
         def _never(*_a, **_k):
             raise AssertionError("Home Affairs must not be called for a passport")
 
-        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _never)
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match_bytes", _never)
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications",
@@ -303,13 +303,13 @@ class TestVerificationDecision:
         self._configure(monkeypatch)
         captured = {}
 
-        def _capture_mode(id_number, storage_ref, settings=None, idempotency_key=None):
+        def _capture_mode(id_number, selfie_bytes, settings=None, idempotency_key=None):
             from Backend.app.config import get_settings
 
             captured["mode"] = (settings or get_settings()).verify_mode
             return self._match("approved")()
 
-        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _capture_mode)
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match_bytes", _capture_mode)
         selfie_id = _pass_liveness(client)
         client.post("/api/v1/verifications", json=_journey(selfie_id=selfie_id, mode="production"))
         # The provider call resolves its mode from settings, not the request body.
@@ -337,7 +337,7 @@ class TestVerificationDecision:
             attempts.append(1)
             raise VerifyNowError("upstream down")
 
-        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _boom)
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match_bytes", _boom)
         selfie_id = _pass_liveness(client)
         body = client.post("/api/v1/verifications", json=_journey(selfie_id=selfie_id)).json()
 
@@ -355,7 +355,7 @@ class TestVerificationDecision:
         def _boom(*_a, **_k):
             raise VerifyNowError("upstream down")
 
-        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match", _boom)
+        monkeypatch.setattr("Backend.app.routers.verifications.run_face_match_bytes", _boom)
         selfie_id = _pass_liveness(client)
         body = client.post(
             "/api/v1/verifications", json=_journey(selfie_id=selfie_id, allow_fallback=True)
@@ -564,7 +564,7 @@ class TestFraudAndSimSwap:
         from Backend.app.services.face_match import FaceMatchResult
 
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.run_face_match",
+            "Backend.app.routers.verifications.run_face_match_bytes",
             lambda *_a, **_k: FaceMatchResult(
                 outcome=outcome,
                 provider_status="Approved",
@@ -717,7 +717,7 @@ class TestNumberPort:
         from Backend.app.services.face_match import FaceMatchResult
 
         monkeypatch.setattr(
-            "Backend.app.routers.verifications.run_face_match",
+            "Backend.app.routers.verifications.run_face_match_bytes",
             lambda *_a, **_k: FaceMatchResult(
                 outcome="approved",
                 provider_status="Approved",

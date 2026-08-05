@@ -63,6 +63,12 @@ class Settings:
     # manual review (HT2-15). Off by default: an outage should not become an
     # approval unless someone chose that deliberately.
     allow_provider_fallback: bool
+    # The first fraud pre-check: "recent (7 days) rejected requests". A window
+    # of 0 disables it, which is the honest way to turn it off for a demo.
+    recent_rejection_window_days: int
+    # Rejections inside that window tolerated before a request is referred to a
+    # human; more than double it rejects outright.
+    max_recent_rejections: int
 
     @property
     def verify_now_configured(self) -> bool:
@@ -115,4 +121,6 @@ def get_settings() -> Settings:
         document_face_min_confidence=float(os.getenv("DOCUMENT_FACE_MIN_CONFIDENCE", "0.60")),
         provider_max_attempts=max(1, int(os.getenv("PROVIDER_MAX_ATTEMPTS", "3"))),
         allow_provider_fallback=os.getenv("ALLOW_PROVIDER_FALLBACK", "").lower() == "true",
+        recent_rejection_window_days=max(0, int(os.getenv("RECENT_REJECTION_WINDOW_DAYS", "7"))),
+        max_recent_rejections=max(0, int(os.getenv("MAX_RECENT_REJECTIONS", "1"))),
     )

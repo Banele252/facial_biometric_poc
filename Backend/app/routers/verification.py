@@ -6,13 +6,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
 from Backend.app.config import get_settings
+from Backend.app.routers.uploads import read_image
 from Backend.app.services.face_match import run_face_match_bytes
 from Backend.external_backend.main import VerifyNowError, get_credits, verify_said
-
-# Uploads the journey never stored. 10 MB is well past a phone camera JPEG and
-# well short of anything worth buffering in a request handler.
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-ALLOWED_IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp")
 
 logger = logging.getLogger(__name__)
 
@@ -68,18 +64,7 @@ async def face_match_endpoint(
             detail="Identity verification provider is not configured",
         )
 
-    if selfie_image.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported image type: {selfie_image.content_type}",
-        )
-
-    image_bytes = await selfie_image.read()
-    if len(image_bytes) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Image exceeds the maximum allowed size (10MB)",
-        )
+    image_bytes = await read_image(selfie_image, "selfie_image")
 
     try:
         result = run_face_match_bytes(id_number.strip(), image_bytes, settings)
