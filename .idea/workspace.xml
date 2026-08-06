@@ -4,17 +4,55 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="242b746a-4828-4989-8ff3-6e418f115077" name="Changes" comment="" />
+    <list default="true" id="242b746a-4828-4989-8ff3-6e418f115077" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/mobile/eas.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/app/routers/iccid.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/routers/iccid.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Backend/app/routers/sim_swap.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/routers/sim_swap.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/FraudIntelligenceChecksScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/FraudIntelligenceChecksScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/IDDocumentScanScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/IDDocumentScanScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/LivenessDetectionScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/LivenessDetectionScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/SimSwapDetailsScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/SimSwapDetailsScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/hooks/useSimSwapOrder.ts" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/hooks/useSimSwapOrder.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/Ledger.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/SelfieCapture.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/Typography.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ui/Button.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ui/Card.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ui/Container.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ui/Input.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ui/index.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/navigation/AppNavigator.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/MainFlow.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/SAIDSelectionScreen.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/SplashScreen.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/api.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/ledger-entry.ts" beforeDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="145" />
+    <option name="cachedIndexableFilesCount" value="20123" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="HT2-40-frontend-foundation" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -41,34 +79,38 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Jest.App.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;javascript.nodejs.core.library.configured.version&quot;: &quot;22.14.0&quot;,
-    &quot;javascript.nodejs.core.library.typings.version&quot;: &quot;22.14.1&quot;,
-    &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/tngxola/WebstormProjects/facial_biometric_poc&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs.jest.jest_package&quot;: &quot;/Users/tngxola/WebstormProjects/facial_biometric_poc/frontend/node_modules/jest&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;npm.check.executor&quot;: &quot;Run&quot;,
-    &quot;npm.install.executor&quot;: &quot;Run&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
-    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
-    &quot;ts.external.directory.path&quot;: &quot;/Applications/WebStorm.app/Contents/plugins/javascript-plugin/jsLanguageServicesImpl/external&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Docker.Dockerfile.executor": "Run",
+    "Jest.App.executor": "Debug",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "SHELLCHECK.PATH": "/Users/tngxola/Library/Application Support/JetBrains/WebStorm2025.3/plugins/Shell Script/shellcheck",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "HT2-42-navigation-architecture",
+    "javascript.nodejs.core.library.configured.version": "22.14.0",
+    "javascript.nodejs.core.library.typings.version": "22.14.1",
+    "javascript.preferred.runtime.type.id": "node",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/src/components",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs.jest.jest_package": "/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/node_modules/@jest",
+    "nodejs_package_manager_path": "npm",
+    "npm.check.executor": "Run",
+    "npm.install.executor": "Run",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "to.speed.mode.migration.done": "true",
+    "ts.external.directory.path": "/Users/tngxola/WebstormProjects/facial_biometric_poc/frontend/node_modules/typescript/lib",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecapSpentCounter">
     <option name="endsOfQuotaMs" value="1786604442854" />
     <option name="spentUsd" value="0.092789255" />
@@ -78,16 +120,17 @@
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/mobile/src/components" />
       <recent name="$PROJECT_DIR$" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/mobile/assets" />
     </key>
   </component>
-  <component name="RunManager" selected="Jest.App">
+  <component name="RunManager" selected="Docker.Dockerfile">
     <configuration name="App" type="JavaScriptTestRunnerJest" temporary="true" nameIsGenerated="true">
       <node-interpreter value="project" />
-      <jest-package value="$PROJECT_DIR$/frontend/node_modules/jest" />
+      <jest-package value="$PROJECT_DIR$/mobile/node_modules/@jest" />
       <working-dir value="$PROJECT_DIR$/frontend" />
       <envs />
       <scope-kind value="SUITE" />
@@ -97,39 +140,16 @@
       </test-names>
       <method v="2" />
     </configuration>
-    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="" />
-      <option name="RUN_TOOL" value="" />
-      <option name="SCRIPT_NAME" value="" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
+    <configuration name="Dockerfile" type="docker-deploy" factoryName="dockerfile" temporary="true" server-name="Docker">
+      <deployment type="dockerfile">
+        <settings>
+          <option name="sourceFilePath" value="Dockerfile" />
+        </settings>
+      </deployment>
       <method v="2" />
     </configuration>
-    <configuration default="true" type="Tox" factoryName="Tox">
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="RUN_TOOL" value="" />
+    <configuration default="true" type="docker-deploy" factoryName="dockerfile" temporary="true">
+      <deployment type="dockerfile" />
       <method v="2" />
     </configuration>
     <configuration name="check" type="js.build_tools.npm" temporary="true" nameIsGenerated="true">
@@ -142,30 +162,13 @@
       <envs />
       <method v="2" />
     </configuration>
-    <configuration default="true" type="tests" factoryName="Doctests">
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="" />
-      <option name="RUN_TOOL" value="" />
-      <option name="SCRIPT_NAME" value="" />
-      <option name="CLASS_NAME" value="" />
-      <option name="METHOD_NAME" value="" />
-      <option name="FOLDER_NAME" value="" />
-      <option name="TEST_TYPE" value="TEST_SCRIPT" />
-      <option name="PATTERN" value="" />
-      <option name="USE_PATTERN" value="false" />
-      <method v="2" />
-    </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Docker.Dockerfile" />
         <item itemvalue="Jest.App" />
         <item itemvalue="npm.check" />
+        <item itemvalue="npm.check" />
+        <item itemvalue="Jest.App" />
       </list>
     </recent_temporary>
   </component>
@@ -184,7 +187,8 @@
       <option name="presentableId" value="Default" />
       <updated>1785575519517</updated>
       <workItem from="1785575520587" duration="12491000" />
-      <workItem from="1785590760443" duration="18529000" />
+      <workItem from="1785590760443" duration="20066000" />
+      <workItem from="1785617607512" duration="79561000" />
     </task>
     <servers />
   </component>
