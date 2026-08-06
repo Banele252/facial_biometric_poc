@@ -5,31 +5,27 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="242b746a-4828-4989-8ff3-6e418f115077" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/mobile/eas.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mobile/src/components/DeviceFrame.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app/routers/iccid.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/routers/iccid.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app/routers/sim_swap.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/routers/sim_swap.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/mobile/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/app.json" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/app.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/assets/mtn-logo.png" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/assets/mtn-logo.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/FacialVerificationScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/FacialVerificationScreen.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/FraudIntelligenceChecksScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/FraudIntelligenceChecksScreen.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/IDDocumentScanScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/IDDocumentScanScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/IdentityValidationScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/IdentityValidationScreen.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/LivenessDetectionScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/LivenessDetectionScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/MainFlow.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/MainFlow.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/RequestSimSwapScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/RequestSimSwapScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/SAIDSelectionScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/SAIDSelectionScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/SIMSwapApprovedScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/SIMSwapApprovedScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/SIMSwapCompleteScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/SIMSwapCompleteScreen.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/SimSwapDetailsScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/SimSwapDetailsScreen.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mobile/src/hooks/useSimSwapOrder.ts" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/hooks/useSimSwapOrder.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/Ledger.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/SelfieCapture.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/Typography.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Button.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Card.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Container.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Input.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/index.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/navigation/AppNavigator.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/screens/MainFlow.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/screens/SAIDSelectionScreen.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/screens/SplashScreen.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/api.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/ledger-entry.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/SplashScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/SplashScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -91,12 +87,12 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "SHELLCHECK.PATH": "/Users/tngxola/Library/Application Support/JetBrains/WebStorm2025.3/plugins/Shell Script/shellcheck",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "HT2-42-navigation-architecture",
+    "git-widget-placeholder": "HT2-72-pwa-device-frame",
     "javascript.nodejs.core.library.configured.version": "22.14.0",
     "javascript.nodejs.core.library.typings.version": "22.14.1",
     "javascript.preferred.runtime.type.id": "node",
     "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/src/components",
+    "last_opened_file_path": "/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/assets",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -120,6 +116,7 @@
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/mobile/assets" />
       <recent name="$PROJECT_DIR$/mobile/src/components" />
       <recent name="$PROJECT_DIR$" />
     </key>
@@ -140,6 +137,42 @@
       </test-names>
       <method v="2" />
     </configuration>
+    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
+      <module name="facial_biometric_poc" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="Tox" factoryName="Tox">
+      <module name="facial_biometric_poc" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="Dockerfile" type="docker-deploy" factoryName="dockerfile" temporary="true" server-name="Docker">
       <deployment type="dockerfile">
         <settings>
@@ -149,7 +182,9 @@
       <method v="2" />
     </configuration>
     <configuration default="true" type="docker-deploy" factoryName="dockerfile" temporary="true">
-      <deployment type="dockerfile" />
+      <deployment type="dockerfile">
+        <settings />
+      </deployment>
       <method v="2" />
     </configuration>
     <configuration name="check" type="js.build_tools.npm" temporary="true" nameIsGenerated="true">
@@ -160,6 +195,26 @@
       </scripts>
       <node-interpreter value="project" />
       <envs />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="tests" factoryName="Doctests">
+      <module name="facial_biometric_poc" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="CLASS_NAME" value="" />
+      <option name="METHOD_NAME" value="" />
+      <option name="FOLDER_NAME" value="" />
+      <option name="TEST_TYPE" value="TEST_SCRIPT" />
+      <option name="PATTERN" value="" />
+      <option name="USE_PATTERN" value="false" />
       <method v="2" />
     </configuration>
     <recent_temporary>
@@ -188,7 +243,7 @@
       <updated>1785575519517</updated>
       <workItem from="1785575520587" duration="12491000" />
       <workItem from="1785590760443" duration="20066000" />
-      <workItem from="1785617607512" duration="79561000" />
+      <workItem from="1785617607512" duration="107836000" />
     </task>
     <servers />
   </component>
