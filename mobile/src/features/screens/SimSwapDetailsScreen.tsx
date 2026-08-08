@@ -222,7 +222,7 @@ export default function SimSwapDetailsScreen({
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Container style={styles.container}>
+          <Container style={styles.container} scroll={false}>
             <View style={styles.titleContainer}>
               <View style={styles.accentLine} />
               <View style={{ flex: 1 }}>
@@ -387,7 +387,7 @@ export default function SimSwapDetailsScreen({
       </KeyboardAvoidingView>
 
       <View style={styles.bottomActions}>
-        <Container>
+        <Container scroll={false}>
           <Button
             variant="primary"
             onPress={handleContinue}
