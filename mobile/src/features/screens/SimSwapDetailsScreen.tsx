@@ -216,7 +216,7 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Container style={styles.container}>
+          <Container style={styles.container} scroll={false}>
             <View style={styles.titleContainer}>
               <View style={styles.accentLine} />
               <View style={{ flex: 1 }}>
@@ -381,7 +381,7 @@ export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
       </KeyboardAvoidingView>
 
       <View style={styles.bottomActions}>
-        <Container>
+        <Container scroll={false}>
           <Button
             variant="primary"
             onPress={handleContinue}

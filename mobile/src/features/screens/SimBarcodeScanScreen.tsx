@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -385,7 +386,13 @@ export default function SimBarcodeScanScreen({
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.contentScroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        bounces
+      >
         {/* Title */}
         <View style={styles.titleBlock}>
           <View style={styles.accentLine} />
@@ -621,7 +628,7 @@ export default function SimBarcodeScanScreen({
             );
           })}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -662,10 +669,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
+  contentScroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 6,
+    paddingBottom: 16,
   },
   titleBlock: {
     flexDirection: 'row',
