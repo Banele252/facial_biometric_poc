@@ -11,10 +11,12 @@
       "resizeMode": "contain",
       "backgroundColor": "#FBF7EE"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.facialbiometricpoc"
+      "bundleIdentifier": "com.mtn.facialbiometricpoc"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +24,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.yourcompany.facialbiometricpoc"
+      "package": "com.mtn.facialbiometricpoc"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -44,6 +46,11 @@
           "backgroundColor": "#FBF7EE"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cf667e35-1fb7-478c-aa25-42b18edb6916"
+      }
+    }
   }
 }
