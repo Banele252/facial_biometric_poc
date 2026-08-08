@@ -1,0 +1,14 @@
+swimlane-beta LR
+  subgraph Internal user
+    start((Start))
+    End((End))
+    request[Access request]
+    user[User details]
+    receive[Receive update]
+    Auth(Authenticate user)
+  end
+
+  subgraph Application
+    triage[Triage request]
+    answer[Send answer]
+  end
