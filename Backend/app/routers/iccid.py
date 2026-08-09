@@ -1,10 +1,13 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, status
-from PIL import Image, ImageEnhance
-import pyzbar.pyzbar as pyzbar
-from pyzbar.pyzbar import ZBarSymbol
 import io
-import re
 import logging
+import re
+
+import pyzbar.pyzbar as pyzbar
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from PIL import Image, ImageEnhance
+from pyzbar.pyzbar import ZBarSymbol
+
+from Backend.app.routers.uploads import read_image
 
 router = APIRouter(prefix="/iccid", tags=["iccid"])
 
@@ -29,21 +32,9 @@ def _preprocess(image: Image.Image) -> Image.Image:
     description="Upload a photo of the SIM barcode. Returns the 19–20 digit ICCID.",
 )
 async def extract_iccid(file: UploadFile = File(...)):
-    allowed = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
-    if file.content_type not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported type. Allowed: {', '.join(allowed)}",
-        )
+    contents = await read_image(file, "file")
 
     try:
-        contents = await file.read()
-        if len(contents) > 10 * 1024 * 1024:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="Image too large. Max size is 10 MB.",
-            )
-
         image = Image.open(io.BytesIO(contents))
 
         # Try original first, then preprocessed
@@ -69,14 +60,17 @@ async def extract_iccid(file: UploadFile = File(...)):
 
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="No valid ICCID barcode found. Wipe the SIM, ensure good lighting, and keep the barcode flat.",
+            detail=(
+                "No valid ICCID barcode found. Wipe the SIM, ensure good "
+                "lighting, and keep the barcode flat."
+            ),
         )
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"ICCID extraction failed: {e}")
+    except Exception as exc:
+        logger.error("ICCID extraction failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Image processing failed. Please try again.",
-        )
+        ) from exc

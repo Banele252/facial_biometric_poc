@@ -98,6 +98,40 @@ _SCHEMA = (
         created_at TEXT NOT NULL
     )
     """,
+    # The fraud intelligence repository the diagram draws beside the
+    # pre-checks. Every rejection is written here, and the first pre-check
+    # ("Check against recent (7 days) rejected requests") reads it back. This
+    # has to be persisted rather than in-process: a repeat attempt an hour
+    # later, or against another replica, must still see the earlier rejection.
+    """
+    CREATE TABLE IF NOT EXISTS rejected_requests (
+        id TEXT PRIMARY KEY,
+        id_number TEXT NOT NULL,
+        msisdn TEXT,
+        device_id TEXT,
+        stage TEXT NOT NULL,
+        reason TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
+    # Authorisation tokens. The diagram issues one once every check has passed
+    # and only then processes the SIM swap, so the step that changes the
+    # customer's SIM presents evidence that the identity chain completed rather
+    # than trusting its caller.
+    """
+    CREATE TABLE IF NOT EXISTS authorisation_tokens (
+        token TEXT PRIMARY KEY,
+        id_number TEXT NOT NULL,
+        msisdn TEXT,
+        -- Not "transaction": that is a reserved word in both SQLite and
+        -- Postgres, and quoting it everywhere is worse than naming it well.
+        transaction_kind TEXT NOT NULL,
+        attempt_reference TEXT,
+        issued_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        consumed_at TEXT
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,

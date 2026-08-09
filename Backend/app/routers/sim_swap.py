@@ -1,16 +1,15 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+
+from Backend.sim_swap_service.sim_swap_activation import activate_new_sim
 
 # Import your existing business logic (or move it into app/services)
 from Backend.sim_swap_service.sim_swap_request import (
-    create_sim_swap_request,
-    VerificationStatus,
     FraudDecision,
     InMemoryOrderStore,
+    VerificationStatus,
+    create_sim_swap_request,
 )
-from Backend.sim_swap_service.sim_swap_activation import activate_new_sim
-from Backend.app.db import get_db   # Your DB connection for drafts
 
 router = APIRouter(prefix="/api/v1/sim-swap", tags=["SIM Swap"])
 
@@ -20,10 +19,12 @@ _draft_store = {}
 
 # Pydantic models for JSON requests
 
+
 class InitiateSwapRequest(BaseModel):
     full_name: str
     msisdn: str
     new_sim_serial: str
+
 
 class CreateOrderRequest(BaseModel):
     msisdn: str
@@ -32,41 +33,34 @@ class CreateOrderRequest(BaseModel):
     verification_status: VerificationStatus
     fraud_decision: FraudDecision
 
+
 # Endpoints
+
 
 @router.post("/initiate")
 async def initiate_sim_swap(
-        request: InitiateSwapRequest,
-        background_tasks: BackgroundTasks,
+    request: InitiateSwapRequest,
 ):
     """
     Step 1 of the SIM Swap journey: the user confirms their details.
     Saves the draft to the database so it can be retrieved later.
     """
-    # Example: insert into a 'pending_swaps' table
-    # db = get_db()
-    # db.execute(...)
-    # For now, keep in memory
     _draft_store[request.msisdn] = {
         "full_name": request.full_name,
         "new_sim_serial": request.new_sim_serial,
     }
 
-    # Log the API call (optional)
-    # background_tasks.add_task(log_call, ...)
-
     return {"status": "accepted", "message": "Draft saved"}
+
 
 @router.post("/create")
 async def create_sim_swap_order(
-        request: CreateOrderRequest,
-        background_tasks: BackgroundTasks,
+    request: CreateOrderRequest,
 ):
     """
     Step 2: actually create the order after identity and fraud checks have passed.
     Uses the same logic as sim_swap_service but accepts JSON.
     """
-    # Use an in‑memory store (or replace with a DB-backed store)
     order_store = InMemoryOrderStore()
 
     result = create_sim_swap_request(
@@ -82,13 +76,13 @@ async def create_sim_swap_order(
         raise HTTPException(status_code=400, detail=result.reasons)
 
     # Optional: log to DB
-    # background_tasks.add_task(log_call, ...)
 
     return {
         "status": result.status.value,
         "order": result.order.__dict__,
         "reasons": result.reasons,
     }
+
 
 @router.get("/{order_id}")
 async def get_sim_swap_order(order_id: str):
@@ -99,13 +93,14 @@ async def get_sim_swap_order(order_id: str):
         raise HTTPException(status_code=404, detail="Order not found")
     return order.__dict__
 
+
 @router.post("/{order_id}/activate")
 async def activate_sim_swap_order(
-        order_id: str,
-        background_tasks: BackgroundTasks,
+    order_id: str,
 ):
     """Activate the new SIM and deactivate the old one."""
     from Backend.sim_swap_service.sim_swap_activation import InMemorySimRegistry
+
     order_store = InMemoryOrderStore()
     sim_registry = InMemorySimRegistry()
 

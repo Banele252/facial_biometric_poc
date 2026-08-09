@@ -34,9 +34,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12.9-slim-bookworm AS runtime
 
 # Patch base image CVEs, then drop apt caches to keep the layer small.
+# libzbar0 is the native library behind pyzbar, which reads the barcode on a
+# SIM to extract its ICCID. The Python wheel is only a wrapper — without the
+# shared library the import fails at runtime, not at build time.
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libzbar0 \
     && rm -rf /var/lib/apt/lists/*
 
 # High UID — Defender for DevOps flags low-numbered UIDs as host-user collisions.
@@ -56,12 +59,14 @@ COPY --chown=10001:10001 Backend/ ./Backend/
 COPY --from=frontend --chown=10001:10001 /build/dist /app/static
 
 # Writable state for the dependency-free defaults. Without DATABASE_URL the app
-# creates a SQLite file under ./data at startup, and without
-# AZURE_STORAGE_CONNECTION_STRING it writes selfies to ./data/selfies — both
-# inside a WORKDIR the app user cannot write to. The container then exits
-# before binding a port. Deployed environments override both with Postgres and
-# Blob, but the image has to stand up on its own.
-RUN mkdir -p /app/data/selfies && chown -R 10001:10001 /app/data
+# creates a SQLite file under ./data at startup; without
+# AZURE_STORAGE_CONNECTION_STRING it writes selfies to ./data/selfies; and the
+# fallback verification decision writes an audit log under ./data/logs
+# (FALLBACK_AUDIT_LOG_PATH overrides it). All three sit inside a WORKDIR the
+# app user cannot write to unless created and chowned here. Deployed
+# environments override the DB and storage with Postgres and Blob, but the
+# image has to stand up on its own.
+RUN mkdir -p /app/data/selfies /app/data/logs && chown -R 10001:10001 /app/data
 
 USER 10001:10001
 

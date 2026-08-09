@@ -2,7 +2,13 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
+// One definition, in config/apiBase. Imported rather than redeclared so this
+// module cannot drift back to an empty base URL, which turns every request
+// into a relative path that resolves to nothing on a device. Re-exported
+// because callers already import it from here.
+import { API_BASE_URL } from '@/config/apiBase';
+
+export { API_BASE_URL };
 const REQUEST_TIMEOUT_MS = 120_000;
 
 export type TransactionKind = 'sim_swap' | 'number_port';

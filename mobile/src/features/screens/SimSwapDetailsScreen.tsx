@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +17,8 @@ import { Typography, Button, Container } from '@/components/ui';
 import { Colors } from '@/theme';
 import { NavigationAction } from '@/navigation/types';
 import { useSimSwapOrder } from '@/hooks/useSimSwapOrder';
+
+const { width, height } = Dimensions.get('window');
 
 interface Props {
   navigate?: (screen: string, params?: any) => void;
@@ -41,7 +44,7 @@ const FIELDS: FieldDef[] = [
   {
     id: 'names',
     label: 'Full Names',
-    placeholder: 'Firstname Surname',
+    placeholder: 'Firstname Lastname',
     helper: 'As registered on your MTN account.',
     errorMsg: 'Enter your full names as registered.',
     maxLength: 48,
@@ -62,7 +65,7 @@ const FIELDS: FieldDef[] = [
   {
     id: 'iccid',
     label: 'New SIM card serial number (ICCID)',
-    placeholder: '8901 4103 2111 1851 0720',
+    placeholder: '8901410321111851 0720',
     helper: 'Printed on the SIM card body.',
     errorMsg: 'The ICCID must be 19 or 20 digits.',
     maxLength: 24,
@@ -108,8 +111,6 @@ export default function SimSwapDetailsScreen({
 }: Props) {
   const scannedIcid = (routeParams?.scannedIcid as string) || '';
 
-  // Lazy initializers: derived from props on mount. No useEffect needed
-  // because this screen remounts every time it becomes active in the router.
   const [values, setValues] = useState<Record<string, string>>(() => ({
     names: '',
     msisdn: '',
@@ -199,15 +200,23 @@ export default function SimSwapDetailsScreen({
     <SafeAreaView style={styles.shell}>
       <StatusBar style="dark" />
 
-      <View style={styles.patternTop} />
-      <View style={styles.patternBottom} />
+      {/* Gold dot pattern — top right */}
+      <View style={styles.dotsPattern}>
+        {[...Array(5)].map((_, row) => (
+          <View key={row} style={styles.dotRow}>
+            {[...Array(6)].map((_, col) => (
+              <View key={col} style={styles.dot} />
+            ))}
+          </View>
+        ))}
+      </View>
 
       <View style={styles.topBar}>
         <Pressable onPress={handleBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={Colors.text} />
         </Pressable>
         <Typography variant="body" style={{ fontWeight: '700' }}>
-            SIM Swap
+            SIM Swap Details
         </Typography>
         <View style={styles.placeholder} />
       </View>
@@ -231,14 +240,7 @@ export default function SimSwapDetailsScreen({
                   align="left"
                   style={{ fontWeight: '800', fontSize: 22, lineHeight: 27 }}
                 >
-                    Capture your SIM swap request details
-                </Typography>
-                <Typography
-                  variant="body"
-                  color="textSecondary"
-                  style={{ marginTop: 8, lineHeight: 20, fontSize: 13.5 }}
-                >
-                    Enter them exactly as they appear on your account.
+                    Capture your SIM swap details
                 </Typography>
               </View>
             </View>
@@ -325,7 +327,7 @@ export default function SimSwapDetailsScreen({
 
             <View style={styles.hintCard}>
               <View style={styles.hintIcon}>
-                <Ionicons name="card" size={16} color="#14110C" />
+                <Ionicons name="document-text-outline" size={16} color="#14110C" />
               </View>
               <Typography
                 variant="caption"
@@ -368,55 +370,45 @@ export default function SimSwapDetailsScreen({
                 </Pressable>
               </View>
             )}
-
-            <View style={styles.securityRow}>
-              <Ionicons name="lock-closed" size={14} color="#C9A000" />
-              <Typography
-                variant="caption"
-                style={{
-                  fontWeight: '500',
-                  color: '#6B6559',
-                  fontSize: 12.5,
-                }}
-              >
-                  Your information is secure with us.
-              </Typography>
-            </View>
           </Container>
         </ScrollView>
       </KeyboardAvoidingView>
 
       <View style={styles.bottomActions}>
-        <Container>
-          <Button
-            variant="primary"
-            onPress={handleContinue}
-            disabled={status === 'loading'}
-            style={
-              allValid && status !== 'loading'
-                ? [styles.primaryBtn, styles.primaryBtnActive]
-                : styles.primaryBtn
-            }
-          >
-            {status === 'loading' ? 'Checking…' : 'Continue'}
-          </Button>
+        <Container style={styles.bottomContainer}>
+          <View style={styles.buttonGroup}>
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={handleContinue}
+              disabled={status === 'loading'}
+              style={
+                allValid && status !== 'loading'
+                  ? [styles.primaryBtn, styles.primaryBtnActive]
+                  : styles.primaryBtn
+              }
+            >
+              {status === 'loading' ? 'Checking…' : 'Continue'}
+            </Button>
 
-          <Button
-            variant="outline"
-            onPress={openBarcodeScanner}
-            style={styles.secondaryBtn}
-          >
-              Scan SIM barcode
-          </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onPress={openBarcodeScanner}
+              style={styles.secondaryBtn}
+            >
+                Scan SIM barcode
+            </Button>
+          </View>
         </Container>
 
         <View style={styles.dotsContainer}>
-          {Array.from({ length: 10 }).map((_, i) => (
+          {Array.from({ length: 5 }).map((_, i) => (
             <View
               key={i}
               style={[
-                styles.dot,
-                i === 3 ? styles.dotActive : styles.dotInactive,
+                styles.progressDot,
+                i === 0 ? styles.progressDotActive : styles.progressDotInactive,
               ]}
             />
           ))}
@@ -426,25 +418,27 @@ export default function SimSwapDetailsScreen({
   );
 }
 
+const GOLD = '#D4AF37';
+
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: '#FFFDF9' },
-  patternTop: {
+  dotsPattern: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 210,
-    height: 210,
-    backgroundColor: 'rgba(255,203,5,0.05)',
-    opacity: 0.5,
+    top: height * 0.10,
+    right: width * 0.06,
+    zIndex: 0,
   },
-  patternBottom: {
-    position: 'absolute',
-    bottom: -80,
-    left: -60,
-    width: 320,
-    height: 320,
-    backgroundColor: 'rgba(255,203,5,0.15)',
-    borderRadius: 160,
+  dotRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  dot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 1.75,
+    backgroundColor: GOLD,
+    marginHorizontal: 5,
+    opacity: 0.4,
   },
   topBar: {
     flexDirection: 'row',
@@ -591,18 +585,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  securityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-  },
   bottomActions: {
     paddingTop: 12,
     paddingBottom: 24,
     backgroundColor: '#FFFDF9',
     borderTopWidth: 1,
     borderTopColor: '#EFEBE1',
+  },
+  bottomContainer: {
+    paddingHorizontal: 24,
+  },
+  buttonGroup: {
+    gap: 12,
+    width: '100%',
   },
   primaryBtn: {
     height: 54,
@@ -629,15 +624,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 18,
   },
-  dot: {
+  progressDot: {
     height: 7,
     borderRadius: 4,
   },
-  dotActive: {
+  progressDotActive: {
     width: 22,
     backgroundColor: '#FFCB05',
   },
-  dotInactive: {
+  progressDotInactive: {
     width: 7,
     backgroundColor: '#E2DFD7',
   },

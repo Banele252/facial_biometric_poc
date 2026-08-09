@@ -2,10 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
 from Backend.app.config import get_settings
+from Backend.app.routers.uploads import read_image
+from Backend.app.services.face_match import run_face_match_bytes
 from Backend.external_backend.main import VerifyNowError, get_credits, verify_said
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,46 @@ def verify_identity(payload: VerificationRequest) -> dict:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Identity verification provider is unavailable",
         ) from exc
+
+
+@router.post("/face-match")
+async def face_match_endpoint(
+    id_number: str = Form(...),
+    selfie_image: UploadFile = File(...),
+) -> dict:
+    """Match an uploaded selfie against the Home Affairs photo.
+
+    A direct, single-step view of the same match the journey runs at
+    ``POST /api/v1/verifications``, for testing a selfie against an ID number
+    without walking the whole journey. The call mode is not a parameter here
+    for the same reason it is not one there: it is a deployment decision read
+    from VERIFY_MODE, so no caller can move this to production on its own.
+    """
+    settings = get_settings()
+    if not settings.verify_now_configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Identity verification provider is not configured",
+        )
+
+    image_bytes = await read_image(selfie_image, "selfie_image")
+
+    try:
+        result = run_face_match_bytes(id_number.strip(), image_bytes, settings)
+    except VerifyNowError as exc:
+        logger.error("VerifyNow face match failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Identity verification provider is unavailable",
+        ) from exc
+
+    return {
+        "outcome": result.outcome,
+        "provider_status": result.provider_status,
+        "score": result.score,
+        "detail": result.detail,
+        "mode": settings.verify_mode,
+    }
 
 
 @router.get("/credits")

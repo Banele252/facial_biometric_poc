@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" font-family="'Century Gothic', 'Questrial', 'Futura', 'Avenir Next', 'Trebuchet MS', sans-serif">
+  <title>Biometric Trust Platform — Azure hub and spoke architecture</title>
+
+  <defs>
+    <marker id="ay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#E0AE00"/>
+    </marker>
+    <marker id="ak" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1A1A1A"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8A8A8A"/>
+    </marker>
+  </defs>
+
+  <!-- ================= HUB ================= -->
+  <rect x="196" y="74" width="268" height="424" rx="10" fill="#FFFFFF" stroke="#004F70" stroke-width="2"/>
+  <rect x="196" y="74" width="268" height="30" rx="10" fill="#004F70"/>
+  <rect x="196" y="94" width="268" height="10" fill="#004F70"/>
+  <text x="212" y="95" font-size="15" font-weight="bold" fill="#FFFFFF" letter-spacing="1.2">HUB VNet</text>
+
+  <!-- Application Gateway -->
+  <rect x="222" y="140" width="216" height="92" rx="7" fill="#FFF9DE" stroke="#FFCB05" stroke-width="2.5"/>
+  <text x="330" y="172" text-anchor="middle" font-size="18" font-weight="bold" fill="#1A1A1A">Application Gateway</text>
+  <text x="330" y="196" text-anchor="middle" font-size="14" fill="#4A4A4A">+ WAF · OWASP 3.2</text>
+  <text x="330" y="216" text-anchor="middle" font-size="13" fill="#7A7A7A">the only way in</text>
+
+  <!-- Azure Firewall -->
+  <rect x="222" y="336" width="216" height="92" rx="7" fill="#F4F4F4" stroke="#1A1A1A" stroke-width="2.5"/>
+  <text x="330" y="368" text-anchor="middle" font-size="18" font-weight="bold" fill="#1A1A1A">Azure Firewall</text>
+  <text x="330" y="392" text-anchor="middle" font-size="14" fill="#4A4A4A">threat intel: Deny</text>
+  <text x="330" y="412" text-anchor="middle" font-size="13" fill="#7A7A7A">the only way out</text>
+
+  <!-- ================= SPOKE ================= -->
+  <rect x="524" y="74" width="608" height="424" rx="10" fill="#FFFFFF" stroke="#004F70" stroke-width="2"/>
+  <rect x="524" y="74" width="608" height="30" rx="10" fill="#004F70"/>
+  <rect x="524" y="94" width="608" height="10" fill="#004F70"/>
+  <text x="540" y="95" font-size="15" font-weight="bold" fill="#FFFFFF" letter-spacing="1.2">SPOKE VNet — no public IPs</text>
+
+  <!-- APIM -->
+  <rect x="552" y="132" width="230" height="78" rx="7" fill="#FFF9DE" stroke="#FFCB05" stroke-width="2.5"/>
+  <text x="667" y="162" text-anchor="middle" font-size="18" font-weight="bold" fill="#1A1A1A">API Management</text>
+  <text x="667" y="185" text-anchor="middle" font-size="14" fill="#4A4A4A">internal VNet mode</text>
+
+  <!-- Container App -->
+  <rect x="552" y="252" width="230" height="96" rx="7" fill="#FFCB05" stroke="#E0AE00" stroke-width="2.5"/>
+  <text x="667" y="284" text-anchor="middle" font-size="19" font-weight="bold" fill="#1A1A1A">Container App</text>
+  <text x="667" y="307" text-anchor="middle" font-size="14" fill="#1A1A1A">API + SPA, one image</text>
+  <text x="667" y="328" text-anchor="middle" font-size="13" fill="#5A4A00">scales to zero</text>
+
+  <!-- Postgres -->
+  <rect x="552" y="392" width="230" height="76" rx="7" fill="#F4F4F4" stroke="#A0A0A0" stroke-width="2"/>
+  <text x="667" y="420" text-anchor="middle" font-size="17" font-weight="bold" fill="#1A1A1A">PostgreSQL Flexible</text>
+  <text x="667" y="442" text-anchor="middle" font-size="13" fill="#4A4A4A">VNet integrated</text>
+  <text x="667" y="460" text-anchor="middle" font-size="12" fill="#7A7A7A">no public endpoint</text>
+
+  <!-- Private-endpoint services -->
+  <text x="838" y="128" font-size="12.5" fill="#7A7A7A" letter-spacing="1">REACHED BY PRIVATE ENDPOINT</text>
+
+  <rect x="838" y="140" width="266" height="62" rx="7" fill="#FBFBFB" stroke="#BDBDBD" stroke-width="1.8"/>
+  <text x="858" y="168" font-size="16.5" font-weight="bold" fill="#1A1A1A">Azure AI Face</text>
+  <text x="858" y="188" font-size="12.5" fill="#7A7A7A">document face match</text>
+
+  <rect x="838" y="214" width="266" height="62" rx="7" fill="#FBFBFB" stroke="#BDBDBD" stroke-width="1.8"/>
+  <text x="858" y="242" font-size="16.5" font-weight="bold" fill="#1A1A1A">Blob storage</text>
+  <text x="858" y="262" font-size="12.5" fill="#7A7A7A">images deleted after 7 days</text>
+
+  <rect x="838" y="288" width="266" height="62" rx="7" fill="#FBFBFB" stroke="#BDBDBD" stroke-width="1.8"/>
+  <text x="858" y="316" font-size="16.5" font-weight="bold" fill="#1A1A1A">Key Vault</text>
+  <text x="858" y="336" font-size="12.5" fill="#7A7A7A">secrets · RBAC</text>
+
+  <rect x="838" y="362" width="266" height="62" rx="7" fill="#FBFBFB" stroke="#BDBDBD" stroke-width="1.8"/>
+  <text x="858" y="390" font-size="16.5" font-weight="bold" fill="#1A1A1A">Container Registry</text>
+  <text x="858" y="410" font-size="12.5" fill="#7A7A7A">app image</text>
+
+  <!-- ================= ENDPOINTS ================= -->
+  <rect x="30" y="248" width="140" height="104" rx="7" fill="#1A1A1A"/>
+  <text x="100" y="290" text-anchor="middle" font-size="18" font-weight="bold" fill="#FFCB05">MTN App</text>
+  <text x="100" y="312" text-anchor="middle" font-size="13" fill="#FFFFFF">customer</text>
+  <text x="100" y="331" text-anchor="middle" font-size="13" fill="#FFFFFF">channels</text>
+
+  <rect x="30" y="556" width="268" height="72" rx="7" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="164" y="584" text-anchor="middle" font-size="16.5" font-weight="bold" fill="#1A1A1A">Home Affairs / VerifyNow</text>
+  <text x="164" y="606" text-anchor="middle" font-size="13" fill="#4A4A4A">external identity provider</text>
+
+  <!-- ================= FLOWS ================= -->
+  <!-- request path : MTN App -> AGW -->
+  <path d="M 170 292 L 214 292 L 214 186 L 216 186" fill="none" stroke="#E0AE00" stroke-width="3.5" marker-end="url(#ay)"/>
+  <!-- AGW -> APIM -->
+  <path d="M 438 171 L 546 171" fill="none" stroke="#E0AE00" stroke-width="3.5" marker-end="url(#ay)"/>
+  <!-- APIM -> Container App -->
+  <path d="M 667 210 L 667 246" fill="none" stroke="#E0AE00" stroke-width="3.5" marker-end="url(#ay)"/>
+  <!-- Container App -> Postgres -->
+  <path d="M 667 348 L 667 386" fill="none" stroke="#8A8A8A" stroke-width="2.2" marker-end="url(#ag)"/>
+
+  <!-- Container App -> private endpoint services -->
+  <path d="M 782 300 L 810 300 L 810 171 L 832 171" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ag)"/>
+  <path d="M 782 300 L 810 300 L 810 245 L 832 245" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ag)"/>
+  <path d="M 782 300 L 810 300 L 810 319 L 832 319" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ag)"/>
+  <path d="M 782 300 L 810 300 L 810 393 L 832 393" fill="none" stroke="#8A8A8A" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ag)"/>
+
+  <!-- egress : Container App -> Firewall -->
+  <path d="M 552 330 L 500 330 L 500 382 L 444 382" fill="none" stroke="#1A1A1A" stroke-width="3" marker-end="url(#ak)"/>
+  <text x="500" y="356" text-anchor="middle" font-size="12.5" fill="#4A4A4A">egress</text>
+
+  <!-- Firewall -> vendor -->
+  <path d="M 275 428 L 275 550" fill="none" stroke="#1A1A1A" stroke-width="3" marker-end="url(#ak)"/>
+
+  <!-- ================= MONITORING ================= -->
+  <rect x="524" y="556" width="608" height="72" rx="7" fill="#F4F4F4" stroke="#A0A0A0" stroke-width="1.8"/>
+  <text x="828" y="584" text-anchor="middle" font-size="16.5" font-weight="bold" fill="#1A1A1A">Log Analytics + Sentinel · Application Insights</text>
+  <text x="828" y="606" text-anchor="middle" font-size="13" fill="#4A4A4A">diagnostics from every resource in both networks</text>
+
+  <path d="M 330 498 L 330 530 L 700 530 L 700 550" fill="none" stroke="#A0A0A0" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#ag)"/>
+  <path d="M 950 498 L 950 530 L 900 530 L 900 550" fill="none" stroke="#A0A0A0" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#ag)"/>
+
+  <!-- ================= LEGEND ================= -->
+  <line x1="1152" y1="556" x2="1182" y2="556" stroke="#E0AE00" stroke-width="3.5"/>
+  <text x="1190" y="561" font-size="12.5" fill="#4A4A4A">request</text>
+  <line x1="1152" y1="580" x2="1182" y2="580" stroke="#1A1A1A" stroke-width="3"/>
+  <text x="1190" y="585" font-size="12.5" fill="#4A4A4A">egress</text>
+  <line x1="1152" y1="604" x2="1182" y2="604" stroke="#8A8A8A" stroke-width="1.8" stroke-dasharray="5 4"/>
+  <text x="1190" y="609" font-size="12.5" fill="#4A4A4A">private</text>
+</svg>

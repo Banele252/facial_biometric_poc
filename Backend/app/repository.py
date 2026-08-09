@@ -79,6 +79,86 @@ def list_attempts(
     )
 
 
+# -- fraud intelligence repository -------------------------------------------
+def record_rejection(
+    id_number: str,
+    stage: str,
+    reason: str | None = None,
+    msisdn: str | None = None,
+    device_id: str | None = None,
+) -> None:
+    """Store a rejected request for the recent-rejections fraud pre-check.
+
+    ``stage`` is the step that rejected (``fraud``, ``document_face``,
+    ``rica``, ...), so the repository shows not just that someone was turned
+    away but where they were turned away.
+    """
+    get_db().execute(
+        "INSERT INTO rejected_requests (id, id_number, msisdn, device_id, stage, reason, "
+        "created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (new_id(), id_number, msisdn, device_id, stage, reason, utcnow_iso()),
+    )
+
+
+def count_recent_rejections(
+    id_number: str,
+    since_iso: str,
+    msisdn: str | None = None,
+    device_id: str | None = None,
+) -> int:
+    """Count rejections since ``since_iso`` for this identity, number or device.
+
+    Any of the three matching is enough. Someone refused on one ID number who
+    comes back on the same handset and the same MSISDN is the pattern the check
+    exists to catch, so it deliberately does not require all three to agree.
+    """
+    clauses = ["id_number = ?"]
+    params: list[Any] = [id_number]
+    if msisdn:
+        clauses.append("msisdn = ?")
+        params.append(msisdn)
+    if device_id:
+        clauses.append("device_id = ?")
+        params.append(device_id)
+    params.append(since_iso)
+
+    row = get_db().query_one(
+        # Fixed literal fragments only; every value is a bound parameter.
+        f"SELECT COUNT(*) AS n FROM rejected_requests "  # noqa: S608
+        f"WHERE ({' OR '.join(clauses)}) AND created_at >= ?",
+        tuple(params),
+    )
+    return int(row["n"]) if row else 0
+
+
+# -- authorisation tokens ----------------------------------------------------
+def create_authorisation_token(
+    token: str,
+    id_number: str,
+    transaction: str,
+    expires_at: str,
+    msisdn: str | None = None,
+    attempt_reference: str | None = None,
+) -> dict[str, Any]:
+    get_db().execute(
+        "INSERT INTO authorisation_tokens (token, id_number, msisdn, transaction_kind, "
+        "attempt_reference, issued_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (token, id_number, msisdn, transaction, attempt_reference, utcnow_iso(), expires_at),
+    )
+    return get_authorisation_token(token)  # type: ignore[return-value]
+
+
+def get_authorisation_token(token: str) -> dict[str, Any] | None:
+    return get_db().query_one("SELECT * FROM authorisation_tokens WHERE token = ?", (token,))
+
+
+def mark_token_consumed(token: str) -> None:
+    get_db().execute(
+        "UPDATE authorisation_tokens SET consumed_at = ? WHERE token = ? AND consumed_at IS NULL",
+        (utcnow_iso(), token),
+    )
+
+
 # -- notifications -----------------------------------------------------------
 def create_notification(
     id_number: str, type_: str, channel: str, message: str, attempt_id: str | None = None

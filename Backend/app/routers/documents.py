@@ -1,58 +1,68 @@
-"""
-Internal backend API - OCR/document fallback verification.
+"""Document verification endpoints — OCR and the document-based matches.
 
-Covers the OCR-and-document fallback flow used when Home Affairs
-verification is unavailable (see "Fallback Verification" / "Passport
-Verification" user story):
-    - OCR Validation (extract identity fields from an ID/passport image)
-    - User Input Match Against Document (compare user input to OCR'd fields)
-    - Face Match Against Document (compare a live selfie to the document photo)
-    - Reject Identity Mismatches (combine the above into an accept/reject decision)
+These are the individual document steps of the journey, exposed one at a time
+so a document can be tested on its own without walking the whole flow at
+``POST /api/v1/verifications``. They run the same
+``Backend.app.services.documents`` code the journey runs, so an answer here is
+the answer the journey would get.
 
-Run locally with (from this directory):
-    uv run uvicorn main:app --reload
-
-Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
+Replaces the standalone FastAPI app that used to live at
+``Backend/internal_backend/main.py``. That app was never mounted or served —
+the container runs a single process — so its endpoints were unreachable and
+drifted from the journey's copy of the same logic.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import logging
 
-from db_logger import ensure_table, log_call, summarize_upload
-from document_match import DocumentType, match_user_input_to_document
-from dotenv import load_dotenv
-from face_match import match_face_to_document
-from fallback_verification_decision import evaluate_fallback_verification
-from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
-from ocr_validator import extract_id_fields
+from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from pydantic import BaseModel
 
-load_dotenv()
+from Backend.app.routers.uploads import read_image
+from Backend.app.services.documents import (
+    ClaimedIdentity,
+    DocumentType,
+    extract_document_fields,
+    match_input_to_document,
+    match_selfie_to_document,
+)
+from Backend.internal_backend.db_logger import log_call, summarize_upload
+from Backend.internal_backend.fallback_verification_decision import (
+    evaluate_fallback_verification,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
 SERVICE_NAME = "internal_backend"
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    ensure_table()
-    yield
+class FallbackVerifyResponse(BaseModel):
+    status: str
+    reasons: list[str]
 
 
-app = FastAPI(
-    title="Facial Biometric Verification - Internal API", version="0.1.0", lifespan=lifespan
-)
+@router.post("/ocr")
+async def ocr_extract(
+    background_tasks: BackgroundTasks,
+    document_image: UploadFile = File(...),
+    user_full_name: str = Form(""),
+    user_id_number: str = Form(""),
+) -> dict:
+    """Extract the identity fields from a photographed ID document or passport.
 
-
-# --------------------------------------------------------------------------
-# OCR Validation
-# --------------------------------------------------------------------------
-@app.post("/api/v1/ocr/extract")
-async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadFile = File(...)):
-    """Extract identity fields from a photographed/scanned ID document or passport."""
-    document_bytes = await document_image.read()
-    result = extract_id_fields(document_bytes)
+    ``user_full_name`` and ``user_id_number`` are only consulted by the mock
+    provider, which has no way to read an image and uses them to decide whether
+    to return a document that agrees with the customer. The Azure provider
+    ignores them and reads what is on the document.
+    """
+    document_bytes = await read_image(document_image, "document_image")
+    result = extract_document_fields(
+        document_bytes,
+        ClaimedIdentity(full_name=user_full_name, document_number=user_id_number),
+    )
     response = {
         "success": result.success,
         "document_type": result.document_type,
@@ -66,7 +76,7 @@ async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadF
     background_tasks.add_task(
         log_call,
         service=SERVICE_NAME,
-        endpoint="/api/v1/ocr/extract",
+        endpoint="/api/v1/documents/ocr",
         method="POST",
         request_summary=summarize_upload(
             document_image.filename, document_image.content_type, len(document_bytes)
@@ -77,24 +87,22 @@ async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadF
     return response
 
 
-# --------------------------------------------------------------------------
-# User Input Match Against Document
-# --------------------------------------------------------------------------
-@app.post("/api/v1/verify/document-match")
+@router.post("/input-match")
 async def document_match_endpoint(
     background_tasks: BackgroundTasks,
     document_type: DocumentType = Form(...),
     user_full_name: str = Form(...),
     user_id_number: str = Form(""),
     document_image: UploadFile = File(...),
-):
-    """Compare user-supplied identity details against the OCR'd ID/passport."""
-    document_bytes = await document_image.read()
-    ocr_result = extract_id_fields(document_bytes)
-    match_result = match_user_input_to_document(
+) -> dict:
+    """Compare the customer's typed details against the OCR'd document."""
+    document_bytes = await read_image(document_image, "document_image")
+    claimed = ClaimedIdentity(full_name=user_full_name, document_number=user_id_number)
+    ocr_result = extract_document_fields(document_bytes, claimed)
+    match_result = match_input_to_document(
         document_type=document_type,
-        user_id_number=user_id_number,
         user_full_name=user_full_name,
+        user_id_number=user_id_number,
         ocr_result=ocr_result,
     )
     response = {
@@ -107,7 +115,7 @@ async def document_match_endpoint(
     background_tasks.add_task(
         log_call,
         service=SERVICE_NAME,
-        endpoint="/api/v1/verify/document-match",
+        endpoint="/api/v1/documents/input-match",
         method="POST",
         request_summary={
             "document_type": document_type.value,
@@ -123,19 +131,16 @@ async def document_match_endpoint(
     return response
 
 
-# --------------------------------------------------------------------------
-# Face Match Against Document photo
-# --------------------------------------------------------------------------
-@app.post("/api/v1/verify/face-match")
-async def face_match_endpoint(
+@router.post("/face-match")
+async def document_face_match_endpoint(
     background_tasks: BackgroundTasks,
     selfie_image: UploadFile = File(...),
     document_image: UploadFile = File(...),
-):
-    """Compare a live selfie against the photo on the ID document / passport."""
-    selfie_bytes = await selfie_image.read()
-    document_bytes = await document_image.read()
-    result = match_face_to_document(selfie_bytes, document_bytes)
+) -> dict:
+    """Compare a live selfie against the photo on the document."""
+    selfie_bytes = await read_image(selfie_image, "selfie_image")
+    document_bytes = await read_image(document_image, "document_image")
+    result = match_selfie_to_document(selfie_bytes, document_bytes)
     response = {
         "success": result.success,
         "is_match": result.is_match,
@@ -145,7 +150,7 @@ async def face_match_endpoint(
     background_tasks.add_task(
         log_call,
         service=SERVICE_NAME,
-        endpoint="/api/v1/verify/face-match",
+        endpoint="/api/v1/documents/face-match",
         method="POST",
         request_summary={
             "selfie_image": summarize_upload(
@@ -161,16 +166,8 @@ async def face_match_endpoint(
     return response
 
 
-# --------------------------------------------------------------------------
-# Reject Identity Mismatches (full OCR/document fallback pipeline)
-# --------------------------------------------------------------------------
-class FallbackVerifyResponse(BaseModel):
-    status: str
-    reasons: list[str]
-
-
-@app.post("/api/v1/fallback-verification/verify", response_model=FallbackVerifyResponse)
-async def verify_fallback(
+@router.post("/verify", response_model=FallbackVerifyResponse)
+async def verify_documents(
     background_tasks: BackgroundTasks,
     document_type: DocumentType = Form(...),
     user_full_name: str = Form(...),
@@ -178,23 +175,24 @@ async def verify_fallback(
     reference_id: str = Form(""),
     selfie_image: UploadFile = File(...),
     document_image: UploadFile = File(...),
-):
-    """
-    Full OCR/document fallback pipeline: OCR -> document match -> face match
-    -> accept/reject decision. Used when Home Affairs verification is
-    unavailable and the customer falls back to scanning their ID/passport.
-    """
-    document_bytes = await document_image.read()
-    selfie_bytes = await selfie_image.read()
+) -> FallbackVerifyResponse:
+    """The three document steps as one call: OCR, face match, detail match.
 
-    ocr_result = extract_id_fields(document_bytes)
-    doc_match_result = match_user_input_to_document(
+    The same sequence the journey runs between its fraud pre-checks and the
+    RICA lookup, without the rest of the journey around it.
+    """
+    document_bytes = await read_image(document_image, "document_image")
+    selfie_bytes = await read_image(selfie_image, "selfie_image")
+    claimed = ClaimedIdentity(full_name=user_full_name, document_number=user_id_number)
+
+    ocr_result = extract_document_fields(document_bytes, claimed)
+    doc_match_result = match_input_to_document(
         document_type=document_type,
-        user_id_number=user_id_number,
         user_full_name=user_full_name,
+        user_id_number=user_id_number,
         ocr_result=ocr_result,
     )
-    face_result = match_face_to_document(selfie_bytes, document_bytes)
+    face_result = match_selfie_to_document(selfie_bytes, document_bytes)
 
     decision = evaluate_fallback_verification(
         document_match_result=doc_match_result,
@@ -205,7 +203,7 @@ async def verify_fallback(
     background_tasks.add_task(
         log_call,
         service=SERVICE_NAME,
-        endpoint="/api/v1/fallback-verification/verify",
+        endpoint="/api/v1/documents/verify",
         method="POST",
         request_summary={
             "document_type": document_type.value,
@@ -224,8 +222,3 @@ async def verify_fallback(
     )
 
     return FallbackVerifyResponse(status=decision.status.value, reasons=decision.reasons)
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
