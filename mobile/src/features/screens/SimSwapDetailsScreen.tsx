@@ -1,5 +1,5 @@
 // src/screens/SimSwapDetailsScreen.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -16,6 +16,7 @@ import { Typography, Button, Container } from '@/components/ui';
 import { Colors } from '@/theme';
 import { NavigationAction } from '@/navigation/types';
 import { useSimSwapOrder } from '@/hooks/useSimSwapOrder';
+import { validateIccidFormat } from '@/shared/iccid';
 
 interface Props {
   dispatch: React.Dispatch<NavigationAction>;
@@ -94,36 +95,39 @@ function validateField(def: FieldDef, value: string): boolean {
   if (def.digitsOnly) {
     const digits = v.replace(/\D/g, '');
     if (def.id === 'msisdn') return digits.length === 10;
-    if (def.id === 'iccid') {
-      const len = digits.length;
-      return len >= 19 && len <= 20;
-    }
+    if (def.id === 'iccid') return validateIccidFormat(digits).valid;
   }
   return true;
 }
 
 export default function SimSwapDetailsScreen({ dispatch, route }: Props) {
+  const scannedIcid = route?.params?.scannedIcid;
+
   const [values, setValues] = useState<Record<string, string>>({
     names: '',
     msisdn: '',
-    iccid: route?.params?.scannedIcid ?? '',
+    iccid: scannedIcid ?? '',
   });
   const [touched, setTouched] = useState<Record<string, boolean>>({
-    iccid: !!route?.params?.scannedIcid,
+    iccid: !!scannedIcid,
   });
   const [focus, setFocus] = useState<string>('');
   const [banner, setBanner] = useState('');
 
   const { submit, status, serverMessage, dismissError } = useSimSwapOrder();
 
-  /* Sync scanned ICCID when navigating back with result */
-  useEffect(() => {
-    const scanned = route?.params?.scannedIcid;
-    if (scanned) {
-      setValues((prev) => ({ ...prev, iccid: scanned }));
-      setTouched((prev) => ({ ...prev, iccid: true }));
-    }
-  }, [route?.params?.scannedIcid]);
+  /* Sync scanned ICCID when navigating back with a result. Adjusting state
+     during render (rather than in a useEffect) avoids the extra render
+     cascade an effect would cause here — see react-hooks/set-state-in-effect
+     and https://react.dev/learn/you-might-not-need-an-effect. appliedIcid
+     tracks the last scan value we've already applied, so this only fires
+     when a *new* scan result arrives, not on every render. */
+  const [appliedIcid, setAppliedIcid] = useState(scannedIcid);
+  if (scannedIcid && scannedIcid !== appliedIcid) {
+    setAppliedIcid(scannedIcid);
+    setValues((prev) => ({ ...prev, iccid: scannedIcid }));
+    setTouched((prev) => ({ ...prev, iccid: true }));
+  }
 
   const handleInput = useCallback(
     (def: FieldDef, text: string) => {

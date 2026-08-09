@@ -39,14 +39,20 @@ app = FastAPI(
 
 # Same-origin in the container, so this is empty by default. Set
 # CORS_ALLOW_ORIGINS to run the Vite dev server against a local API.
-_cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
+# _cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
+
+_cors_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+
 if _cors_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
         allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
+        max_age=600,
     )
 
 app.include_router(health.router)

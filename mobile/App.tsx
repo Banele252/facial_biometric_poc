@@ -10,12 +10,11 @@ import FacialVerificationScreen from '@/features/screens/FacialVerificationScree
 import LivenessDetectionScreen from '@/features/screens/LivenessDetectionScreen';
 import { IDDocumentScanScreen } from '@/features/screens/IDDocumentScanScreen';
 import SimSwapDetailsScreen from '@/features/screens/SimSwapDetailsScreen';
+import SimBarcodeScanScreen from '@/features/screens/SimBarcodeScanScreen';
 import { SAIDSelectionScreen } from '@/features/screens/SAIDSelectionScreen';
 import IdentityValidationScreen from '@/features/screens/IdentityValidationScreen';
 import { RequestSimSwapScreen } from '@/features/screens/RequestSimSwapScreen';
 import SplashScreen from '@/features/screens/SplashScreen';
-
-// ... imports for screens
 
 const SCREEN_MAP: Record<ScreenName, React.FC<any>> = {
   Splash: SplashScreen,
@@ -23,6 +22,7 @@ const SCREEN_MAP: Record<ScreenName, React.FC<any>> = {
   SAIDSelection: SAIDSelectionScreen,
   IdentityValidation: IdentityValidationScreen,
   SimSwapDetails: SimSwapDetailsScreen,
+  SimBarcodeScan: SimBarcodeScanScreen,
   IDDocumentScan: IDDocumentScanScreen,
   FacialVerification: FacialVerificationScreen,
   LivenessDetection: LivenessDetectionScreen,
@@ -46,10 +46,10 @@ function Router() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <NavigationProvider>
-        <Router />
-      </NavigationProvider>
-    </SafeAreaProvider>
+      <SafeAreaProvider>
+        <NavigationProvider>
+          <Router />
+        </NavigationProvider>
+      </SafeAreaProvider>
   );
 }
