@@ -97,7 +97,7 @@ jobs:
 
       # Build only — publishing happens in the CD workflow after gates pass.
       - name: Build image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
