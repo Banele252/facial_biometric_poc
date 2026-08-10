@@ -1,0 +1,39 @@
+flowchart TB
+    subgraph "Analytics Environment"
+        subgraph "Vnet /28"
+            subgraph "Azure function subnet /29"
+                C@{shape: bolt,label: "Azure function"}
+                J@{shape: bolt,label: "Azure function"}
+            end
+            subgraph "Private Endpoint subnet /29"
+                D@{shape: rect,label: "Private endpoint"} 
+                K@{shape: rect,label: "Private endpoint"} 
+            end
+            
+        end
+        F@{shape: rect,label: "Azure web app"}
+        E@{shape: database,label: "Postgres SQL"}
+        C -.-> D
+        D -.-> E
+        F -.-> K
+        K -.-> J
+        J -.-> D
+    end
+    subgraph "Prod Environment"
+        A@{shape: database,label: "Postgres SQL"}
+        subgraph "Vnet /28"
+        subgraph "Private Endpoint subnet /29"
+            B@{shape: rect,label: "Private endpoint"}
+        end
+        end
+        B -.-> A
+    end 
+
+    subgraph "Source code repository"
+        G@{shape: rect,label: "Container registry"}
+        H@{shape: rect,label: "Git hub repo"}
+        H-->G
+    end 
+    B -.-> C
+    G -.-> F
+
