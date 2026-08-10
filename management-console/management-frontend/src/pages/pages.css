@@ -1,0 +1,130 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.page__subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: -8px 0 0;
+}
+
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.filters-row .ui-input {
+  min-width: 240px;
+  flex: 1;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+
+.chart-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.chart-card__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  margin: 0;
+}
+
+.risk-band-legend {
+  display: flex;
+  gap: var(--space-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.risk-band-legend__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.risk-band-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.payload-preview {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-family: ui-monospace, monospace;
+  font-size: var(--font-size-xs);
+  max-width: 320px;
+}
+
+.payload-preview pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.reasons-list {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+  padding: 0;
+  overflow: hidden;
+}
+
+.chat-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.chat-bubble {
+  max-width: 70%;
+  padding: 10px var(--space-md);
+  border-radius: 16px;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.chat-bubble--user {
+  align-self: flex-end;
+  background: var(--color-secondary);
+  color: var(--color-surface);
+  border-bottom-right-radius: 4px;
+}
+
+.chat-bubble--system {
+  align-self: flex-start;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-panel__composer {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.chat-panel__composer .ui-input {
+  flex: 1;
+}
