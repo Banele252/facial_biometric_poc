@@ -14,7 +14,7 @@ RUN npm run build
 
 
 # ---------- Stage 2: resolve Python dependencies ----------
-FROM python:3.14.6-slim-bookworm AS deps
+FROM python:3.15.0rc1-slim-bookworm AS deps
 
 COPY --from=ghcr.io/astral-sh/uv:0.5.29 /uv /bin/uv
 
@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 
 # ---------- Stage 3: runtime ----------
-FROM python:3.14.6-slim-bookworm AS runtime
+FROM python:3.15.0rc1-slim-bookworm AS runtime
 
 # Patch base image CVEs, then drop apt caches to keep the layer small.
 RUN apt-get update \
