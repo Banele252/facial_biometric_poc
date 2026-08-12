@@ -1,22 +1,19 @@
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+src = ["."]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "W", "N"]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "C4", "SIM",
+]
 ignore = [
-    "S101",   # assert allowed in tests
-    "S106",   # hardcoded password in test fixtures
-    "S107",   # hardcoded password in test fixtures
-    "B008",   # FastAPI Depends/Form in defaults is standard
-    "B904",   # raise from exc — optional in FastAPI handlers
+    "N999",   # Invalid module name (Backend/ has uppercase B)
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # FastAPI Depends/File/Form in defaults — intentional pattern
+    "SIM112", # Legacy lowercase env vars (would break existing .env files)
 ]
 
-[tool.ruff.lint.per-file-ignores]
-"Backend/tests/**/*.py" = ["S101", "S106", "S107"]
-"Backend/**/test_*.py" = ["S101", "S106", "S107"]
-"Backend/sim_swap_service/test_*.py" = ["S101"]
-
-[tool.black]
-line-length = 120
-target-version = ['py311']
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

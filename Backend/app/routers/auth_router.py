@@ -92,7 +92,7 @@ def issue_test_token(
     now = datetime.now(UTC)
     token_id = str(uuid.uuid4())
 
-    # FIX: was settings.JWT_ISSUER / JWT_AUDIENCE / JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+    # JWT_ISSUER / JWT_AUDIENCE / JWT_ACCESS_TOKEN_EXPIRE_MINUTES
     # — same casing correction as above.
     payload = {
         "sub": username,
@@ -107,14 +107,14 @@ def issue_test_token(
         "role": user["role"],
     }
 
-    # FIX: was settings.JWT_PRIVATE_KEY
+    # JWT_PRIVATE_KEY
     if not settings.jwt_private_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="JWT_PRIVATE_KEY not configured. Run: python scripts/generate_keys.py",
         )
 
-    # FIX: was settings.JWT_PRIVATE_KEY / settings.JWT_ALGORITHM
+    # JWT_PRIVATE_KEY / settings.JWT_ALGORITHM
     token = jwt.encode(
         payload,
         settings.jwt_private_key,
