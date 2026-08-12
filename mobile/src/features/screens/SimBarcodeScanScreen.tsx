@@ -17,8 +17,8 @@ import { NavigationAction } from '@/navigation/types';
 
 interface Props {
     dispatch: React.Dispatch<NavigationAction>;
-    stepCount?: number; 
-    activeStep?: number;
+    stepCount?: number;      // Number of dots (optional, default 6)
+    activeStep?: number;     // 1-based active dot index (optional, default 4)
 }
 
 type Phase = 'ready' | 'scanning' | 'done' | 'error';
@@ -57,7 +57,7 @@ function formatDigits(raw: string, group: number[]): string {
   return out.join(' ');
 }
 
-/* L-shaped corner bracket */
+/* ─── L-shaped corner bracket ─── */
 function CornerBracket({
   color,
   position,
@@ -92,7 +92,7 @@ function CornerBracket({
   );
 }
 
-/*  Fake barcode bars (decorative)  */
+/* ─── Fake barcode bars (decorative) ─── */
 function DecorativeBars() {
   return (
     <View style={styles.barsRow}>
@@ -115,7 +115,7 @@ function DecorativeBars() {
   );
 }
 
-/*  Checklist chip  */
+/* ─── Checklist chip ─── */
 function Chip({ label, tone }: { label: string; tone: 'good' | 'warn' | 'idle' }) {
   const map = {
     good: { bg: '#E4F5EA', fg: '#1F7A4C', bd: '#C4E7D2' },
@@ -162,7 +162,7 @@ export default function SimBarcodeScanScreen({
     phaseRef.current = phase;
   }, [phase]);
 
-  /* Permission */
+  /* ── Permission ── */
   const hasRequestedRef = useRef(false);
   useEffect(() => {
     if (!hasRequestedRef.current && permission && !permission.granted) {
@@ -171,7 +171,7 @@ export default function SimBarcodeScanScreen({
     }
   }, [permission, requestPermission]);
 
-  /* Animations */
+  /* ── Animations ── */
   const [sweepAnim] = useState(() => new Animated.Value(-72));
   const [pulseAnim] = useState(() => new Animated.Value(1));
 
@@ -221,7 +221,7 @@ export default function SimBarcodeScanScreen({
     return () => anim.stop();
   }, [phase, pulseAnim]);
 
-  /* Barcode handler */
+  /* ── Barcode handler ── */
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
       if (phaseRef.current !== 'scanning' || hasHandledScanRef.current) return;
@@ -242,7 +242,7 @@ export default function SimBarcodeScanScreen({
     [],
   );
 
-  /* Actions */
+  /* ── Actions ── */
   const startScanning = useCallback(() => {
     hasHandledScanRef.current = false;
     setIcid(''); // clear previous value
@@ -271,7 +271,7 @@ export default function SimBarcodeScanScreen({
   const dismissBanner = useCallback(() => setBanner(''), []);
   const toggleTorch = useCallback(() => setTorch((t) => !t), []);
 
-  /* Derived UI */
+  /* ── Derived UI ── */
   const scanning = phase === 'scanning';
   const done = phase === 'done';
   const err = phase === 'error';

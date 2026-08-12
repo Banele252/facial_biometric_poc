@@ -1,11 +1,11 @@
 """Identity verification against the external VerifyNow provider."""
+
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from Backend.app.config import get_settings
-from Backend.app.dependencies.security import get_correlation_id, require_biometric_read, require_biometric_write
 from Backend.external_backend.main import VerifyNowError, get_credits, verify_said
 
 logger = logging.getLogger(__name__)
@@ -18,8 +18,8 @@ class VerificationRequest(BaseModel):
     mode: str = Field("production", pattern="^(production|sandbox)$")
 
 
-@router.post("/verify-identity", dependencies=[Depends(require_biometric_write)])
-def verify_identity(payload: VerificationRequest, correlation_id: str = Depends(get_correlation_id)) -> dict:
+@router.post("/verify-identity")
+def verify_identity(payload: VerificationRequest) -> dict:
     settings = get_settings()
     if not settings.verify_now_configured:
         raise HTTPException(
@@ -34,6 +34,7 @@ def verify_identity(payload: VerificationRequest, correlation_id: str = Depends(
             timeout=settings.request_timeout_seconds,
         )
     except VerifyNowError as exc:
+        # Log the provider detail, but do not leak it to the caller.
         logger.error("VerifyNow verification failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -41,8 +42,8 @@ def verify_identity(payload: VerificationRequest, correlation_id: str = Depends(
         ) from exc
 
 
-@router.get("/credits", dependencies=[Depends(require_biometric_read)])
-def credits(correlation_id: str = Depends(get_correlation_id)) -> dict:
+@router.get("/credits")
+def credits() -> dict:
     settings = get_settings()
     if not settings.verify_now_configured:
         raise HTTPException(

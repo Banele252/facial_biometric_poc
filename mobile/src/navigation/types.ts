@@ -22,17 +22,4 @@ export type NavigationAction =
     | { type: 'GO_BACK' }
     | { type: 'RESET'; payload: { screen: ScreenName } };
 
-export type RootStackParamList = {
-    Splash: undefined;
-    RequestSimSwap: undefined;
-    SAIDSelection: undefined;
-    IdentityValidation: undefined;
-    SimSwapDetails: { scannedIcid?: string } | undefined;
-    IDDocumentScan: { fullName?: string; cellNumber?: string; iccid?: string } | undefined;
-    FacialVerification: undefined;
-    LivenessDetection: undefined;
-    FraudIntelligenceChecks: undefined;
-    SIMSwapApproved: undefined;
-    SIMSwapComplete: undefined;
-    SimBarcodeScan: undefined;
-};
+export type RootStackParamList = Record<string, undefined>;

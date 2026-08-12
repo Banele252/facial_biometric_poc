@@ -53,10 +53,10 @@ function Router() {
 
 export default function App() {
   return (
-      <SafeAreaProvider>
-        <NavigationProvider>
-          <Router />
-        </NavigationProvider>
-      </SafeAreaProvider>
+    <SafeAreaProvider>
+      <NavigationProvider>
+        <Router />
+      </NavigationProvider>
+    </SafeAreaProvider>
   );
 }

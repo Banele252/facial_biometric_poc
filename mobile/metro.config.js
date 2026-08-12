@@ -1,10 +1,9 @@
-// metro.config.js
+// mobile/metro.config.js
 const { getDefaultConfig } = require('expo/metro-config');
 
-/** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Alias '@' to './src' for Metro resolution
+// Add alias for '@' to point to './src'
 config.resolver.extraNodeModules = {
     ...config.resolver.extraNodeModules,
     '@': `${__dirname}/src`,

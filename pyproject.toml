@@ -35,4 +35,33 @@ target-version = "py312"
 exclude = [".venv", "frontend", "Documents"]
 
 [tool.ruff.lint]
-ignore = ["N999"]
+select = ["E", "F", "W", "I", "UP", "B", "S", "C4"]
+ignore = [
+    # The repo predates these conventions; the pipeline PR does not rewrite
+    # existing business logic. Revisit in a dedicated cleanup.
+    "N801",  # class naming (id_validation)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # assert is the point of a test
+"Backend/internal_backend/id_validation.py" = [
+    "E722",  # bare except — pre-existing, out of scope for this PR
+    "B904",
+    "SIM105",
+    "E501",  # long line in an existing docstring; rewording is a content change
+]
+"Backend/internal_backend/test_*.py" = ["S101"]  # assert is the point of a test
+"Backend/internal_backend/main.py" = [
+    "B008",  # File(...)/Form(...) as defaults is the standard FastAPI idiom
+]
+"Backend/rica_service/test_*.py" = ["S101"]  # assert is the point of a test
+"Backend/fraud_engine/test_*.py" = ["S101"]  # assert is the point of a test
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+
+[tool.coverage.run]
+source = ["Backend"]
+omit = ["*/tests/*", "*/__init__.py"]

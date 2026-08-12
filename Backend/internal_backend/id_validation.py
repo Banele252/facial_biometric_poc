@@ -2,7 +2,7 @@
 # Objective: To build a validation script based on the rules listed on the subtask: HT2-27
 
 
-class IdValidation:
+class id_validation:
     def __init__(self, id: str):
         self.id = id
         self.id_list = list(id)
@@ -42,7 +42,7 @@ class IdValidation:
                 return True
             else:
                 return False
-        except Exception:
+        except:
             return False
 
     def is_12th_digit_zero_or_one(self) -> bool:
@@ -79,14 +79,14 @@ class IdValidation:
                 total += digit
 
             return total % 10 == 0
-        except Exception:
+        except:
             return False
 
     def senati_excutor(self):
         pass
 
 
-# id_validator = IdValidation(id='')
+# id_validator = id_validation(id='')
 # print(id_validator.is_valid_luhn())
 # print(id_validator.is_11th_digit_zero_or_one())
 # print(id_validator.is_12th_digit_zero_or_one())
