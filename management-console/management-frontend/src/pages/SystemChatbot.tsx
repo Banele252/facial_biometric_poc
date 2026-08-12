@@ -3,6 +3,7 @@ import './pages.css'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
+import { Markdown } from '../components/ui/Markdown'
 import { sendChatMessage } from '../api'
 import { initialChatMessages, type ChatMessage } from '../data/mockChatMessages'
 
@@ -63,7 +64,7 @@ export function SystemChatbot() {
         <div className="chat-panel__messages" ref={listRef}>
           {messages.map((message) => (
             <div key={message.id} className={`chat-bubble chat-bubble--${message.sender}`}>
-              {message.text}
+              <Markdown text={message.text} />
             </div>
           ))}
           {sending && <div className="chat-bubble chat-bubble--system">Thinking…</div>}
