@@ -1,16 +1,16 @@
-
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
-
-from Backend.sim_swap_service.sim_swap_activation import activate_new_sim
+from typing import Optional
 
 # Import your existing business logic (or move it into app/services)
 from Backend.sim_swap_service.sim_swap_request import (
+    create_sim_swap_request,
+    VerificationStatus,
     FraudDecision,
     InMemoryOrderStore,
-    VerificationStatus,
-    create_sim_swap_request,
 )
+from Backend.sim_swap_service.sim_swap_activation import activate_new_sim
+from Backend.app.db import get_db   # Your DB connection for drafts
 
 router = APIRouter(prefix="/api/v1/sim-swap", tags=["SIM Swap"])
 

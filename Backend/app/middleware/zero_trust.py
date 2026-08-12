@@ -5,7 +5,6 @@ correlation ID propagation, scope checking, rate limiting, security headers.
 """
 
 import json
-import os
 import re
 import time
 import uuid
@@ -13,19 +12,18 @@ from datetime import UTC, datetime
 from typing import Any
 
 import jwt
+from Backend.app.config import get_settings
 from fastapi import Request
 from fastapi.security import APIKeyHeader, HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-
-from Backend.app.config import get_settings
 
 # ── Security scheme exports (used by routers) ──
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 bearer_auth = HTTPBearer(auto_error=False)
 correlation_header = APIKeyHeader(name="X-Correlation-Id", auto_error=False)
 
-# ── Redis ──
+# ── Redis optional ──
 try:
     import redis.asyncio as redis
     REDIS_AVAILABLE = True
@@ -42,30 +40,15 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, redis_client: Any | None = None):
         super().__init__(app)
         self.settings = get_settings()
-        self.env = os.getenv("ENV", "development")
         self.redis = redis_client
-
-        # ── Redis: mandatory in production, fail closed ──
         if REDIS_AVAILABLE and redis_client is None:
             try:
                 self.redis = redis.from_url(
                     self.settings.redis_url, decode_responses=True
                 )
-            except Exception as exc:
+            except Exception:
                 self.redis = None
-                if self.env == "production":
-                    raise RuntimeError(
-                        f"Redis is required in production for rate limiting and nonce storage: {exc}"
-                    ) from exc
-
-        if self.env == "production" and self.redis is None:
-            raise RuntimeError(
-                "Redis is required in production. Set REDIS_URL and ensure redis is reachable."
-            )
-
-        # In-memory only for local dev (single worker)
         self._nonce_cache: dict[str, float] = {}
-        self._rate_counters: dict[str, list[float]] = {}
 
     async def dispatch(self, request: Request, call_next):
         settings = self.settings
@@ -86,7 +69,7 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
         request.state.correlation_id = correlation_id
 
         # 3. RATE LIMITING
-        client_ip = self._get_client_ip(request)
+        client_ip = request.client.host if request.client else "unknown"
         rate_key = f"rate:{client_ip}:{path}:{method}"
         if await self._is_rate_limited(rate_key, path):
             return self._security_response(
@@ -96,7 +79,6 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
                 correlation_id,
                 retry_after=60,
             )
-        await self._increment_counter(rate_key)
 
         # 4. JWT VALIDATION
         if path == "/auth/token":
@@ -191,27 +173,19 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # 10. RESPONSE HEADERS
-        current_count = await self._get_current_count(rate_key)
-        limit = self._get_rate_limit(path)
         response.headers["X-Correlation-Id"] = correlation_id
-        response.headers["X-RateLimit-Limit"] = str(limit)
-        response.headers["X-RateLimit-Remaining"] = str(max(0, limit - current_count))
+        response.headers["X-RateLimit-Limit"] = str(self._get_rate_limit(path))
+        response.headers["X-RateLimit-Remaining"] = str(
+            max(0, self._get_rate_limit(path) - await self._get_current_count(rate_key))
+        )
         response.headers["X-RateLimit-Reset"] = str(int(time.time()) + 60)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = "default-src 'none'"
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
 
         return response
-
-    def _get_client_ip(self, request: Request) -> str:
-        """Extract client IP behind a trusted reverse proxy."""
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
 
     def _validate_jwt(self, token: str, correlation_id: str) -> Any:
         settings = self.settings
@@ -281,8 +255,8 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
 
     async def _store_nonce(self, nonce: str):
         if self.redis:
-            await self.redis.set(
-                f"nonce:{nonce}", "1", nx=True, ex=self.settings.nonce_ttl_seconds
+            await self.redis.setex(
+                f"nonce:{nonce}", self.settings.nonce_ttl_seconds, "1"
             )
         else:
             self._nonce_cache[nonce] = time.time()
@@ -302,41 +276,23 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
             return s.rate_limit_history_per_minute
         if "/auth/token" in path:
             return s.rate_limit_token_per_minute
-        if "/iccid" in path:
-            return 10
         return 100
 
     async def _get_current_count(self, key: str) -> int:
         if self.redis:
             count = await self.redis.get(key)
             return int(count) if count else 0
-        now = time.time()
-        if key not in self._rate_counters:
-            self._rate_counters[key] = []
-        self._rate_counters[key] = [t for t in self._rate_counters[key] if now - t < 60]
-        return len(self._rate_counters[key])
-
-    async def _increment_counter(self, key: str):
-        if self.redis:
-            pipe = self.redis.pipeline()
-            await pipe.incr(key)
-            await pipe.expire(key, 60)
-            await pipe.execute()
-        else:
-            now = time.time()
-            if key not in self._rate_counters:
-                self._rate_counters[key] = []
-            self._rate_counters[key].append(now)
+        return 0
 
     def _security_response(
-            self,
-            status_code: int,
-            message: str,
-            code: str,
-            correlation_id: str,
-            retry_after: int | None = None,
+        self,
+        status_code: int,
+        message: str,
+        code: str,
+        correlation_id: str,
+        retry_after: int | None = None,
     ) -> Response:
-        body: dict[str, Any] = {  # ← FIX: explicit annotation allows int values
+        body = {
             "error": (
                 "Unauthorized"
                 if status_code == 401
@@ -355,18 +311,15 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
             "correlation_id": correlation_id,
             "timestamp": datetime.now(UTC).isoformat(),
         }
-        if retry_after is not None:  # ← FIX: truthiness bug (0 is valid)
+        if retry_after:
             body["retry_after"] = retry_after
 
         headers = {
             "Content-Type": "application/json",
             "X-Correlation-Id": correlation_id,
             "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": "DENY",
-            "Content-Security-Policy": "default-src 'none'",
-            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
         }
-        if retry_after is not None:
+        if retry_after:
             headers["Retry-After"] = str(retry_after)
 
         return Response(

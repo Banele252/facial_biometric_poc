@@ -99,7 +99,10 @@ def _finalise(
         mode: str | None = None,
         checks: list[CheckResult] | None = None,
 ) -> VerificationDecision:
-    status_value = (APPROVED if decision else REJECTED) if isinstance(decision, bool) else decision
+    if isinstance(decision, bool):
+        status_value = APPROVED if decision else REJECTED
+    else:
+        status_value = decision
 
     attempt = repository.record_attempt(
         id_number=id_number,

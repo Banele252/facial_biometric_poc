@@ -18,7 +18,10 @@ class IdValidation:
 
             True if the digit length is 13 else fales.
         """
-        return len(self.id_list) == 13
+        if len(self.id_list) == 13:
+            return True
+        else:
+            return False
 
     def is_id_numeric(self) -> bool:
         return self.id.isnumeric()
@@ -27,19 +30,28 @@ class IdValidation:
         yy = int(self.id[:2])
         mm = int(self.id[2:4])
         dd = int(self.id[4:6])
-        return bool((yy >= 1 and yy <= 99) and (mm >= 1 and mm <= 12) and (dd >= 1 and dd <= 31))
+        if (yy >= 1 and yy <= 99) and (mm >= 1 and mm <= 12) and (dd >= 1 and dd <= 31):
+            return True
+        else:
+            return False
 
     def is_11th_digit_zero_or_one(self) -> bool:
         try:
             eleventh_digit = self.id[10]
-            return bool(eleventh_digit == "0" or eleventh_digit == "1")
+            if eleventh_digit == "0" or eleventh_digit == "1":
+                return True
+            else:
+                return False
         except Exception:
             return False
 
     def is_12th_digit_zero_or_one(self) -> bool:
         try:
             twelenth_digit = self.id[11]
-            return bool(twelenth_digit == "8" or twelenth_digit == "9")
+            if twelenth_digit == "8" or twelenth_digit == "9":
+                return True
+            else:
+                return False
         except IndexError:
             return False
 

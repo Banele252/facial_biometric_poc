@@ -1,29 +1,28 @@
-"""FastAPI application entrypoint."""
+"""FastAPI application entrypoint.
+
+Serves the JSON API and, in the container image, the built frontend bundle from
+the same process — one image, one container, one Container App revision.
+"""
 
 import logging
 import os
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from Backend.app.config import get_settings
 from Backend.app.db import init_db
-from Backend.app.middleware.zero_trust import ZeroTrustMiddleware, api_key_header, bearer_auth
 from Backend.app.routers import (
-    auth,
     health,
-    iccid,
     notifications,
     selfies,
-    sim_swap,
     validation,
     verification,
     verifications,
 )
-from Backend.rica_service.main import router as rica_router
+from Backend.rica_service import main as rica_main
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -38,36 +37,9 @@ app = FastAPI(
     redoc_url=None,
 )
 
-
-def custom_openapi():
-    if app.openapi_schema:
-        return app.openapi_schema
-    openapi_schema = get_openapi(
-        title=app.title,
-        version=app.version,
-        description=app.description,
-        routes=app.routes,
-    )
-    openapi_schema["components"]["securitySchemes"] = {
-        "bearerAuth": {
-            "type": "http",
-            "scheme": "bearer",
-            "bearerFormat": "JWT",
-            "description": "Enter your JWT token as: Bearer <token>",
-        },
-        "apiKey": {
-            "type": "apiKey",
-            "in": "header",
-            "name": "X-API-Key",
-            "description": "Sandbox or production API key for Tier-1 operations",
-        },
-    }
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
-
-
-app.openapi = custom_openapi
-
+# Same-origin in the container, so this is empty by default. Set
+# CORS_ALLOW_ORIGINS to run the Vite dev server against a local API.
+# _cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
 
 _cors_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
 _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
@@ -83,37 +55,49 @@ if _cors_origins:
         max_age=600,
     )
 
-app.add_middleware(ZeroTrustMiddleware)
+app.include_router(health.router)
+app.include_router(validation.router)
+app.include_router(verification.router)
+app.include_router(selfies.router)
+app.include_router(verifications.router)
+app.include_router(notifications.router)
+# The mock RICA registry ships as its own runnable service, but the
+# infrastructure deploys a single container, so it is mounted here rather than
+# given a second port the platform has nowhere to route.
+app.include_router(rica_main.router)
 
-app.include_router(health)
-app.include_router(auth)
-app.include_router(validation, dependencies=[Depends(bearer_auth)])
-app.include_router(verification, dependencies=[Depends(bearer_auth)])
-app.include_router(selfies, dependencies=[Depends(bearer_auth)])
-app.include_router(verifications, dependencies=[Depends(bearer_auth)])
-app.include_router(notifications, dependencies=[Depends(bearer_auth)])
-app.include_router(iccid, dependencies=[Depends(bearer_auth)])
-app.include_router(sim_swap, dependencies=[Depends(bearer_auth), Depends(api_key_header)])
-app.include_router(rica_router, dependencies=[Depends(bearer_auth)])
-
+# Create the history/notification tables on startup. Cheap and idempotent; for
+# the default local SQLite backend this needs no external service.
 init_db()
 
 
 def _mount_frontend() -> None:
+    """Serve the built SPA if a bundle is present.
+
+    Absent during local API-only development and during tests; present in the
+    container image, where the node build stage writes it to STATIC_DIR.
+    """
     static_dir = get_settings().static_dir
     index_file = static_dir / "index.html"
     if not index_file.is_file():
-        logging.getLogger(__name__).info("No frontend bundle at %s -- serving API only", static_dir)
+        logging.getLogger(__name__).info("No frontend bundle at %s — serving API only", static_dir)
         return
+
     app.mount(
         "/assets",
         StaticFiles(directory=static_dir / "assets"),
         name="assets",
     )
+
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str) -> FileResponse:
+        """Return index.html for client-side routes.
+
+        API routes are registered above and match first, so they are unaffected.
+        """
         if full_path:
             candidate = (static_dir / full_path).resolve()
+            # Reject traversal outside the bundle (e.g. ../../etc/passwd).
             if candidate.is_file() and candidate.is_relative_to(static_dir.resolve()):
                 return FileResponse(candidate)
         return FileResponse(index_file)
