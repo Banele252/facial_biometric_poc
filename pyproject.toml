@@ -16,6 +16,7 @@ dependencies = [
     "azure-ai-vision-face>=1.0.0b2",
     "azure-core>=1.30.0",
     "psycopg[binary]>=3.3.4",
+    "openai-agents>=0.1.0",
 ]
 
 [dependency-groups]
