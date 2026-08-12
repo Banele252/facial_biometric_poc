@@ -14,9 +14,20 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Annotated, Any
 
+import psycopg
+from analytical_db import (
+    db_conn,
+    fraud_rejections_summary,
+    list_fraud_rejections,
+    list_process_logs,
+    list_sim_swap_orders,
+    sim_swap_status_summary,
+    sim_swap_volume_by_day,
+)
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from system_llm import ask_system_chatbot
@@ -67,3 +78,131 @@ async def chat(payload: ChatRequest) -> ChatResponse:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# --- Analytics -----------------------------------------------------------
+# Reads from the analytics Postgres DB via analytical_db.py. Same DB
+# Backend/analytics_api reads from; mirrors its route conventions.
+
+analytics_router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
+Conn = Annotated[Any, Depends(db_conn)]
+
+
+def _analytics_db_error(exc: Exception) -> HTTPException:
+    logger.error("Analytics DB query failed: %s", exc)
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Analytics database is currently unavailable",
+    )
+
+
+@analytics_router.get("/audit-logs")
+async def audit_logs(
+    conn: Conn,
+    process: str | None = None,
+    environment: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    try:
+        return list_process_logs(
+            conn,
+            process=process,
+            environment=environment,
+            created_from=created_from,
+            created_to=created_to,
+            limit=limit,
+            offset=offset,
+        )
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+
+
+@analytics_router.get("/fraud-rejections")
+async def fraud_rejections(
+    conn: Conn,
+    stage: str | None = None,
+    msisdn: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    try:
+        return list_fraud_rejections(
+            conn,
+            stage=stage,
+            msisdn=msisdn,
+            created_from=created_from,
+            created_to=created_to,
+            limit=limit,
+            offset=offset,
+        )
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+
+
+@analytics_router.get("/fraud-rejections/summary")
+async def fraud_rejections_summary_route(
+    conn: Conn,
+    created_from: str | None = None,
+    created_to: str | None = None,
+) -> dict[str, Any]:
+    try:
+        rules = fraud_rejections_summary(conn, created_from=created_from, created_to=created_to)
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+    return {"rules": rules}
+
+
+@analytics_router.get("/sim-swap-orders")
+async def sim_swap_orders(
+    conn: Conn,
+    status: str | None = None,
+    msisdn: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    try:
+        return list_sim_swap_orders(
+            conn,
+            status=status,
+            msisdn=msisdn,
+            created_from=created_from,
+            created_to=created_to,
+            limit=limit,
+            offset=offset,
+        )
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+
+
+@analytics_router.get("/sim-swap-orders/status-summary")
+async def sim_swap_orders_status_summary(
+    conn: Conn,
+    created_from: str | None = None,
+    created_to: str | None = None,
+) -> dict[str, Any]:
+    try:
+        statuses = sim_swap_status_summary(
+            conn, created_from=created_from, created_to=created_to
+        )
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+    return {"statuses": statuses}
+
+
+@analytics_router.get("/sim-swap-orders/volume-by-day")
+async def sim_swap_orders_volume_by_day(conn: Conn, days: int = 14) -> dict[str, Any]:
+    try:
+        rows = sim_swap_volume_by_day(conn, days=days)
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+    return {"days": rows}
+
+
+app.include_router(analytics_router)

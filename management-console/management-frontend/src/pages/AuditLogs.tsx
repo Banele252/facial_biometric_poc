@@ -1,13 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './pages.css'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Table, type TableColumn } from '../components/ui/Table'
 import { Input, Select } from '../components/ui/Input'
-import { mockAuditLogs, type AuditLogEntry } from '../data/mockAuditLogs'
-
-const PROCESS_OPTIONS = Array.from(new Set(mockAuditLogs.map((log) => log.process)))
-const ENVIRONMENT_OPTIONS = Array.from(new Set(mockAuditLogs.map((log) => log.environment)))
+import { getAuditLogs, type AuditLogEntry } from '../api'
 
 function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -22,17 +19,48 @@ export function AuditLogs() {
   const [environment, setEnvironment] = useState('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  const rows = useMemo(() => {
-    return mockAuditLogs.filter((log) => {
-      if (process !== 'all' && log.process !== process) return false
-      if (environment !== 'all' && log.environment !== environment) return false
-      if (search) {
-        const haystack = `${log.process} ${log.id} ${JSON.stringify(log.payload)}`.toLowerCase()
-        if (!haystack.includes(search.toLowerCase())) return false
-      }
-      return true
+  const [logs, setLogs] = useState<AuditLogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let ignore = false
+    setLoading(true)
+    setError(null)
+    getAuditLogs({
+      process: process === 'all' ? undefined : process,
+      environment: environment === 'all' ? undefined : environment,
+      limit: 100,
     })
-  }, [search, process, environment])
+      .then((res) => {
+        if (!ignore) setLogs(res.items)
+      })
+      .catch((err) => {
+        if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load audit logs')
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [process, environment])
+
+  // Reflects the currently loaded page of logs, not the full table.
+  const processOptions = useMemo(() => Array.from(new Set(logs.map((log) => log.process))), [logs])
+  const environmentOptions = useMemo(
+    () => Array.from(new Set(logs.map((log) => log.environment))),
+    [logs],
+  )
+
+  const rows = useMemo(() => {
+    if (!search) return logs
+    const needle = search.toLowerCase()
+    return logs.filter((log) => {
+      const haystack = `${log.process} ${log.id} ${JSON.stringify(log.payload)}`.toLowerCase()
+      return haystack.includes(needle)
+    })
+  }, [logs, search])
 
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
@@ -70,7 +98,7 @@ export function AuditLogs() {
         <Input placeholder="Search by process, id, or payload…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={process} onChange={(e) => setProcess(e.target.value)}>
           <option value="all">All processes</option>
-          {PROCESS_OPTIONS.map((option) => (
+          {processOptions.map((option) => (
             <option key={option} value={option}>
               {option.replace(/_/g, ' ')}
             </option>
@@ -78,7 +106,7 @@ export function AuditLogs() {
         </Select>
         <Select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
           <option value="all">All environments</option>
-          {ENVIRONMENT_OPTIONS.map((option) => (
+          {environmentOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -87,7 +115,13 @@ export function AuditLogs() {
       </div>
 
       <Card>
-        <Table columns={columns} rows={rows} rowKey={(row) => row.id} />
+        {loading ? (
+          <p className="page__subtitle">Loading audit logs…</p>
+        ) : error ? (
+          <p className="page__subtitle">Could not load audit logs: {error}</p>
+        ) : (
+          <Table columns={columns} rows={rows} rowKey={(row) => row.id} />
+        )}
       </Card>
     </div>
   )

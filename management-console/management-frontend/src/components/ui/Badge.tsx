@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import './ui.css'
 
-type BadgeTone = 'neutral' | 'approved' | 'review' | 'rejected' | 'flagged' | 'pending'
+export type BadgeTone = 'neutral' | 'approved' | 'review' | 'rejected' | 'flagged' | 'pending'
 
 interface BadgeProps {
   tone?: BadgeTone
