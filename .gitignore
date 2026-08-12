@@ -23,7 +23,7 @@ Backend/analytics_sync/.python_packages/
 Backend/analytics_sync/.azurite/
 
 # Runtime data (local sqlite DB and selfie storage)
-data/
+/data/
 
 # Test and lint caches
 .pytest_cache/
