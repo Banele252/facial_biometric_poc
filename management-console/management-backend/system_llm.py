@@ -300,7 +300,11 @@ fraud_assistant = Agent(
         "you can help with.\n\n"
         "Always ground your answers in the data returned by your tools "
         "rather than guessing. If a tool returns no matching records, say "
-        "so explicitly instead of inventing an answer."
+        "so explicitly instead of inventing an answer.\n\n"
+        "You are rendered in a chat widget that only supports **bold**, "
+        "*italics*, `inline code`, and simple `- ` bullet lists. Use those "
+        "sparingly for emphasis or short lists; do not use headings, "
+        "tables, fenced code blocks, or links — they will not render."
     ),
     tools=[get_fraud_outcomes, get_transactions, get_audit_logs],
     input_guardrails=[topic_guardrail],
