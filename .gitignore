@@ -16,7 +16,7 @@ wheels/
 !.env.example
 
 # Runtime data (local sqlite DB and selfie storage)
-data/
+/data/
 
 # Test and lint caches
 .pytest_cache/

@@ -9,10 +9,10 @@ export default defineConfig({
   },
   server: {
     port: 5174,
-    // Local dev only: once management-backend exists, proxy /api here the
-    // same way the root frontend/ proxies to its own backend on :8000.
-    // proxy: {
-    //   '/api': 'http://localhost:8001',
-    // },
+    // Local dev only: management-backend runs standalone on :8001 (see
+    // management-console/management-backend/main.py).
+    proxy: {
+      '/api': 'http://localhost:8001',
+    },
   },
 })

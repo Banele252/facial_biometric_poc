@@ -3,23 +3,25 @@ import './pages.css'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
-import { CANNED_REPLIES, mockChatMessages, type ChatMessage } from '../data/mockChatMessages'
+import { sendChatMessage } from '../api'
+import { initialChatMessages, type ChatMessage } from '../data/mockChatMessages'
 
-let nextId = mockChatMessages.length + 1
+let nextId = initialChatMessages.length + 1
 
 export function SystemChatbot() {
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages)
+  const [messages, setMessages] = useState<ChatMessage[]>(initialChatMessages)
   const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [messages])
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const text = draft.trim()
-    if (!text) return
+    if (!text || sending) return
 
     const userMessage: ChatMessage = {
       id: `msg_${nextId++}`,
@@ -29,20 +31,33 @@ export function SystemChatbot() {
     }
     setMessages((prev) => [...prev, userMessage])
     setDraft('')
+    setSending(true)
 
-    // Placeholder only — no LLM backend wired up yet.
-    window.setTimeout(() => {
-      const reply = CANNED_REPLIES[Math.floor(Math.random() * CANNED_REPLIES.length)]
+    try {
+      const { reply } = await sendChatMessage(text)
       setMessages((prev) => [
         ...prev,
         { id: `msg_${nextId++}`, sender: 'system', text: reply, timestamp: new Date().toISOString() },
       ])
-    }, 600)
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `msg_${nextId++}`,
+          sender: 'system',
+          text: `Sorry, I couldn't reach the Fraud Assistant (${detail}).`,
+          timestamp: new Date().toISOString(),
+        },
+      ])
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
     <div className="page">
-      <p className="page__subtitle">Placeholder assistant — responses are canned locally until a real backend is connected.</p>
+      <p className="page__subtitle">Ask about fraud outcomes, SIM-swap transactions, or audit logs.</p>
 
       <Card className="chat-panel">
         <div className="chat-panel__messages" ref={listRef}>
@@ -51,14 +66,16 @@ export function SystemChatbot() {
               {message.text}
             </div>
           ))}
+          {sending && <div className="chat-bubble chat-bubble--system">Thinking…</div>}
         </div>
         <form className="chat-panel__composer" onSubmit={handleSubmit}>
           <Input
-            placeholder="Ask the console assistant…"
+            placeholder="Ask the Fraud Assistant…"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            disabled={sending}
           />
-          <Button type="submit" size="md">
+          <Button type="submit" size="md" disabled={sending}>
             Send
           </Button>
         </form>
