@@ -71,7 +71,8 @@ import os
 import psycopg
 from psycopg import sql
 from psycopg.types.json import Json
-
+from dotenv import load_dotenv
+load_dotenv(override=True)
 logger = logging.getLogger("analytics_sync")
 
 # information_schema.columns.data_type -> the type to use on the destination.
