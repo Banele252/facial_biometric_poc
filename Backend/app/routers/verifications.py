@@ -5,33 +5,19 @@ Runs the SIM swap identity journey in the agreed order:
     ID precheck -> liveness -> RICA registration -> external ID verification
     -> Home Affairs face match -> decision
 
-then records the attempt and fires the approval/rejection notification. Each
-step is written to the audit trail and returned in ``checks``, so the caller
-can show what every stage actually returned rather than a bare verdict.
-
-Two provider calls are made (ID verification and face match). The VerifyNow
-sandbox rate-limits per IP across its routes, so a wait is inserted between
-them in sandbox mode — which is why this endpoint takes ~12s there and the
-client needs a progress state.
-
-Stories:
-- HT2-15 Fallback Verification for SA_ID holders: when the primary provider is
-  unavailable, a structurally valid ID that passed liveness is approved via a
-  fallback path flagged for manual review, instead of failing the customer.
-- HT2-14 Check Failed Verification History: GET /verifications/history exposes
-  past attempts, filterable to rejected ones.
-- HT2-24 / HT2-25: an approval or rejection notification is sent for every
-  decision.
+HT2-73: Zero-trust security added. POST /verifications is Tier-1 (requires
+simswap:execute scope + X-API-Key via middleware). GET /verifications/history
+requires biometric:read scope.
 """
-
 import logging
 import time
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from Backend.app import repository
 from Backend.app.config import get_settings
+from Backend.app.dependencies.security import get_correlation_id, require_biometric_read, require_simswap_execute
 from Backend.app.routers.validation import run_structural_checks
 from Backend.app.services.audit import record_event
 from Backend.app.services.face_match import run_face_match
@@ -53,26 +39,15 @@ REVIEW = "review"
 
 class VerificationRequest(BaseModel):
     id_number: str = Field(..., min_length=1, max_length=32)
-    # Identity claimed by the customer. Needed to check the SIM registration
-    # against RICA; when absent that check is skipped rather than failed, so
-    # the ID-only flow still works.
     full_name: str | None = Field(None, max_length=200)
     msisdn: str | None = Field(None, max_length=32, description="Number being swapped")
     new_sim_number: str | None = Field(None, max_length=32)
-    # Which high-risk transaction this journey authorises. The CARB names both;
-    # they share the entire identity chain and differ only in the final action.
     transaction: str = Field("sim_swap", pattern="^(sim_swap|number_port)$")
-    # Receiving network, for a port. Ignored for a SIM swap.
     target_network: str | None = Field(None, max_length=64)
-    # Client-supplied device identifier, used for repeat-device and velocity
-    # signals. Absent means those checks see every request as a new device.
     device_id: str | None = Field(None, max_length=128)
     selfie_id: str | None = Field(
         None, description="Selfie that passed liveness; required for approval"
     )
-    # Accepted but ignored — the call mode is a deployment decision, read from
-    # VERIFY_MODE. Kept on the model so existing callers do not break; see the
-    # note in verify() for why it is not honoured.
     mode: str | None = Field(
         None, pattern="^(production|sandbox)$", deprecated="Ignored; set VERIFY_MODE instead"
     )
@@ -82,11 +57,9 @@ class VerificationRequest(BaseModel):
 
 
 class CheckResult(BaseModel):
-    """One step of the journey, in the order it ran."""
-
     name: str
     label: str
-    status: str  # pass | fail | review | skipped
+    status: str
     detail: str
     score: float | None = None
 
@@ -116,18 +89,16 @@ class AttemptRecord(BaseModel):
 
 
 def _finalise(
-    id_number: str,
-    decision: bool | str,
-    method: str,
-    reason: str,
-    selfie_id: str | None,
-    provider_status: str | None = None,
-    match_score: float | None = None,
-    mode: str | None = None,
-    checks: list[CheckResult] | None = None,
+        id_number: str,
+        decision: bool | str,
+        method: str,
+        reason: str,
+        selfie_id: str | None,
+        provider_status: str | None = None,
+        match_score: float | None = None,
+        mode: str | None = None,
+        checks: list[CheckResult] | None = None,
 ) -> VerificationDecision:
-    # ``decision`` accepts the outcome string or a boolean, so the simple
-    # approve/reject gates below stay readable.
     if isinstance(decision, bool):
         status_value = APPROVED if decision else REJECTED
     else:
@@ -172,22 +143,14 @@ def _finalise(
     )
 
 
-@router.post("/verifications", response_model=VerificationDecision)
-def verify(payload: VerificationRequest) -> VerificationDecision:
-    """Run the SIM swap identity journey and return the decision.
-
-    Order matches the agreed process: ID precheck -> RICA registration ->
-    external ID verification -> Home Affairs face match. Every step is audited
-    and returned in ``checks`` so the caller can show what actually happened
-    rather than a bare verdict.
-    """
+@router.post(
+    "/verifications",
+    response_model=VerificationDecision,
+    dependencies=[Depends(require_simswap_execute)])
+def verify(payload: VerificationRequest, correlation_id: str = Depends(get_correlation_id)) -> VerificationDecision:
+    """Run the SIM swap identity journey and return the decision."""
     id_number = payload.id_number.strip()
     settings = get_settings()
-    # The call mode is read from configuration only. `payload.mode` is
-    # accepted for backwards compatibility but deliberately ignored: the
-    # face match already reads settings directly, and a client able to move
-    # one of the two provider calls to production but not the other is worse
-    # than a client that cannot move either.
     mode = settings.verify_mode
     checks: list[CheckResult] = []
 
@@ -201,7 +164,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         },
     )
 
-    # 1. ID precheck — structural validation, no external call.
+    # 1. ID precheck
     valid, _checks, failed = run_structural_checks(id_number)
     checks.append(
         CheckResult(
@@ -222,7 +185,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
             checks=checks,
         )
 
-    # Liveness precondition. A selfie is required, and it must have passed.
+    # Liveness precondition
     if not payload.selfie_id:
         checks.append(
             CheckResult(
@@ -269,8 +232,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         )
     )
 
-    # 2. RICA registration. Skipped when the caller did not supply the claimed
-    #    identity — an ID-only request is still a valid, narrower journey.
+    # 2. RICA registration
     if payload.full_name and payload.msisdn:
         rica = rica_verify(
             id_number=id_number,
@@ -278,12 +240,6 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
             msisdn=payload.msisdn.strip(),
         )
         matched = bool(rica.get("matched"))
-        # "No record" and "wrong name" are not the same answer and must not get
-        # the same outcome. A mismatch means someone is claiming a number that
-        # belongs to somebody else — the fraud case, and a rejection. An absent
-        # record only means the registry cannot confirm this number, which is a
-        # gap in the data rather than evidence against the customer, so it goes
-        # to manual review instead of turning them away.
         unregistered = rica.get("record") is None
 
         if matched:
@@ -354,8 +310,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         )
         return _fallback(payload, id_number, mode, checks)
 
-    # 3. External ID verification. A provider failure here is not fatal — the
-    #    face match is the stronger signal and still runs.
+    # 3. External ID verification
     id_verified = False
     try:
         verify_said(id_number=id_number, mode=mode, timeout=settings.request_timeout_seconds)
@@ -380,13 +335,11 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         )
     record_event("id_verification", {"id_number": id_number, "verified": id_verified})
 
-    # The sandbox rate-limits per IP across its routes, so the second provider
-    # call in this journey has to wait. Production is not limited this way.
     if settings.is_sandbox and settings.sandbox_cooldown_seconds > 0:
         logger.info("Sandbox cooldown: waiting %.0fs", settings.sandbox_cooldown_seconds)
         time.sleep(settings.sandbox_cooldown_seconds)
 
-    # 4. Home Affairs face match (CARB step 8A).
+    # 4. Home Affairs face match
     try:
         match = run_face_match(id_number, selfie["storage_ref"], settings)
         checks.append(
@@ -411,8 +364,6 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
             },
         )
         if match.outcome != APPROVED:
-            # Identity is not established, so the fraud checks and the swap
-            # itself are moot — stop here.
             return _finalise(
                 id_number,
                 decision=match.outcome,
@@ -441,18 +392,13 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
 
 
 def _fraud_and_swap(
-    payload: VerificationRequest,
-    id_number: str,
-    mode: str,
-    checks: list[CheckResult],
-    match,
+        payload: VerificationRequest,
+        id_number: str,
+        mode: str,
+        checks: list[CheckResult],
+        match,
 ) -> VerificationDecision:
-    """Steps 9-11: fraud checks, then create the SIM swap order.
-
-    Only reached once identity is established. The fraud engine's own policy
-    stands: a watchlist hit rejects, volume-based risk refers to a human.
-    """
-    # 5. Fraud intelligence (CARB step 9).
+    """Steps 9-11: fraud checks, then create the SIM swap order."""
     fraud = run_fraud_checks(
         identity_reference=id_number,
         msisdn=(payload.msisdn or "").strip(),
@@ -492,15 +438,9 @@ def _fraud_and_swap(
             checks=checks,
         )
 
-    # 6. The transaction itself. Identity is established and fraud is clear, so
-    #    from here the two journeys diverge: a port hands the number to another
-    #    network, a swap issues a new SIM on this one.
     if payload.transaction == "number_port":
         return _authorise_port(payload, id_number, mode, checks, match)
 
-    # SIM swap (CARB steps 10-11). Needs the number and the new SIM; without
-    # them the identity journey still succeeded, so this is reported as skipped
-    # rather than failing the customer.
     if not payload.msisdn or not payload.new_sim_number:
         checks.append(
             CheckResult(
@@ -547,9 +487,6 @@ def _fraud_and_swap(
         },
     )
 
-    # 7. Activate the new SIM (CARB step 11). Only once an order exists — this
-    #    is the step that actually cuts the customer over, and it records the
-    #    serial it replaced so the change is reversible.
     if swap.created and swap.order_id:
         activation = activate(swap.order_id)
         checks.append(
@@ -596,11 +533,11 @@ def _fraud_and_swap(
 
 
 def _authorise_port(
-    payload: VerificationRequest,
-    id_number: str,
-    mode: str,
-    checks: list[CheckResult],
-    match,
+        payload: VerificationRequest,
+        id_number: str,
+        mode: str,
+        checks: list[CheckResult],
+        match,
 ) -> VerificationDecision:
     """Final action for a number port, once identity and fraud have passed."""
     if not payload.msisdn or not payload.target_network:
@@ -663,7 +600,7 @@ def _authorise_port(
 
 
 def _fallback(
-    payload: VerificationRequest, id_number: str, mode: str, checks: list[CheckResult]
+        payload: VerificationRequest, id_number: str, mode: str, checks: list[CheckResult]
 ) -> VerificationDecision:
     """Fallback path (HT2-15): the provider is unavailable or unconfigured."""
     if not payload.allow_fallback:
@@ -691,11 +628,15 @@ def _fallback(
     )
 
 
-@router.get("/verifications/history", response_model=list[AttemptRecord])
+@router.get(
+    "/verifications/history",
+    response_model=list[AttemptRecord],
+    dependencies=[Depends(require_biometric_read)])
 def verification_history(
-    id_number: str | None = Query(None, max_length=32),
-    status_filter: str | None = Query(None, alias="status", pattern="^(approved|rejected|review)$"),
-    limit: int = Query(50, ge=1, le=200),
+        id_number: str | None = Query(None, max_length=32),
+        status_filter: str | None = Query(None, alias="status", pattern="^(approved|rejected|review)$"),
+        limit: int = Query(50, ge=1, le=200),
+        correlation_id: str = Depends(get_correlation_id),
 ) -> list[AttemptRecord]:
     rows = repository.list_attempts(
         id_number=id_number.strip() if id_number else None,
