@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -16,8 +17,8 @@ import { NavigationAction } from '@/navigation/types';
 
 interface Props {
     dispatch: React.Dispatch<NavigationAction>;
-    stepCount?: number;      // Number of dots (optional, default 6)
-    activeStep?: number;     // 1-based active dot index (optional, default 4)
+    stepCount?: number; 
+    activeStep?: number;
 }
 
 type Phase = 'ready' | 'scanning' | 'done' | 'error';
@@ -56,7 +57,7 @@ function formatDigits(raw: string, group: number[]): string {
   return out.join(' ');
 }
 
-/* ─── L-shaped corner bracket ─── */
+/* L-shaped corner bracket */
 function CornerBracket({
   color,
   position,
@@ -91,7 +92,7 @@ function CornerBracket({
   );
 }
 
-/* ─── Fake barcode bars (decorative) ─── */
+/*  Fake barcode bars (decorative)  */
 function DecorativeBars() {
   return (
     <View style={styles.barsRow}>
@@ -114,7 +115,7 @@ function DecorativeBars() {
   );
 }
 
-/* ─── Checklist chip ─── */
+/*  Checklist chip  */
 function Chip({ label, tone }: { label: string; tone: 'good' | 'warn' | 'idle' }) {
   const map = {
     good: { bg: '#E4F5EA', fg: '#1F7A4C', bd: '#C4E7D2' },
@@ -161,7 +162,7 @@ export default function SimBarcodeScanScreen({
     phaseRef.current = phase;
   }, [phase]);
 
-  /* ── Permission ── */
+  /* Permission */
   const hasRequestedRef = useRef(false);
   useEffect(() => {
     if (!hasRequestedRef.current && permission && !permission.granted) {
@@ -170,7 +171,7 @@ export default function SimBarcodeScanScreen({
     }
   }, [permission, requestPermission]);
 
-  /* ── Animations ── */
+  /* Animations */
   const [sweepAnim] = useState(() => new Animated.Value(-72));
   const [pulseAnim] = useState(() => new Animated.Value(1));
 
@@ -220,7 +221,7 @@ export default function SimBarcodeScanScreen({
     return () => anim.stop();
   }, [phase, pulseAnim]);
 
-  /* ── Barcode handler ── */
+  /* Barcode handler */
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
       if (phaseRef.current !== 'scanning' || hasHandledScanRef.current) return;
@@ -241,7 +242,7 @@ export default function SimBarcodeScanScreen({
     [],
   );
 
-  /* ── Actions ── */
+  /* Actions */
   const startScanning = useCallback(() => {
     hasHandledScanRef.current = false;
     setIcid(''); // clear previous value
@@ -270,7 +271,7 @@ export default function SimBarcodeScanScreen({
   const dismissBanner = useCallback(() => setBanner(''), []);
   const toggleTorch = useCallback(() => setTorch((t) => !t), []);
 
-  /* ── Derived UI ── */
+  /* Derived UI */
   const scanning = phase === 'scanning';
   const done = phase === 'done';
   const err = phase === 'error';
@@ -385,7 +386,13 @@ export default function SimBarcodeScanScreen({
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.contentScroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        bounces
+      >
         {/* Title */}
         <View style={styles.titleBlock}>
           <View style={styles.accentLine} />
@@ -621,7 +628,7 @@ export default function SimBarcodeScanScreen({
             );
           })}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -662,10 +669,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
+  contentScroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 6,
+    paddingBottom: 16,
   },
   titleBlock: {
     flexDirection: 'row',

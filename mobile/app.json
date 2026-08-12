@@ -7,21 +7,24 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FBF7EE"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.facialbiometricpoc"
+      "bundleIdentifier": "com.mtn.facialbiometricpoc"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.yourcompany.facialbiometricpoc"
+      "package": "com.mtn.facialbiometricpoc"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -33,6 +36,21 @@
       "scope": "/",
       "startUrl": "/",
       "orientation": "portrait"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FBF7EE"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cf667e35-1fb7-478c-aa25-42b18edb6916"
+      }
     }
   }
 }

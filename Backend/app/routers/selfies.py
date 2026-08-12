@@ -7,14 +7,14 @@ configured liveness provider against a stored selfie and persist the verdict.
 Selfies are sensitive personal information: the raw image is never returned or
 logged, only opaque identifiers and the liveness verdict.
 """
-
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from Backend.app import repository
 from Backend.app.config import get_settings
+from Backend.app.dependencies.security import get_correlation_id, require_biometric_read, require_biometric_write
 from Backend.app.services import liveness as liveness_service
 from Backend.app.services import storage as storage_service
 
@@ -43,8 +43,13 @@ class LivenessResponse(BaseModel):
     detail: str
 
 
-@router.post("/selfies", response_model=SelfieResponse, status_code=status.HTTP_201_CREATED)
-def capture_selfie(payload: SelfieRequest) -> SelfieResponse:
+@router.post(
+    "/selfies",
+    response_model=SelfieResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_biometric_write)],
+)
+def capture_selfie(payload: SelfieRequest, correlation_id: str = Depends(get_correlation_id)) -> SelfieResponse:
     try:
         raw, content_type = storage_service.decode_image(payload.image)
     except storage_service.StorageError as exc:
@@ -66,15 +71,19 @@ def capture_selfie(payload: SelfieRequest) -> SelfieResponse:
     )
 
 
-@router.post("/selfies/{selfie_id}/liveness", response_model=LivenessResponse)
-def check_liveness(selfie_id: str) -> LivenessResponse:
+@router.post(
+    "/selfies/{selfie_id}/liveness",
+    response_model=LivenessResponse,
+    dependencies=[Depends(require_biometric_read)],
+)
+def check_liveness(selfie_id: str, correlation_id: str = Depends(get_correlation_id)) -> LivenessResponse:
     selfie = repository.get_selfie(selfie_id)
     if selfie is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selfie not found")
 
     try:
         raw = storage_service.get_storage().load(selfie["storage_ref"])
-    except Exception as exc:  # storage backends raise varied errors
+    except Exception as exc:
         logger.error("Failed to load stored selfie: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -86,7 +95,6 @@ def check_liveness(selfie_id: str) -> LivenessResponse:
     try:
         result = provider.check(raw, selfie["content_type"], settings.liveness_min_score)
     except RuntimeError as exc:
-        # e.g. the Azure Face provider is unavailable in this environment.
         logger.error("Liveness provider error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

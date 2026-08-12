@@ -41,3 +41,6 @@ RDS.log
 *.synctex.gz
 IRS.log
 fallback_verification_audit.log
+.idea/
+*.pem
+keys/
