@@ -1,8 +1,4 @@
-"""Generate RSA key pair for JWT signing and emit .env.example.
-
-Run:
-    python Backend/scripts/generate_keys.py ./keys
-"""
+"""Generate RSA key pair for JWT signing."""
 
 import os
 import sys
@@ -13,7 +9,10 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 def generate_keys(output_dir: str = "./keys") -> None:
-    """Generate RSA key pair and write .env.example."""
+    if os.getenv("ENV") == "production":
+        print("ERROR: This script is for local development only.")
+        sys.exit(1)
+
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -30,11 +29,9 @@ def generate_keys(output_dir: str = "./keys") -> None:
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
 
-    # Write raw keys
     (out / "private.pem").write_bytes(private_pem)
     (out / "public.pem").write_bytes(public_pem)
 
-    # Build env file safely (avoid backslash in f-string for py311)
     private_b64 = private_pem.decode().strip().replace("\n", "\\n")
     public_b64 = public_pem.decode().strip().replace("\n", "\\n")
 
@@ -45,13 +42,11 @@ def generate_keys(output_dir: str = "./keys") -> None:
         "JWT_ALGORITHM=RS256",
         "JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60",
         "",
-        "# Sandbox API Key (rotate weekly)",
-        f"SANDBOX_API_KEY=sbx-ak-2026-08-05-{os.urandom(4).hex()}",
-        f"ADMIN_API_KEY=admin-{os.urandom(8).hex()}",
+        "# Sandbox API Key",
+        f"SANDBOX_API_KEY=sbx-ak-2026-08-12-{os.urandom(4).hex()}",
         "",
         "# Environment",
         "ENV=development",
-        "VERIFY_MODE=sandbox",
         "",
         "# Redis",
         "REDIS_URL=redis://localhost:6379/0",

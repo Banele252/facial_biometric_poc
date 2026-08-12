@@ -1,10 +1,11 @@
-"""Security schema models."""
-
+"""Security-related Pydantic schemas."""
 
 from pydantic import BaseModel
 
 
 class SecurityError(BaseModel):
+    """Standard security error response."""
+
     error: str
     message: str
     code: str

@@ -1,6 +1,5 @@
 """
 FastAPI dependency injectors for zero-trust security.
-Use with Depends() in route definitions for declarative auth.
 """
 
 from fastapi import Depends, HTTPException, Request, status
@@ -10,7 +9,6 @@ security_bearer = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(request: Request) -> dict:
-    """Extract validated JWT payload from request state."""
     user = getattr(request.state, "user", None)
     if not user:
         raise HTTPException(
@@ -22,8 +20,6 @@ async def get_current_user(request: Request) -> dict:
 
 
 def require_scope(scope: str):
-    """Factory for scope-based authorization."""
-
     async def _check(request: Request, user: dict = Depends(get_current_user)):
         scopes = user.get("scope", "").split()
         if scope not in scopes:
@@ -33,13 +29,10 @@ def require_scope(scope: str):
                 headers={"X-Error-Code": "INSUFFICIENT_SCOPE"},
             )
         return user
-
     return _check
 
 
 def require_any_scope(*scopes: str):
-    """Require any one of the provided scopes."""
-
     async def _check(request: Request, user: dict = Depends(get_current_user)):
         user_scopes = user.get("scope", "").split()
         if not any(s in user_scopes for s in scopes):
@@ -49,13 +42,10 @@ def require_any_scope(*scopes: str):
                 headers={"X-Error-Code": "INSUFFICIENT_SCOPE"},
             )
         return user
-
     return _check
 
 
 def require_all_scopes(*scopes: str):
-    """Require all of the provided scopes."""
-
     async def _check(request: Request, user: dict = Depends(get_current_user)):
         user_scopes = user.get("scope", "").split()
         missing = [s for s in scopes if s not in user_scopes]
@@ -66,11 +56,9 @@ def require_all_scopes(*scopes: str):
                 headers={"X-Error-Code": "INSUFFICIENT_SCOPE"},
             )
         return user
-
     return _check
 
 
-# Pre-built scope checkers
 require_biometric_read = require_scope("biometric:read")
 require_biometric_write = require_scope("biometric:write")
 require_simswap_execute = require_scope("simswap:execute")

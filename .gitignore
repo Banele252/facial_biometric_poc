@@ -42,3 +42,5 @@ RDS.log
 IRS.log
 fallback_verification_audit.log
 .idea/
+*.pem
+keys/
