@@ -5,13 +5,7 @@ import { Badge } from '../components/ui/Badge'
 import { Table, type TableColumn } from '../components/ui/Table'
 import { Input, Select } from '../components/ui/Input'
 import { getAuditLogs, type AuditLogEntry } from '../api'
-
-function formatTimestamp(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
-}
+import { formatDateTime as formatTimestamp } from '../utils/date'
 
 export function AuditLogs() {
   const [search, setSearch] = useState('')

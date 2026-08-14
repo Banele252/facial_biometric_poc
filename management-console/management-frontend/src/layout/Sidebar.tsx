@@ -6,9 +6,9 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
-        <span className="sidebar__brand-mark">M</span>
+        <span className="sidebar__brand-mark">T</span>
         <div>
-          <div className="sidebar__brand-text">MTN Console</div>
+          <div className="sidebar__brand-text">Trust Platform</div>
           <div className="sidebar__brand-subtext">Management Dashboard</div>
         </div>
       </div>

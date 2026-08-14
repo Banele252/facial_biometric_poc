@@ -103,9 +103,33 @@
   margin: 0;
 }
 
+.header__user-area {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
 .header__user {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+}
+
+.header__logout {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 6px var(--space-md);
+  font-family: var(--font-family);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.header__logout:hover {
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 .dashboard-shell__content {

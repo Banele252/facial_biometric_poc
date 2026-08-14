@@ -16,13 +16,20 @@ created_at on all three source tables is stored as plain ISO-8601 text (not
 a native Postgres timestamp - see Backend/analytics_sync/sync.py's
 docstring for why), so date-range filters take strings, not datetimes;
 lexicographic comparison on ISO-8601 UTC strings is chronologically correct.
+
+Stored/transmitted-between-services timestamps stay UTC (that's what's in
+the DB and what the rest of the system assumes). This module converts to
+SAST (South African Standard Time, a fixed UTC+2 offset with no DST) only
+at the API-response boundary, for every `created_at` value it returns and
+for the day-bucketing in the `*_volume_by_day` functions - so a viewer of
+this console only ever sees SAST, never UTC or their own machine's zone.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import psycopg
@@ -32,6 +39,16 @@ from psycopg.rows import dict_row
 
 _MAX_LIMIT = 200
 _DEFAULT_LIMIT = 50
+
+_SAST = timezone(timedelta(hours=2))
+
+
+def _to_sast(iso_text: str | None) -> str | None:
+    """A stored UTC (or otherwise offset-aware) ISO-8601 string, converted to
+    the equivalent SAST (+02:00) ISO-8601 string."""
+    if iso_text is None:
+        return None
+    return datetime.fromisoformat(iso_text).astimezone(_SAST).isoformat()
 
 
 def get_connection() -> psycopg.Connection:
@@ -111,6 +128,7 @@ def list_process_logs(
             item["payload"] = json.loads(item["payload"])
         except (TypeError, json.JSONDecodeError):
             item["payload"] = {"raw": item["payload"]}
+        item["created_at"] = _to_sast(item["created_at"])
 
     return {"total": total, "limit": limit, "offset": offset, "items": items}
 
@@ -156,6 +174,9 @@ def list_fraud_rejections(
             [*params, limit, offset],
         )
         items = cur.fetchall()
+
+    for item in items:
+        item["created_at"] = _to_sast(item["created_at"])
 
     return {"total": total, "limit": limit, "offset": offset, "items": items}
 
@@ -223,6 +244,9 @@ def list_sim_swap_orders(
         )
         items = cur.fetchall()
 
+    for item in items:
+        item["created_at"] = _to_sast(item["created_at"])
+
     return {"total": total, "limit": limit, "offset": offset, "items": items}
 
 
@@ -250,18 +274,112 @@ def sim_swap_status_summary(
 def sim_swap_volume_by_day(conn: psycopg.Connection, *, days: int = 14) -> list[dict[str, Any]]:
     """Order counts per day per status for the last `days` days.
 
-    created_at is TEXT, so days are bucketed by string prefix
-    (substring(created_at, 1, 10) == the "YYYY-MM-DD" portion) rather than
-    date_trunc. Rows are unpivoted ({day, status, count}) - the caller
-    decides how to present the status breakdown rather than this module
-    hardcoding the set of known statuses.
+    created_at is TEXT holding a UTC instant, so it's cast to `timestamptz`
+    and shifted to SAST wall-clock via `AT TIME ZONE` before bucketing -
+    `AT TIME ZONE` on a `timestamptz` is unambiguous regardless of the DB
+    connection's own session timezone setting, so e.g. 23:30 UTC (01:30 SAST
+    the next day) buckets into the correct SAST day rather than the UTC one.
+    Rows are unpivoted ({day, status, count}) - the caller decides how to
+    present the status breakdown rather than this module hardcoding the set
+    of known statuses.
     """
-    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    cutoff = (datetime.now(_SAST).date() - timedelta(days=days)).isoformat()
 
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT substring(created_at, 1, 10) AS day, status, count(*) AS count "
-            "FROM sim_swap_orders WHERE substring(created_at, 1, 10) >= %s "
+            "SELECT substring((created_at::timestamptz AT TIME ZONE 'Africa/Johannesburg')::text, 1, 10) AS day, "
+            "status, count(*) AS count FROM sim_swap_orders "
+            "WHERE substring((created_at::timestamptz AT TIME ZONE 'Africa/Johannesburg')::text, 1, 10) >= %s "
+            "GROUP BY day, status ORDER BY day",
+            (cutoff,),
+        )
+        return cur.fetchall()
+
+
+# --- transactions ---------------------------------------------------------
+
+
+def list_transactions(
+    conn: psycopg.Connection,
+    *,
+    status: str | None = None,
+    msisdn: str | None = None,
+    transaction_kind: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    limit: int = _DEFAULT_LIMIT,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Filtered, paginated transaction records, newest first."""
+    limit = max(1, min(limit, _MAX_LIMIT))
+    offset = max(0, offset)
+
+    conditions, params = _date_range_where(created_from, created_to)
+    if status is not None:
+        conditions.append(sql.SQL("status = %s"))
+        params.append(status)
+    if msisdn is not None:
+        conditions.append(sql.SQL("msisdn = %s"))
+        params.append(msisdn)
+    if transaction_kind is not None:
+        conditions.append(sql.SQL("transaction_kind = %s"))
+        params.append(transaction_kind)
+    where_clause = _where_clause(conditions)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("SELECT count(*) AS total FROM transactions{}").format(where_clause),
+            params,
+        )
+        total = cur.fetchone()["total"]
+
+        cur.execute(
+            sql.SQL(
+                "SELECT id, msisdn, id_number, sim_serial, transaction_kind, status, reason, "
+                "created_at FROM transactions{} ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            ).format(where_clause),
+            [*params, limit, offset],
+        )
+        items = cur.fetchall()
+
+    for item in items:
+        item["created_at"] = _to_sast(item["created_at"])
+
+    return {"total": total, "limit": limit, "offset": offset, "items": items}
+
+
+def transaction_status_summary(
+    conn: psycopg.Connection,
+    *,
+    created_from: str | None = None,
+    created_to: str | None = None,
+) -> list[dict[str, Any]]:
+    """Transaction counts grouped by status, most common first."""
+    conditions, params = _date_range_where(created_from, created_to)
+    where_clause = _where_clause(conditions)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "SELECT status, count(*) AS count FROM transactions{} "
+                "GROUP BY status ORDER BY count DESC"
+            ).format(where_clause),
+            params,
+        )
+        return cur.fetchall()
+
+
+def transaction_volume_by_day(conn: psycopg.Connection, *, days: int = 14) -> list[dict[str, Any]]:
+    """Transaction counts per day per status for the last `days` days - see
+    `sim_swap_volume_by_day` for why this shifts `created_at` to SAST via
+    `AT TIME ZONE` before bucketing."""
+    cutoff = (datetime.now(_SAST).date() - timedelta(days=days)).isoformat()
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT substring((created_at::timestamptz AT TIME ZONE 'Africa/Johannesburg')::text, 1, 10) AS day, "
+            "status, count(*) AS count FROM transactions "
+            "WHERE substring((created_at::timestamptz AT TIME ZONE 'Africa/Johannesburg')::text, 1, 10) >= %s "
             "GROUP BY day, status ORDER BY day",
             (cutoff,),
         )

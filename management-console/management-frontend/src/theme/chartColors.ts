@@ -3,7 +3,7 @@
 // with theme/tokens.ts and index.css — do not drift these apart.
 //
 // The fraud/transaction "outcome" triad needs a third color beyond mobile's
-// success/error pair. MTN yellow (#FFCB05) is too close to itself in hue to
+// success/error pair. Brand yellow (#FFCB05) is too close to itself in hue to
 // double as both the brand accent and a status color, and fails contrast/CVD
 // checks against the error red. #B8860B (dark goldenrod) is used instead for
 // "review" — always paired with a text label/legend, never color alone.

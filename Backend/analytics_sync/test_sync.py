@@ -210,6 +210,72 @@ def test_mirror_table_updated_at_table_first_run_reads_everything():
     assert select_params == ()
 
 
+def test_mirror_table_skips_null_watermark_values():
+    """A row with a NULL updated_at (schema says NOT NULL, but a row can
+    still slip through outside the app's own INSERT paths) must not crash
+    the max() watermark calculation - it's still upserted like any other
+    row, just excluded when picking the new watermark."""
+    source = RecordingConnection(
+        [
+            FakeCursor(fetchall_result=[("id", "text"), ("updated_at", "text")]),  # columns
+            FakeCursor(fetchall_result=[("id",)]),  # primary key
+            FakeCursor(
+                fetchall_result=[
+                    ("1", "2026-08-10T10:00:00+00:00"),
+                    ("2", None),
+                ]
+            ),  # data SELECT
+        ]
+    )
+    dest = RecordingConnection(
+        [
+            FakeCursor(),  # ensure_table_mirror
+            FakeCursor(fetchone_result=None),  # _get_watermark
+            FakeCursor(),  # upsert
+            FakeCursor(),  # _set_watermark
+        ]
+    )
+
+    copied = sync.mirror_table(source, dest, "active_sims")
+
+    assert copied == 2
+    upsert_query, upsert_rows = dest._cursors_seen[2].executed[0]
+    assert upsert_rows == [("1", "2026-08-10T10:00:00+00:00"), ("2", None)]
+
+    watermark_query, watermark_params = dest._cursors_seen[3].executed[0]
+    assert "_sync_state" in _rendered(watermark_query)
+    assert watermark_params == ("active_sims", "2026-08-10T10:00:00+00:00")
+
+
+def test_mirror_table_advances_no_watermark_when_all_rows_null():
+    """If every fetched row has a NULL updated_at, there's nothing usable to
+    pick a new watermark from - the rows still get upserted, but
+    _set_watermark must never be called."""
+    source = RecordingConnection(
+        [
+            FakeCursor(fetchall_result=[("id", "text"), ("updated_at", "text")]),
+            FakeCursor(fetchall_result=[("id",)]),
+            FakeCursor(fetchall_result=[("1", None), ("2", None)]),
+        ]
+    )
+    dest = RecordingConnection(
+        [
+            FakeCursor(),  # ensure_table_mirror
+            FakeCursor(fetchone_result=None),  # _get_watermark
+            FakeCursor(),  # upsert
+        ]
+    )
+
+    copied = sync.mirror_table(source, dest, "active_sims")
+
+    assert copied == 2
+    upsert_query, upsert_rows = dest._cursors_seen[2].executed[0]
+    assert upsert_rows == [("1", None), ("2", None)]
+    # Only 3 destination cursors used (create-table, watermark-get, upsert) -
+    # no _set_watermark call.
+    assert len(dest._cursors_seen) == 3
+
+
 def test_mirror_table_never_uses_created_at_as_watermark():
     """Regression test: a table shaped like `notifications` (primary key,
     created_at, no updated_at, never gets UPDATEd in this codebase today)

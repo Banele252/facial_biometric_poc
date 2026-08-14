@@ -344,8 +344,16 @@ def mirror_table(
     if rows:
         _upsert_rows(dest_conn, table_name, col_names, pk_columns, rows)
         if watermark_idx is not None:
-            new_watermark = max(row[watermark_idx] for row in rows)
-            _set_watermark(dest_conn, table_name, new_watermark)
+            watermark_values = [row[watermark_idx] for row in rows if row[watermark_idx] is not None]
+            if len(watermark_values) < len(rows):
+                logger.warning(
+                    "%s: %d of %d synced rows had a NULL %s despite it being the "
+                    "sync watermark column - excluded from watermark calculation",
+                    table_name, len(rows) - len(watermark_values), len(rows), watermark_col,
+                )
+            if watermark_values:
+                new_watermark = max(watermark_values)
+                _set_watermark(dest_conn, table_name, new_watermark)
 
     return len(rows)
 

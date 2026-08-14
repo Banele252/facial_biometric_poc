@@ -1,5 +1,5 @@
 // Ported from mobile/src/theme/{colors,typography,spacing}.ts so the
-// management console shares the mobile app's MTN visual identity.
+// management console shares the mobile app's visual identity.
 
 export const Colors = {
   primary: '#FFCB05',

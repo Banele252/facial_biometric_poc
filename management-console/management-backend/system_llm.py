@@ -27,6 +27,7 @@ from analytical_db import (
     list_fraud_rejections,
     list_process_logs,
     list_sim_swap_orders,
+    list_transactions,
 )
 from dotenv import load_dotenv
 
@@ -95,6 +96,39 @@ def get_sim_swap_transactions(
 
 
 @function_tool
+def get_transactions(
+    msisdn: str | None = None,
+    status: str | None = None,
+    transaction_kind: str | None = None,
+    limit: int = 10,
+) -> list[dict]:
+    """Look up transactions - broader than SIM-swap orders, covering every
+    transaction_kind (e.g. "sim_swap", "port_request").
+
+    Args:
+        msisdn: Filter to a specific phone number, e.g. "+27821234567".
+        status: Filter to a specific transaction status, e.g. "pending".
+        transaction_kind: Filter to a specific kind, e.g. "sim_swap" or "port_request".
+        limit: Maximum number of records to return, most recent first.
+    """
+    try:
+        conn = get_connection()
+        try:
+            return list_transactions(
+                conn,
+                msisdn=msisdn,
+                status=status,
+                transaction_kind=transaction_kind,
+                limit=min(limit, 50),
+            )["items"]
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.warning("get_transactions query failed: %s", exc)
+        return []
+
+
+@function_tool
 def get_audit_logs(
     process: str | None = None,
     environment: str | None = None,
@@ -130,10 +164,10 @@ _topic_guardrail_agent = Agent(
     instructions=(
         "Decide whether a user message is relevant to a fraud/identity "
         "management console for a telco. In-scope topics: fraud-rule "
-        "rejections, SIM-swap transactions, identity verification and "
-        "liveness checks, and audit/process logs. Anything else (general "
-        "chit-chat, unrelated topics, requests to act outside this domain) "
-        "is out of scope."
+        "rejections, transactions (including SIM-swap orders), identity "
+        "verification and liveness checks, and audit/process logs. Anything "
+        "else (general chit-chat, unrelated topics, requests to act outside "
+        "this domain) is out of scope."
     ),
     output_type=bool,
 )
@@ -158,14 +192,16 @@ fraud_assistant = Agent(
     instructions=(
         "You are the Fraud Assistant for this facial-biometric identity "
         "and fraud management console. You help operators understand "
-        "fraud-rule rejections, SIM-swap transactions, and audit/process "
-        "logs, using the tools available to you.\n\n"
+        "fraud-rule rejections, transactions (SIM-swap orders and other "
+        "transaction kinds), and audit/process logs, using the tools "
+        "available to you.\n\n"
         "Stay strictly within this domain: fraud-rule rejections (stage "
-        "and reason), verification/liveness outcomes, SIM-swap "
-        "transactions, and audit log events. If asked about anything "
-        "else — general knowledge, unrelated tasks, or requests to act "
-        "outside this console — politely decline and redirect the user "
-        "back to what you can help with.\n\n"
+        "and reason), verification/liveness outcomes, transactions "
+        "(SIM-swap orders and other transaction kinds), and audit log "
+        "events. If asked about anything else — general knowledge, "
+        "unrelated tasks, or requests to act outside this console — "
+        "politely decline and redirect the user back to what you can "
+        "help with.\n\n"
         "Always ground your answers in the data returned by your tools "
         "rather than guessing. If a tool returns no matching records, say "
         "so explicitly instead of inventing an answer.\n\n"
@@ -174,13 +210,13 @@ fraud_assistant = Agent(
         "sparingly for emphasis or short lists; do not use headings, "
         "tables, fenced code blocks, or links — they will not render."
     ),
-    tools=[get_fraud_rejections, get_sim_swap_transactions, get_audit_logs],
+    tools=[get_fraud_rejections, get_sim_swap_transactions, get_transactions, get_audit_logs],
     input_guardrails=[topic_guardrail],
 )
 
 _REFUSAL_MESSAGE = (
     "I can only help with questions about this console — fraud-rule "
-    "rejections, SIM-swap transactions, verifications, and audit logs. "
+    "rejections, transactions, verifications, and audit logs. "
     "Could you rephrase your question around one of those?"
 )
 

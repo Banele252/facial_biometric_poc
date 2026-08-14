@@ -8,6 +8,10 @@
 //   GET  /api/v1/analytics/sim-swap-orders               sim_swap_orders rows
 //   GET  /api/v1/analytics/sim-swap-orders/status-summary  order counts by status
 //   GET  /api/v1/analytics/sim-swap-orders/volume-by-day   order counts per day per status
+//   GET  /api/v1/analytics/transactions                  transactions rows
+//   GET  /api/v1/analytics/transactions/status-summary    transaction counts by status
+//   GET  /api/v1/analytics/transactions/volume-by-day     transaction counts per day per status
+//   POST /api/v1/auth/login                              username/password login
 
 export interface ChatResponse {
   reply: string
@@ -130,4 +134,64 @@ export function getSimSwapStatusSummary(): Promise<{ statuses: SimSwapStatusCoun
 
 export function getSimSwapVolumeByDay(days = 14): Promise<{ days: SimSwapVolumeRow[] }> {
   return request(`/api/v1/analytics/sim-swap-orders/volume-by-day${buildQuery({ days })}`)
+}
+
+// --- Transactions --------------------------------------------------------
+
+export interface Transaction {
+  id: string
+  msisdn: string
+  id_number: string
+  sim_serial: string
+  transaction_kind: string
+  status: string
+  reason: string
+  created_at: string
+}
+
+export interface TransactionStatusCount {
+  status: string
+  count: number
+}
+
+export interface TransactionVolumeRow {
+  day: string
+  status: string
+  count: number
+}
+
+export function getTransactions(
+  filters: {
+    status?: string
+    msisdn?: string
+    transaction_kind?: string
+    limit?: number
+    offset?: number
+  } = {},
+): Promise<PaginatedResponse<Transaction>> {
+  return request(`/api/v1/analytics/transactions${buildQuery(filters)}`)
+}
+
+export function getTransactionStatusSummary(): Promise<{ statuses: TransactionStatusCount[] }> {
+  return request('/api/v1/analytics/transactions/status-summary')
+}
+
+export function getTransactionVolumeByDay(days = 14): Promise<{ days: TransactionVolumeRow[] }> {
+  return request(`/api/v1/analytics/transactions/volume-by-day${buildQuery({ days })}`)
+}
+
+// --- Auth ------------------------------------------------------------------
+
+export interface User {
+  id: number
+  username: string
+  name: string
+  email: string
+}
+
+export function login(username: string, password: string): Promise<User> {
+  return request('/api/v1/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
 }

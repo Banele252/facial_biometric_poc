@@ -7,46 +7,51 @@ import { Badge, type BadgeTone } from '../components/ui/Badge'
 import { Table, type TableColumn } from '../components/ui/Table'
 import { Select } from '../components/ui/Input'
 import {
-  getSimSwapOrders,
-  getSimSwapStatusSummary,
-  getSimSwapVolumeByDay,
-  type SimSwapOrder,
-  type SimSwapStatusCount,
-  type SimSwapVolumeRow,
+  getTransactions,
+  getTransactionStatusSummary,
+  getTransactionVolumeByDay,
+  type Transaction,
+  type TransactionStatusCount,
+  type TransactionVolumeRow,
 } from '../api'
 import { ChartColors } from '../theme/chartColors'
+import { formatDate } from '../utils/date'
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-// Grounded in Backend/sim_swap_service/sim_swap_request.py's OrderStatus enum.
 const STATUS_TONE: Record<string, BadgeTone> = {
-  CREATED: 'review',
-  ACTIVATED: 'approved',
-  REJECTED: 'rejected',
+  approved: 'approved',
+  completed: 'approved',
+  activated: 'approved',
+  pending: 'review',
+  review: 'review',
+  rejected: 'rejected',
+  flagged: 'flagged',
 }
 const STATUS_DOT: Record<string, string> = {
-  CREATED: ChartColors.outcome.review,
-  ACTIVATED: ChartColors.outcome.approved,
-  REJECTED: ChartColors.outcome.rejected,
+  approved: ChartColors.outcome.approved,
+  completed: ChartColors.outcome.approved,
+  activated: ChartColors.outcome.approved,
+  pending: ChartColors.outcome.review,
+  review: ChartColors.outcome.review,
+  rejected: ChartColors.outcome.rejected,
+  flagged: ChartColors.outcome.rejected,
 }
-const statusTone = (status: string): BadgeTone => STATUS_TONE[status] ?? 'neutral'
-const statusColor = (status: string) => STATUS_DOT[status] ?? ChartColors.volumeBar
+const statusTone = (status: string): BadgeTone => STATUS_TONE[status.toLowerCase()] ?? 'neutral'
+const statusColor = (status: string) => STATUS_DOT[status.toLowerCase()] ?? ChartColors.volumeBar
 
 export function TransactionReport() {
   const [statusFilter, setStatusFilter] = useState('all')
+  const [kindFilter, setKindFilter] = useState('all')
 
-  const [orders, setOrders] = useState<SimSwapOrder[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [total, setTotal] = useState(0)
-  const [statusSummary, setStatusSummary] = useState<SimSwapStatusCount[]>([])
-  const [volumeRows, setVolumeRows] = useState<SimSwapVolumeRow[]>([])
+  const [statusSummary, setStatusSummary] = useState<TransactionStatusCount[]>([])
+  const [volumeRows, setVolumeRows] = useState<TransactionVolumeRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let ignore = false
-    Promise.all([getSimSwapStatusSummary(), getSimSwapVolumeByDay(14)])
+    Promise.all([getTransactionStatusSummary(), getTransactionVolumeByDay(14)])
       .then(([statusRes, volumeRes]) => {
         if (ignore) return
         setStatusSummary(statusRes.statuses)
@@ -64,15 +69,19 @@ export function TransactionReport() {
     let ignore = false
     setLoading(true)
     setError(null)
-    getSimSwapOrders({ status: statusFilter === 'all' ? undefined : statusFilter, limit: 100 })
+    getTransactions({
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      transaction_kind: kindFilter === 'all' ? undefined : kindFilter,
+      limit: 100,
+    })
       .then((res) => {
         if (!ignore) {
-          setOrders(res.items)
+          setTransactions(res.items)
           setTotal(res.total)
         }
       })
       .catch((err) => {
-        if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load SIM-swap orders')
+        if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load transactions')
       })
       .finally(() => {
         if (!ignore) setLoading(false)
@@ -80,7 +89,7 @@ export function TransactionReport() {
     return () => {
       ignore = true
     }
-  }, [statusFilter])
+  }, [statusFilter, kindFilter])
 
   const { chartData, statuses } = useMemo(() => {
     const statusSet = Array.from(new Set(volumeRows.map((r) => r.status)))
@@ -94,28 +103,35 @@ export function TransactionReport() {
     return { chartData: data, statuses: statusSet }
   }, [volumeRows])
 
-  const columns: TableColumn<SimSwapOrder>[] = [
-    { key: 'order_id', header: 'Order ID', render: (row) => row.order_id },
+  const kinds = useMemo(
+    () => Array.from(new Set(transactions.map((t) => t.transaction_kind))).sort(),
+    [transactions],
+  )
+
+  const columns: TableColumn<Transaction>[] = [
+    { key: 'id', header: 'ID', render: (row) => row.id },
     { key: 'msisdn', header: 'MSISDN', render: (row) => row.msisdn },
-    { key: 'identity_reference', header: 'Identity ref', render: (row) => row.identity_reference },
-    { key: 'new_sim_serial', header: 'New SIM serial', render: (row) => row.new_sim_serial },
+    { key: 'id_number', header: 'ID number', render: (row) => row.id_number },
+    { key: 'transaction_kind', header: 'Kind', render: (row) => row.transaction_kind },
+    { key: 'sim_serial', header: 'SIM serial', render: (row) => row.sim_serial },
     { key: 'status', header: 'Status', render: (row) => <Badge tone={statusTone(row.status)}>{row.status}</Badge> },
+    { key: 'reason', header: 'Reason', render: (row) => row.reason },
     { key: 'created_at', header: 'Timestamp', render: (row) => formatDate(row.created_at) },
   ]
 
   return (
     <div className="page">
-      <p className="page__subtitle">SIM-swap orders processed by the application.</p>
+      <p className="page__subtitle">Transactions processed across the application.</p>
 
       <div className="stat-grid">
-        <StatTile label="Total orders" value={total} />
+        <StatTile label="Total transactions" value={total} />
         {statusSummary.map((s) => (
           <StatTile key={s.status} label={s.status} value={s.count} dotColor={statusColor(s.status)} />
         ))}
       </div>
 
       <Card className="chart-card">
-        <h2 className="chart-card__title">Order volume, last 14 days</h2>
+        <h2 className="chart-card__title">Transaction volume, last 14 days</h2>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
             <CartesianGrid stroke={ChartColors.grid} strokeDasharray="0" vertical={false} />
@@ -149,15 +165,23 @@ export function TransactionReport() {
             </option>
           ))}
         </Select>
+        <Select value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+          <option value="all">All kinds</option>
+          {kinds.map((kind) => (
+            <option key={kind} value={kind}>
+              {kind}
+            </option>
+          ))}
+        </Select>
       </div>
 
       <Card>
         {loading ? (
-          <p className="page__subtitle">Loading SIM-swap orders…</p>
+          <p className="page__subtitle">Loading transactions…</p>
         ) : error ? (
-          <p className="page__subtitle">Could not load SIM-swap orders: {error}</p>
+          <p className="page__subtitle">Could not load transactions: {error}</p>
         ) : (
-          <Table columns={columns} rows={orders} rowKey={(row) => row.order_id} />
+          <Table columns={columns} rows={transactions} rowKey={(row) => row.id} />
         )}
       </Card>
     </div>

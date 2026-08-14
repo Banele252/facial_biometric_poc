@@ -13,10 +13,7 @@ import {
   type FraudRuleSummaryEntry,
 } from '../api'
 import { ChartColors } from '../theme/chartColors'
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
+import { formatDate } from '../utils/date'
 
 export function FraudIntelligence() {
   const [stageFilter, setStageFilter] = useState('all')

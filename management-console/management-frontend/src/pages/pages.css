@@ -149,3 +149,74 @@
 .chat-panel__composer .ui-input {
   flex: 1;
 }
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background);
+}
+
+.login-page__card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding: var(--space-xl);
+}
+
+.login-page__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.login-page__brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-black);
+  font-size: var(--font-size-md);
+  flex-shrink: 0;
+}
+
+.login-page__brand-text {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
+  color: var(--color-text);
+}
+
+.login-page__brand-subtext {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.login-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.login-page__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.login-page__error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}

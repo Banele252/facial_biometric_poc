@@ -11,6 +11,9 @@ htmlcov
 frontend/node_modules
 frontend/dist
 
+management-console/management-frontend/node_modules
+management-console/management-frontend/dist
+
 Documents
 tests
 deploy
