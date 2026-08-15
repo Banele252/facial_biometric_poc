@@ -1,4 +1,4 @@
-// src/features/screens/SimSwapDetailsScreen.tsx
+// src/features/screens/ConsentScreen.tsx
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -100,7 +100,7 @@ function validateField(def: FieldDef, value: string): boolean {
   return true;
 }
 
-export default function SimSwapDetailsScreen({
+export default function ConsentScreen({
   navigate,
   goBack,
   dispatch,

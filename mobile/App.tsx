@@ -9,19 +9,19 @@ import FraudIntelligenceChecksScreen from '@/features/screens/FraudIntelligenceC
 import FacialVerificationScreen from '@/features/screens/FacialVerificationScreen';
 import LivenessDetectionScreen from '@/features/screens/LivenessDetectionScreen';
 import { IDDocumentScanScreen } from '@/features/screens/IDDocumentScanScreen';
-import SimSwapDetailsScreen from '@/features/screens/SimSwapDetailsScreen';
+import ConsentScreen from '@/features/screens/ConsentScreen';
 import SimBarcodeScanScreen from '@/features/screens/SimBarcodeScanScreen';
 import { SAIDSelectionScreen } from '@/features/screens/SAIDSelectionScreen';
 import IdentityValidationScreen from '@/features/screens/IdentityValidationScreen';
 import { RequestSimSwapScreen } from '@/features/screens/RequestSimSwapScreen';
-import SplashScreen from '@/features/screens/SplashScreen';
+import LandingScreen from '@/features/screens/LandingScreen';
 
 const SCREEN_MAP: Record<ScreenName, React.FC<any>> = {
-  Splash: SplashScreen,
+  Splash: LandingScreen,
   RequestSimSwap: RequestSimSwapScreen,
   SAIDSelection: SAIDSelectionScreen,
   IdentityValidation: IdentityValidationScreen,
-  SimSwapDetails: SimSwapDetailsScreen,
+  SimSwapDetails: ConsentScreen,
   SimBarcodeScan: SimBarcodeScanScreen,
   IDDocumentScan: IDDocumentScanScreen,
   FacialVerification: FacialVerificationScreen,
@@ -53,10 +53,10 @@ function Router() {
 
 export default function App() {
   return (
-      <SafeAreaProvider>
-        <NavigationProvider>
-          <Router />
-        </NavigationProvider>
-      </SafeAreaProvider>
+    <SafeAreaProvider>
+      <NavigationProvider>
+        <Router />
+      </NavigationProvider>
+    </SafeAreaProvider>
   );
 }

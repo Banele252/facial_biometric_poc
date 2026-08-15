@@ -1,43 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="AutoImportSettings">
-    <option name="autoReloadType" value="SELECTIVE" />
+    <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="242b746a-4828-4989-8ff3-6e418f115077" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/mobile/eas.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app/routers/iccid.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/routers/iccid.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Backend/app/routers/sim_swap.py" beforeDir="false" afterPath="$PROJECT_DIR$/Backend/app/routers/sim_swap.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mobile/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/FraudIntelligenceChecksScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/FraudIntelligenceChecksScreen.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/IDDocumentScanScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/IDDocumentScanScreen.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/LivenessDetectionScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/LivenessDetectionScreen.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/SimSwapDetailsScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/SimSwapDetailsScreen.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mobile/src/hooks/useSimSwapOrder.ts" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/hooks/useSimSwapOrder.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/Ledger.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/SelfieCapture.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/Typography.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Button.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Card.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Container.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/Input.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/components/ui/index.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/navigation/AppNavigator.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/screens/MainFlow.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/screens/SAIDSelectionScreen.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/screens/SplashScreen.tsx" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/api.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/ledger-entry.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/Ledger.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/Ledger.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/PhoneFrame.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/SelfieCapture.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/SelfieCapture.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/ui/Button.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/ui/Button.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/ui/Card.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/ui/Card.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/ui/Container.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/ui/Container.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/ui/Input.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/ui/Input.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/ui/Typography.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/ui/Typography.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/components/ui/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/components/ui/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/features/screens/LandingScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/features/screens/LandingScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/navigation/AppNavigator.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/navigation/AppNavigator.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/navigation/NavigationProvider.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/navigation/NavigationProvider.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mobile/src/navigation/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/mobile/src/navigation/types.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="20123" />
+    <option name="cachedIndexableFilesCount" value="224" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -79,38 +71,46 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Docker.Dockerfile.executor": "Run",
-    "Jest.App.executor": "Debug",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "SHELLCHECK.PATH": "/Users/tngxola/Library/Application Support/JetBrains/WebStorm2025.3/plugins/Shell Script/shellcheck",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "HT2-42-navigation-architecture",
-    "javascript.nodejs.core.library.configured.version": "22.14.0",
-    "javascript.nodejs.core.library.typings.version": "22.14.1",
-    "javascript.preferred.runtime.type.id": "node",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/src/components",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs.jest.jest_package": "/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/node_modules/@jest",
-    "nodejs_package_manager_path": "npm",
-    "npm.check.executor": "Run",
-    "npm.install.executor": "Run",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "to.speed.mode.migration.done": "true",
-    "ts.external.directory.path": "/Users/tngxola/WebstormProjects/facial_biometric_poc/frontend/node_modules/typescript/lib",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Docker.Dockerfile.executor&quot;: &quot;Run&quot;,
+    &quot;Jest.App.executor&quot;: &quot;Debug&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;/Users/tngxola/Library/Application Support/JetBrains/WebStorm2025.3/plugins/Shell Script/shellcheck&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;HT2-74-design-user-journey-screens&quot;,
+    &quot;javascript.nodejs.core.library.configured.version&quot;: &quot;22.14.0&quot;,
+    &quot;javascript.nodejs.core.library.typings.version&quot;: &quot;22.14.1&quot;,
+    &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/tngxola/WebstormProjects/facial_biometric_poc&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs.jest.jest_package&quot;: &quot;/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/node_modules/@jest&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;npm.check.executor&quot;: &quot;Run&quot;,
+    &quot;npm.install.executor&quot;: &quot;Run&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;/Users/tngxola/WebstormProjects/facial_biometric_poc/mobile/node_modules/typescript/lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecapSpentCounter">
     <option name="endsOfQuotaMs" value="1786604442854" />
     <option name="spentUsd" value="0.092789255" />
@@ -149,7 +149,9 @@
       <method v="2" />
     </configuration>
     <configuration default="true" type="docker-deploy" factoryName="dockerfile" temporary="true">
-      <deployment type="dockerfile" />
+      <deployment type="dockerfile">
+        <settings />
+      </deployment>
       <method v="2" />
     </configuration>
     <configuration name="check" type="js.build_tools.npm" temporary="true" nameIsGenerated="true">
@@ -162,15 +164,11 @@
       <envs />
       <method v="2" />
     </configuration>
-    <recent_temporary>
-      <list>
-        <item itemvalue="Docker.Dockerfile" />
-        <item itemvalue="Jest.App" />
-        <item itemvalue="npm.check" />
-        <item itemvalue="npm.check" />
-        <item itemvalue="Jest.App" />
-      </list>
-    </recent_temporary>
+    <list>
+      <item itemvalue="Docker.Dockerfile" />
+      <item itemvalue="Jest.App" />
+      <item itemvalue="npm.check" />
+    </list>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
@@ -189,6 +187,7 @@
       <workItem from="1785575520587" duration="12491000" />
       <workItem from="1785590760443" duration="20066000" />
       <workItem from="1785617607512" duration="79561000" />
+      <workItem from="1786802987648" duration="922000" />
     </task>
     <servers />
   </component>
@@ -205,5 +204,16 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="javascript">
+          <url>file://$PROJECT_DIR$/mobile/src/features/screens/LandingScreen.tsx</url>
+          <line>36</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

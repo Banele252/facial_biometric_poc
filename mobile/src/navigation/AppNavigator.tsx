@@ -1,126 +1,98 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, NavigationAction } from './types';
-
-import SplashScreen from '../features/screens/SplashScreen';
-import { RequestSimSwapScreen } from '@/features/screens/RequestSimSwapScreen';
-import { SAIDSelectionScreen } from '@/features/screens/SAIDSelectionScreen';
-import IdentityValidationScreen from '../features/screens/IdentityValidationScreen';
-import SimSwapDetailsScreen from '../features/screens/SimSwapDetailsScreen';
-import SimBarcodeScanScreen from '../features/screens/SimBarcodeScanScreen';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet } from 'react-native';
+import { NavigationProvider, useNavigation } from '@/navigation/NavigationProvider';
+import { ScreenName } from '@/navigation/types';
+import SIMSwapCompleteScreen from '@/features/screens/SIMSwapCompleteScreen';
+import SIMSwapApprovedScreen from '@/features/screens/SIMSwapApprovedScreen';
+import FraudIntelligenceChecksScreen from '@/features/screens/FraudIntelligenceChecksScreen';
+import FacialVerificationScreen from '@/features/screens/FacialVerificationScreen';
+import LivenessDetectionScreen from '@/features/screens/LivenessDetectionScreen';
 import { IDDocumentScanScreen } from '@/features/screens/IDDocumentScanScreen';
-import FacialVerificationScreen from '../features/screens/FacialVerificationScreen';
-import LivenessDetectionScreen from '../features/screens/LivenessDetectionScreen';
-import FraudIntelligenceChecksScreen from '../features/screens/FraudIntelligenceChecksScreen';
-import SIMSwapApprovedScreen from '../features/screens/SIMSwapApprovedScreen';
-import SIMSwapCompleteScreen from '../features/screens/SIMSwapCompleteScreen';
+import ConsentScreen from '@/features/screens/ConsentScreen';
+import SimBarcodeScanScreen from '@/features/screens/SimBarcodeScanScreen';
+import { SAIDSelectionScreen } from '@/features/screens/SAIDSelectionScreen';
+import IdentityValidationScreen from '@/features/screens/IdentityValidationScreen';
+import { RequestSimSwapScreen } from '@/features/screens/RequestSimSwapScreen';
+import LandingScreen from '@/features/screens/LandingScreen';
 
-const Stack = createStackNavigator<RootStackParamList>();
+const SCREEN_MAP: Record<ScreenName, React.FC<any>> = {
+  LandingScreen: LandingScreen,
+  RequestSimSwap: RequestSimSwapScreen,
+  SAIDSelection: SAIDSelectionScreen,
+  IdentityValidation: IdentityValidationScreen,
+  ConsentScreen: ConsentScreen,
+  SimBarcodeScan: SimBarcodeScanScreen,
+  IDDocumentScan: IDDocumentScanScreen,
+  FacialVerification: FacialVerificationScreen,
+  LivenessDetection: LivenessDetectionScreen,
+  FraudIntelligenceChecks: FraudIntelligenceChecksScreen,
+  SIMSwapApproved: SIMSwapApprovedScreen,
+  SIMSwapComplete: SIMSwapCompleteScreen,
+};
 
-/**
- * Bridges screens still written against the old { type, payload } dispatch
- * API onto real React Navigation calls, so those screens don't need to be
- * rewritten in this pass. New screens should take `navigation`/`route`
- * directly instead of reaching for this.
- */
-function makeLegacyDispatch(
-  navigation: StackNavigationProp<RootStackParamList, keyof RootStackParamList>,
-) {
-  return (action: NavigationAction) => {
-    switch (action.type) {
-    case 'NAVIGATE':
-      navigation.navigate(action.payload.screen as any, action.payload.params as any);
-      return;
-    case 'GO_BACK':
-      navigation.goBack();
-      return;
-    case 'RESET':
-      navigation.reset({ index: 0, routes: [{ name: action.payload.screen as any }] });
-      return;
-    }
-  };
-}
-
-export default function AppNavigator() {
+function ErrorScreen({ message }: { message: string }) {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Splash">
-          {({ navigation }) => (
-            <SplashScreen navigate={navigation.navigate} goBack={navigation.goBack} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="RequestSimSwap">
-          {({ navigation }) => (
-            <RequestSimSwapScreen navigate={navigation.navigate} goBack={navigation.goBack} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="SAIDSelection">
-          {({ navigation }) => (
-            <SAIDSelectionScreen navigate={navigation.navigate} goBack={navigation.goBack} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="IdentityValidation">
-          {({ navigation }) => (
-            <IdentityValidationScreen navigate={navigation.navigate} goBack={navigation.goBack} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="SimSwapDetails">
-          {({ navigation, route }) => (
-            <SimSwapDetailsScreen
-              dispatch={makeLegacyDispatch(navigation)}
-              route={{ params: route.params }}
-            />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="SimBarcodeScan">
-          {({ navigation }) => (
-            <SimBarcodeScanScreen dispatch={makeLegacyDispatch(navigation)} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="IDDocumentScan">
-          {({ navigation }) => (
-            <IDDocumentScanScreen dispatch={makeLegacyDispatch(navigation)} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="FacialVerification">
-          {({ navigation }) => (
-            <FacialVerificationScreen dispatch={makeLegacyDispatch(navigation)} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="LivenessDetection">
-          {({ navigation }) => (
-            <LivenessDetectionScreen dispatch={makeLegacyDispatch(navigation)} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="FraudIntelligenceChecks">
-          {({ navigation }) => (
-            <FraudIntelligenceChecksScreen dispatch={makeLegacyDispatch(navigation)} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="SIMSwapApproved">
-          {({ navigation }) => (
-            <SIMSwapApprovedScreen dispatch={makeLegacyDispatch(navigation)} />
-          )}
-        </Stack.Screen>
-
-        <Stack.Screen name="SIMSwapComplete">
-          {({ navigation }) => (
-            <SIMSwapCompleteScreen dispatch={makeLegacyDispatch(navigation)} />
-          )}
-        </Stack.Screen>
-      </Stack.Navigator>
-    </NavigationContainer>
+    <View style={styles.errorShell}>
+      <Text style={styles.errorTitle}>Router Error</Text>
+      <Text style={styles.errorBody}>{message}</Text>
+      <Text style={styles.errorHint}>Check types.ts and SCREEN_MAP</Text>
+    </View>
   );
 }
+
+function Router() {
+  const { state, dispatch, navigate, goBack } = useNavigation();
+  const screen = state.current.screen as ScreenName;
+  const Screen = SCREEN_MAP[screen];
+
+  if (!Screen) {
+    console.error(`Screen "${screen}" not found in SCREEN_MAP`);
+    return <ErrorScreen message={`Screen "${screen}" is missing from the router.`} />;
+  }
+
+  return (
+    <Screen
+      navigate={navigate}
+      goBack={goBack}
+      dispatch={dispatch}
+      routeParams={state.current.params}
+    />
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <NavigationProvider>
+        <Router />
+      </NavigationProvider>
+    </SafeAreaProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  errorShell: {
+    flex: 1,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#C0362C',
+    marginBottom: 8,
+  },
+  errorBody: {
+    fontSize: 14,
+    color: '#5A5A64',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorHint: {
+    fontSize: 12,
+    color: '#8A8A94',
+  },
+});

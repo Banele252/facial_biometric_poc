@@ -14,7 +14,7 @@ interface NavState {
 }
 
 const initialState: NavState = {
-  current: { screen: 'Splash' },
+  current: { screen: 'LandingScreen' },  // ← was 'Splash'
   history: [],
 };
 
@@ -56,16 +56,12 @@ const NavigationContext = createContext<{
   reset: (screen: ScreenName) => void;
     } | null>(null);
 
-export const NavigationProvider = ({ children }:
-                                   { children: ReactNode }) => {
+export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(navigationReducer, initialState);
 
-  const navigate = useCallback(
-    (screen: ScreenName, params?: Record<string, unknown>) => {
-      dispatch({ type: 'NAVIGATE', payload: { screen, params } });
-    },
-    [],
-  );
+  const navigate = useCallback((screen: ScreenName, params?: Record<string, unknown>) => {
+    dispatch({ type: 'NAVIGATE', payload: { screen, params } });
+  }, []);
 
   const goBack = useCallback(() => {
     dispatch({ type: 'GO_BACK' });

@@ -2,10 +2,23 @@ import React from 'react';
 import { Text, TextProps, StyleSheet } from 'react-native';
 import { Colors, TypographyTokens } from '@/theme';
 
+// Known string keys in the Colors theme object.
+// Add more as your theme grows.
+type ColorKey =
+    | 'text'
+    | 'textSecondary'
+    | 'primary'
+    | 'error'
+    | 'surface'
+    | 'border'
+    | 'borderLight'
+    | 'textLight'
+    | 'primaryShadow';
+
 interface Props extends TextProps {
-    variant?: 'h1' | 'h2' | 'subtitle' | 'body' | 'caption';
-    color?: keyof typeof Colors;
-    align?: 'left' | 'center' | 'right';
+  variant?: 'h1' | 'h2' | 'subtitle' | 'body' | 'caption';
+  color?: ColorKey;
+  align?: 'left' | 'center' | 'right';
 }
 
 export const Typography: React.FC<Props> = ({
@@ -16,9 +29,18 @@ export const Typography: React.FC<Props> = ({
   children,
   ...props
 }) => {
+  // Runtime guard: if the theme key is missing or not a string, fall back to Colors.text
+  const resolvedColor =
+      typeof Colors[color] === 'string' ? (Colors[color] as string) : Colors.text;
+
   return (
     <Text
-      style={[styles.base, styles[variant], { color: Colors[color], textAlign: align }, style]}
+      style={[
+        styles.base,
+        styles[variant],
+        { color: resolvedColor, textAlign: align },
+        style,
+      ]}
       {...props}
     >
       {children}

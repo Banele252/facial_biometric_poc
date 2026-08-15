@@ -10,10 +10,10 @@ import {
 } from 'react-native';
 
 interface Props {
-    children?: React.ReactNode;
-    style?: StyleProp<ViewStyle>;
-    scroll?: boolean;
-    scrollViewProps?: Omit<ScrollViewProps, 'children' | 'contentContainerStyle' | 'style'>;
+  children?: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  scroll?: boolean;
+  scrollViewProps?: Omit<ScrollViewProps, 'children' | 'contentContainerStyle' | 'style'>;
 }
 
 const MAX_CONTENT_WIDTH = 428;
@@ -40,18 +40,18 @@ export const Container: React.FC<Props> = ({
     );
   }
 
-  const { flex: _flex, ...safeStyle } = StyleSheet.flatten(style) || {};
-
   return (
     <ScrollView
       style={styles.scrollShell}
-      contentContainerStyle={[layoutStyle, styles.grow, safeStyle]}
+      contentContainerStyle={styles.grow}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       bounces
       {...scrollViewProps}
     >
-      {children}
+      <View style={[layoutStyle, style]}>
+        {children}
+      </View>
     </ScrollView>
   );
 };

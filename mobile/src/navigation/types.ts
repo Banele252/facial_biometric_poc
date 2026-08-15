@@ -1,9 +1,9 @@
 export type ScreenName =
-    | 'Splash'
+    | 'LandingScreen'
     | 'RequestSimSwap'
     | 'SAIDSelection'
     | 'IdentityValidation'
-    | 'SimSwapDetails'
+    | 'ConsentScreen'
     | 'IDDocumentScan'
     | 'FacialVerification'
     | 'LivenessDetection'
@@ -23,11 +23,11 @@ export type NavigationAction =
     | { type: 'RESET'; payload: { screen: ScreenName } };
 
 export type RootStackParamList = {
-    Splash: undefined;
+    LandingScreen: undefined;
     RequestSimSwap: undefined;
     SAIDSelection: undefined;
     IdentityValidation: undefined;
-    SimSwapDetails: { scannedIcid?: string } | undefined;
+    ConsentScreen: { scannedIcid?: string } | undefined;
     IDDocumentScan: { fullName?: string; cellNumber?: string; iccid?: string } | undefined;
     FacialVerification: undefined;
     LivenessDetection: undefined;
