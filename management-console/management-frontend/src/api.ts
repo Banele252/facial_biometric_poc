@@ -11,6 +11,7 @@
 //   GET  /api/v1/analytics/transactions                  transactions rows
 //   GET  /api/v1/analytics/transactions/status-summary    transaction counts by status
 //   GET  /api/v1/analytics/transactions/volume-by-day     transaction counts per day per status
+//   GET  /api/v1/analytics/transactions/{id}/report       per-transaction PDF activity report
 //   POST /api/v1/auth/login                              username/password login
 
 export interface ChatResponse {
@@ -178,6 +179,18 @@ export function getTransactionStatusSummary(): Promise<{ statuses: TransactionSt
 
 export function getTransactionVolumeByDay(days = 14): Promise<{ days: TransactionVolumeRow[] }> {
   return request(`/api/v1/analytics/transactions/volume-by-day${buildQuery({ days })}`)
+}
+
+// Binary PDF response - not JSON, so this bypasses the shared request<T>() helper.
+export async function downloadTransactionReport(id: string): Promise<Blob> {
+  const resp = await fetch(`/api/v1/analytics/transactions/${encodeURIComponent(id)}/report`)
+  if (!resp.ok) {
+    const detail = await resp.json().catch(() => null)
+    const msg =
+      (typeof detail?.detail === 'string' && detail.detail) || `Request failed (HTTP ${resp.status})`
+    throw new Error(msg)
+  }
+  return resp.blob()
 }
 
 // --- Auth ------------------------------------------------------------------

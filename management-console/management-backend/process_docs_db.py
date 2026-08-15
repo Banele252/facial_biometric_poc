@@ -77,6 +77,20 @@ def delete_process_docs_not_in(conn: psycopg.Connection, slugs: list[str]) -> No
     conn.commit()
 
 
+def get_process_docs(conn: psycopg.Connection, slugs: list[str]) -> list[dict[str, Any]]:
+    """Exact-slug lookup - used when the relevant docs are already known
+    (e.g. from a transaction's check names) rather than found by embedding
+    similarity - see search_process_docs for the similarity-based path."""
+    if not slugs:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT slug, title, content FROM process_docs WHERE slug = ANY(%s)",
+            (slugs,),
+        )
+        return cur.fetchall()
+
+
 def search_process_docs(
     conn: psycopg.Connection, query_embedding: list[float], limit: int = 5
 ) -> list[dict[str, Any]]:

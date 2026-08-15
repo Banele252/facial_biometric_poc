@@ -39,10 +39,13 @@ from auth import authenticate_user, ensure_users_table
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pdf_report import build_pdf
 from process_docs_db import ensure_process_docs_table
 from pydantic import BaseModel, Field
+from report_agent import generate_report_narrative
+from report_data import gather_report_context
 from system_llm import ask_system_chatbot
 
 load_dotenv()
@@ -287,6 +290,30 @@ async def transactions_volume_by_day(conn: Conn, days: int = 14) -> dict[str, An
     except psycopg.Error as exc:
         raise _analytics_db_error(exc) from exc
     return {"days": rows}
+
+
+@analytics_router.get("/transactions/{transaction_id}/report")
+async def transaction_report(conn: Conn, transaction_id: str) -> Response:
+    """A per-transaction "Trust Platform activity report" PDF - see
+    report_data.py for the correlation caveat (transactions has no foreign
+    key into process_log, so this is a best-effort match)."""
+    try:
+        context = gather_report_context(conn, transaction_id)
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+    if context is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
+
+    narrative = await generate_report_narrative(context)
+    pdf_bytes = build_pdf(context, narrative)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="trust-platform-report-{transaction_id}.pdf"'
+        },
+    )
 
 
 app.include_router(analytics_router)

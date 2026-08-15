@@ -49,3 +49,13 @@ export function ChatbotIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function ReportIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M15 3v4h4" />
+      <path d="M12 12v6M9 15l3 3 3-3" />
+    </svg>
+  )
+}

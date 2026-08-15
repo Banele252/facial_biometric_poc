@@ -6,6 +6,7 @@ import { StatTile } from '../components/ui/StatTile'
 import { Badge, type BadgeTone } from '../components/ui/Badge'
 import { Table, type TableColumn } from '../components/ui/Table'
 import { Select } from '../components/ui/Input'
+import { ReportDownloadButton } from '../components/ReportDownloadButton'
 import {
   getTransactions,
   getTransactionStatusSummary,
@@ -117,6 +118,7 @@ export function TransactionReport() {
     { key: 'status', header: 'Status', render: (row) => <Badge tone={statusTone(row.status)}>{row.status}</Badge> },
     { key: 'reason', header: 'Reason', render: (row) => row.reason },
     { key: 'created_at', header: 'Timestamp', render: (row) => formatDate(row.created_at) },
+    { key: 'report', header: 'Report', render: (row) => <ReportDownloadButton transaction={row} /> },
   ]
 
   return (

@@ -133,6 +133,38 @@ def list_process_logs(
     return {"total": total, "limit": limit, "offset": offset, "items": items}
 
 
+def find_verification_decision(
+    conn: psycopg.Connection, *, id_number: str, near: str
+) -> dict[str, Any] | None:
+    """Best-effort match: the verification_decision process_log event for
+    `id_number` closest in time to `near` (typically a transaction's
+    created_at). `transactions` has no foreign key into process_log - this
+    is a fuzzy join, not an exact one. Callers MUST check the returned
+    `delta_seconds` against their own cutoff before trusting this as "the"
+    matching event; this always returns the nearest candidate, even if it
+    is hours or days away."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, payload, created_at, "
+            "ABS(EXTRACT(EPOCH FROM (created_at::timestamptz - %(near)s::timestamptz))) "
+            "AS delta_seconds "
+            "FROM process_log WHERE process = 'verification_decision' "
+            "AND payload::jsonb->>'id_number' = %(id_number)s "
+            "ORDER BY delta_seconds ASC LIMIT 1",
+            {"near": near, "id_number": id_number},
+        )
+        row = cur.fetchone()
+
+    if row is None:
+        return None
+    try:
+        row["payload"] = json.loads(row["payload"])
+    except (TypeError, json.JSONDecodeError):
+        row["payload"] = {}
+    row["created_at"] = _to_sast(row["created_at"])
+    return row
+
+
 # --- rejected_requests (fraud rule rejections) --------------------------
 
 
@@ -346,6 +378,20 @@ def list_transactions(
         item["created_at"] = _to_sast(item["created_at"])
 
     return {"total": total, "limit": limit, "offset": offset, "items": items}
+
+
+def get_transaction(conn: psycopg.Connection, transaction_id: str) -> dict[str, Any] | None:
+    """One transaction row by id, or None if it doesn't exist."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, msisdn, id_number, sim_serial, transaction_kind, status, reason, "
+            "created_at FROM transactions WHERE id = %s",
+            (transaction_id,),
+        )
+        row = cur.fetchone()
+    if row is not None:
+        row["created_at"] = _to_sast(row["created_at"])
+    return row
 
 
 def transaction_status_summary(
