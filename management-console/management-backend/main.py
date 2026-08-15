@@ -41,6 +41,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from process_docs_db import ensure_process_docs_table
 from pydantic import BaseModel, Field
 from system_llm import ask_system_chatbot
 
@@ -72,6 +73,18 @@ def _ensure_users_table() -> None:
     conn = get_connection()
     try:
         ensure_users_table(conn)
+    finally:
+        conn.close()
+
+
+@app.on_event("startup")
+def _ensure_process_docs_table() -> None:
+    """Schema/extension only - no filesystem or OpenAI dependency, so this
+    stays fast and safe on every container boot. Row population happens
+    separately, offline, via index_process_docs.py."""
+    conn = get_connection()
+    try:
+        ensure_process_docs_table(conn)
     finally:
         conn.close()
 

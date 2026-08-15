@@ -1,0 +1,10 @@
+API Activity Log Reporting
+
+What it does:
+This process serves up a filtered, paginated history of API activity - which service handled a request, which endpoint was called, what status code came back, and when - for display in the management console.
+
+Why it matters:
+Operators and managers need visibility into what's actually happening across the system day to day, without needing direct database access or technical knowledge of how each service is built. This turns raw, mirrored activity data into something a non-technical console user can browse, search, and filter.
+
+How it works:
+The process reads from the mirrored copy of the API call log table (populated by the analytics database sync process) and returns results filtered by service, endpoint, date range, and other criteria, in manageable pages rather than all at once. This satisfies one of the three original management console requests: visibility into "API logs for the performed activities."

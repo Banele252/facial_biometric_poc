@@ -1,0 +1,10 @@
+Liveness Detection (Journey Integration)
+
+What it does:
+This process determines whether a selfie shows a real, physically present person, as part of the main verification journey. It is designed with a real production biometric provider (Azure AI Face liveness) in mind, but currently runs on a simpler stand-in heuristic since that provider isn't available in the current environment.
+
+Why it matters:
+Liveness detection is what stops someone from passing a face match using a photo of a photo, a printed image, or a video replay instead of actually being present themselves. It is explicitly described internally as a plausibility gate rather than true biometric liveness detection in its current form - a distinction worth keeping in mind when interpreting its results.
+
+How it works:
+By default, a mock liveness check is used: it rejects selfies that are suspiciously small in file size, and scores larger images using a simple stand-in signal (variation in the image's byte content) as a rough proxy for real image richness. A separate, currently unused code path documents where a genuine Azure AI Face liveness provider would be connected once that service becomes available to the organisation.

@@ -1,0 +1,10 @@
+Fraud Intelligence Check
+
+What it does:
+This process looks beyond a single device and checks the phone number itself: how often has this number attempted a SIM swap recently (velocity), is this identity, number, or device on a known watchlist of confirmed fraud, and are there other simple warning indicators such as missing information on the request.
+
+Why it matters:
+Some fraud patterns only show up when you look at a phone number's history over time, not just the device making the current request. A hard watchlist match is also the strongest possible fraud signal available - if a number or identity is already known to be fraudulent, the system needs to catch that immediately rather than relying on softer statistical signals.
+
+How it works:
+Three independent checks run together: a velocity check counting recent attempts on the same phone number, a watchlist lookup against known-fraud identities, numbers, and devices which automatically triggers a HIGH risk result if matched, and a small set of starter heuristic checks such as missing required fields. The specific indicators are explicitly a starting point, pending further scope confirmation from the fraud team.

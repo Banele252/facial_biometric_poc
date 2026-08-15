@@ -1,0 +1,10 @@
+Fraud Rule Trigger Reporting
+
+What it does:
+This process reports on which fraud and verification rules are actually firing in practice - which specific check rejected a given request and why, plus a ranked summary of which check-and-reason combinations trigger most often across all requests.
+
+Why it matters:
+It's not enough to know that fraud checks exist; the business needs to know which ones are actually doing work, how often, and why - both to spot fraud patterns worth investigating further and to catch checks that might be too strict (rejecting genuine customers) or too lenient (missing real fraud). This satisfies the second original management console request: extracting insight from "the rules used on the fraud intelligence repo."
+
+How it works:
+The process reads from the mirrored rejected-requests data and returns both a browsable, filterable list of individual rejections and a summary ranking of which stage-and-reason combinations occur most frequently. Worth noting: whether every rejection reason across the system reliably writes into this underlying table is not fully confirmed, so this reporting may reflect only part of the full rejection picture today.

@@ -1,0 +1,10 @@
+Notification Inbox
+
+What it does:
+This process lets a customer see their own notifications about the outcome of their verification requests - approvals, rejections, or "sent for manual review" - looked up by their ID number.
+
+Why it matters:
+A customer who requests a SIM swap or number port needs a way to find out what happened to their request afterwards, without needing to contact support directly for every routine outcome. This gives them visibility into their own case history in a simple, self-service way.
+
+How it works:
+This is the read side of the notification system: given a customer's ID number, it returns the notifications that were generated for them. The notifications themselves are written elsewhere, at the point the verification journey reaches a final decision (see the Notification Dispatch document) - this process only serves them back to the customer.

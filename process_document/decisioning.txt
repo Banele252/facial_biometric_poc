@@ -1,0 +1,10 @@
+Fraud Decisioning
+
+What it does:
+This process turns a fraud risk assessment into one of three final outcomes for a SIM swap request: APPROVE, REFER for human review, or REJECT outright.
+
+Why it matters:
+A risk score on its own doesn't tell anyone what to actually do. This is the policy layer that decides how the business responds to different levels of fraud risk - and it deliberately avoids automatically blocking every "risky-looking" request, since a device or number simply looking suspicious shouldn't be enough on its own to turn away a genuine customer.
+
+How it works:
+A watchlist hit is always an automatic REJECT, since it is the strongest and most confident fraud signal available. A MEDIUM or HIGH risk score from volume-based signals (device and velocity patterns) is sent to REFER, meaning a human reviewer or branch staff member makes the final call rather than the system rejecting automatically. Anything below that is APPROVEd. This policy - specifically the choice to refer rather than hard-block risky-looking requests - is explicitly flagged as a proof-of-concept decision awaiting fraud-team sign-off.

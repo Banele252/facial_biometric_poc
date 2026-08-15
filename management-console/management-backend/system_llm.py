@@ -30,6 +30,8 @@ from analytical_db import (
     list_transactions,
 )
 from dotenv import load_dotenv
+from embeddings import embed_text
+from process_docs_db import search_process_docs
 
 load_dotenv()
 
@@ -154,6 +156,31 @@ def get_audit_logs(
         return []
 
 
+@function_tool
+def search_process_documentation(query: str, limit: int = 5) -> list[dict]:
+    """Search the business-language process/system documentation for
+    passages relevant to a "how/why does X work" question, e.g. "How does
+    the ID validation check work?" or "Why is a face match required for a
+    SIM swap?". Use this for process/system-behaviour questions, not for
+    looking up specific transaction/rejection/audit-log records.
+
+    Args:
+        query: The user's question, in their own words.
+        limit: Maximum number of matching documents to return.
+    """
+    try:
+        query_embedding = embed_text(query)
+        conn = get_connection()
+        try:
+            results = search_process_docs(conn, query_embedding, limit=min(limit, 10))
+            return [{"title": r["title"], "content": r["content"]} for r in results]
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.warning("search_process_documentation query failed: %s", exc)
+        return []
+
+
 # --- Grounding ----------------------------------------------------------
 # Defense in depth: explicit domain instructions on the main agent, plus an
 # input guardrail that classifies off-topic messages before the main agent
@@ -165,8 +192,10 @@ _topic_guardrail_agent = Agent(
         "Decide whether a user message is relevant to a fraud/identity "
         "management console for a telco. In-scope topics: fraud-rule "
         "rejections, transactions (including SIM-swap orders), identity "
-        "verification and liveness checks, and audit/process logs. Anything "
-        "else (general chit-chat, unrelated topics, requests to act outside "
+        "verification and liveness checks, audit/process logs, and "
+        "process/system documentation questions (how or why a "
+        "verification, fraud, or SIM-swap step works). Anything else "
+        "(general chit-chat, unrelated topics, requests to act outside "
         "this domain) is out of scope."
     ),
     output_type=bool,
@@ -193,24 +222,34 @@ fraud_assistant = Agent(
         "You are the Fraud Assistant for this facial-biometric identity "
         "and fraud management console. You help operators understand "
         "fraud-rule rejections, transactions (SIM-swap orders and other "
-        "transaction kinds), and audit/process logs, using the tools "
-        "available to you.\n\n"
+        "transaction kinds), audit/process logs, and how/why the "
+        "system's processes work, using the tools available to you.\n\n"
         "Stay strictly within this domain: fraud-rule rejections (stage "
         "and reason), verification/liveness outcomes, transactions "
-        "(SIM-swap orders and other transaction kinds), and audit log "
-        "events. If asked about anything else — general knowledge, "
-        "unrelated tasks, or requests to act outside this console — "
-        "politely decline and redirect the user back to what you can "
-        "help with.\n\n"
+        "(SIM-swap orders and other transaction kinds), audit log "
+        "events, and process/system documentation questions. If asked "
+        "about anything else — general knowledge, unrelated tasks, or "
+        "requests to act outside this console — politely decline and "
+        "redirect the user back to what you can help with.\n\n"
         "Always ground your answers in the data returned by your tools "
         "rather than guessing. If a tool returns no matching records, say "
-        "so explicitly instead of inventing an answer.\n\n"
+        "so explicitly instead of inventing an answer. For questions "
+        "about how or why a process works, use "
+        "search_process_documentation and ground your answer in the "
+        "documentation it returns, the same way you ground data answers "
+        "in the other tools' results.\n\n"
         "You are rendered in a chat widget that only supports **bold**, "
         "*italics*, `inline code`, and simple `- ` bullet lists. Use those "
         "sparingly for emphasis or short lists; do not use headings, "
         "tables, fenced code blocks, or links — they will not render."
     ),
-    tools=[get_fraud_rejections, get_sim_swap_transactions, get_transactions, get_audit_logs],
+    tools=[
+        get_fraud_rejections,
+        get_sim_swap_transactions,
+        get_transactions,
+        get_audit_logs,
+        search_process_documentation,
+    ],
     input_guardrails=[topic_guardrail],
 )
 

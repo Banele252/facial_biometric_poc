@@ -1,0 +1,10 @@
+SIM Card Barcode Extraction
+
+What it does:
+This process reads a photograph of a physical SIM card's barcode and extracts the ICCID printed on it - the unique 19 to 20 digit serial number that identifies that specific SIM card, which by standard always starts with the digits "89".
+
+Why it matters:
+During a SIM swap, someone needs to record which physical SIM card is being activated. Typing a 19-to-20-digit serial number by hand is slow and error-prone; letting a customer or agent simply photograph the barcode on the card is far faster and far less likely to introduce a typo into the record.
+
+How it works:
+The submitted photo is processed with a series of image-cleanup steps - converting to greyscale, adjusting contrast, and sharpening - to make the barcode as easy as possible to read reliably, and then a barcode-decoding step extracts the ICCID value itself. This is a straightforward image-processing utility rather than an identity or fraud check.
