@@ -1,19 +1,11 @@
 {
   "expo": {
-    "name": "Facial Biometric POC",
+    "name": "Biometric Trust",
     "slug": "facial-biometric-poc",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FBF7EE"
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.mtn.facialbiometricpoc"
@@ -24,26 +16,47 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.mtn.facialbiometricpoc"
+      "package": "com.mtn.facialbiometricpoc",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "name": "Facial Biometric POC",
-      "shortName": "Biometric POC",
-      "display": "standalone",
-      "themeColor": "#FFCB05",
-      "backgroundColor": "#FFFDF9",
-      "scope": "/",
-      "startUrl": "/",
-      "orientation": "portrait"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Biometric Trust to access your camera for identity verification."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Biometric Trust to access your photos for ID document upload."
+        }
+      ],
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#FBF7EE"
+          "backgroundColor": "#FFCC00",
+          "imageWidth": 200
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
         }
       ]
     ],
