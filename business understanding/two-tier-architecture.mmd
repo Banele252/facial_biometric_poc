@@ -1,0 +1,15 @@
+flowchart LR
+    user["User"] --> client
+
+    subgraph client["Client tier"]
+        direction TB
+        ui["Presentation<br/>(UI)"]
+        logic["Business logic"]
+        ui --> logic
+    end
+
+    subgraph dbtier["Database tier"]
+        db[("Database server")]
+    end
+
+    client -->|direct DB connection| dbtier
