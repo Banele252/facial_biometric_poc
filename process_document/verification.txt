@@ -1,0 +1,10 @@
+Direct External Verification
+
+What it does:
+This process exposes the external Home Affairs verification provider (VerifyNow) directly, letting an ID number be verified or provider credit balances be checked without running the full end-to-end verification journey.
+
+Why it matters:
+Not every situation needs the complete, multi-step verification journey - sometimes a direct identity check against Home Affairs records is exactly what's needed on its own, for example for debugging, integration testing, or a narrower use case. Keeping this as a separate, thinner entry point avoids forcing every caller through the full journey when they only need this one piece.
+
+How it works:
+A request is passed straight through to the external Home Affairs provider's identity verification capability, and the provider's response is returned as-is. A separate endpoint also allows checking how many verification credits remain with the provider, which is useful for monitoring usage without needing to inspect provider billing directly.

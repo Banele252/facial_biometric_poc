@@ -1,0 +1,10 @@
+Risk Assessment
+
+What it does:
+This process takes the results of the device risk check and the fraud intelligence check and combines them into one single fraud risk score out of 100, along with a simple LOW, MEDIUM, or HIGH risk band.
+
+Why it matters:
+Without this step, every part of the system that needs to make a decision based on fraud risk would have to separately understand and weigh two different signals. Combining them into one number and one band makes every later decision - like whether to approve, refer, or reject a request - simple threshold logic instead of duplicated judgement calls scattered across the codebase.
+
+How it works:
+The device risk result and the fraud intelligence result are combined with an even, fifty-fifty weighting into a single numeric score. That score is then translated into a LOW, MEDIUM, or HIGH band using fixed cut-off points. Both the weighting and the exact cut-offs are explicitly flagged as proof-of-concept placeholders, not final numbers agreed with the fraud team, and are expected to be tuned later.

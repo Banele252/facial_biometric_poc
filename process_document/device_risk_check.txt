@@ -1,0 +1,10 @@
+Device Risk Check
+
+What it does:
+This process looks at the device being used to request a SIM swap and asks two questions: how many swap attempts has this device made recently, and how many different customer identities has it been used to claim? A device tied to many different identities is a strong warning sign.
+
+Why it matters:
+Fraudsters often reuse the same phone or device to attempt SIM swap fraud against many different victims. Spotting that pattern at the device level catches fraud that wouldn't be visible if you only looked at one request, or one phone number, in isolation - it reveals a "fraud farm" pattern across many attempts.
+
+How it works:
+Each SIM swap request includes a device identifier supplied by the client. The system tracks how many attempts and how many distinct identities have come from that same device recently. A device linked to several different identities is scored HIGH risk; a device with just repeated attempts under one identity is scored MEDIUM. This is a proof-of-concept implementation using a client-supplied device ID rather than deep hardware fingerprinting, and the exact thresholds are placeholders awaiting sign-off from the fraud team.

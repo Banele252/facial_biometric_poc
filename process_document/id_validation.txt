@@ -1,0 +1,10 @@
+ID Validation
+
+What it does:
+This process checks whether a South African ID number is structurally valid before anything else happens with it. It confirms the number is the right length and made up only of digits, that the birth date encoded in the number is plausible, that the citizenship digit makes sense, and that the number passes the official checksum calculation used to detect typos and made-up numbers.
+
+Why it matters:
+It is the cheapest and fastest fraud filter in the whole system. Rather than spending time and money sending an obviously fake or mistyped ID number through document scanning, face matching, or the external Home Affairs check, the system catches nonsense numbers immediately and rejects them for free. This protects the more expensive downstream checks from being wasted on requests that could never have succeeded anyway.
+
+How it works:
+A customer's typed-in ID number is run through a series of simple rule checks - length, digits-only, a valid-looking date of birth, a valid citizenship marker, and a mathematical checksum. If every rule passes, the ID number is treated as structurally sound and the request moves on to the next stage of the verification journey. If any rule fails, the request is rejected immediately with a reason, before any document or biometric data is even looked at.

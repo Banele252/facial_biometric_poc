@@ -1,0 +1,10 @@
+Fraud Checks in the Verification Journey
+
+What it does:
+This process is the glue that plugs the fraud engine's four-stage pipeline (device risk, fraud intelligence, risk scoring, and decisioning) into the main customer-facing verification journey, so the journey can get one fraud outcome without needing to know the details of how the fraud engine works internally.
+
+Why it matters:
+The fraud engine is built and tested as its own standalone service. Rather than duplicating its logic inside the main verification journey, this integration layer lets the journey reuse the exact same fraud policy - including the rule that only a watchlist hit is an automatic rejection, while risk-based findings go to a human for review - without copy-pasting that logic in two places where it could drift apart over time.
+
+How it works:
+When the verification journey reaches the fraud-checking stage, this process calls the fraud engine's four checks in sequence on the journey's behalf and returns the final APPROVE, REFER, or REJECT decision, which the journey then uses to decide whether a SIM swap or number port can actually proceed.

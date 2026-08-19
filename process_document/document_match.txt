@@ -1,0 +1,10 @@
+Document Match
+
+What it does:
+This process compares what a customer typed into the app - their name, and for South African ID holders, their ID number - against what was actually read off their photographed ID document or passport. It answers the question: does this document actually belong to the person claiming it?
+
+Why it matters:
+Without this check, someone could submit any document photo alongside claims about someone else's identity, and the system would have no way of knowing the two don't match. This is one of the key checks that stops a fraudster from using a stolen or borrowed document to impersonate someone else.
+
+How it works:
+The customer's typed name is compared against the name extracted from their document using fuzzy matching, which tolerates small differences caused by OCR misreads, spacing, or minor spelling variations rather than demanding an exact character-for-character match. For South African ID holders, the ID number is also compared directly. Foreign passport holders skip the ID/passport number re-check at this stage, since that number was already validated earlier in the journey against the RICA database.

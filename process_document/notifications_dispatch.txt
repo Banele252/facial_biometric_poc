@@ -1,0 +1,10 @@
+Notification Dispatch
+
+What it does:
+This process composes and sends a customer their decision notification - approved, rejected, or sent for manual review - once the verification journey reaches a final outcome, and saves a copy of it to the in-app notification inbox.
+
+Why it matters:
+A customer needs to be told what happened to their request, and that message needs to be recorded so it can be reviewed later for audit purposes and so the customer can look it up again themselves. Building this behind a general notification interface, rather than hard-coding one delivery method, means new channels like email or SMS could be added in future without needing to change how the rest of the journey triggers a notification.
+
+How it works:
+When the verification journey reaches a decision, this process builds the appropriate message and hands it off through a pluggable notifier interface. Today, only the in-app channel is implemented - the message is saved directly to the customer's notification inbox - but the interface is designed so additional channels can be added later without changing the calling code in the verification journey.

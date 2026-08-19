@@ -1,0 +1,10 @@
+Home Affairs Identity Verification (VerifyNow)
+
+What it does:
+This process is the connection to VerifyNow, an external provider that checks a South African ID number directly against Department of Home Affairs records, compares a selfie to the photo Home Affairs holds on file, and can check whether a person is physically present (liveness) rather than a photo or video being replayed.
+
+Why it matters:
+The organisation does not have its own direct link into Home Affairs' identity records, so VerifyNow acts as the trusted middleman that makes real government-backed identity verification possible. This is the strongest and most authoritative identity check available in the whole system - it isn't just checking a document photo, it's checking against the official government record.
+
+How it works:
+Three separate capabilities are available: verifying an ID number against Home Affairs records, matching a selfie against the photo Home Affairs holds (used when there's no other reference image to compare against), and a passive liveness check. Provider errors are surfaced clearly rather than hidden, and in the shared sandbox testing environment, the face-match and liveness checks share a short cooldown window, so they can't both be called back-to-back without one of them failing - which is why liveness is handled separately elsewhere in production.

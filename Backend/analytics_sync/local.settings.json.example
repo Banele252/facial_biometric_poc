@@ -1,0 +1,19 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+
+    "postgres_host": "",
+    "postgres_port": "5432",
+    "postgres_username": "",
+    "postgres_password": "",
+    "database": "",
+
+    "analytics_postgres_host": "",
+    "analytics_postgres_port": "5432",
+    "analytics_postgres_username": "",
+    "analytics_postgres_password": "",
+    "analytics_database": ""
+  }
+}

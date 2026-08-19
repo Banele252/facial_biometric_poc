@@ -1,0 +1,192 @@
+/* Button */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid transparent;
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.ui-button--md {
+  height: 44px;
+  padding: 0 var(--space-lg);
+  font-size: var(--font-size-sm);
+}
+.ui-button--lg {
+  height: 54px;
+  padding: 0 var(--space-xl);
+  font-size: var(--font-size-md);
+}
+.ui-button--primary {
+  background: var(--color-primary);
+  color: var(--color-secondary);
+  box-shadow: 0 8px 20px var(--color-primary-shadow);
+}
+.ui-button--primary:hover {
+  background: var(--color-primary-hover);
+}
+.ui-button--secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-light);
+}
+.ui-button--outline {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.ui-button--ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.ui-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Card */
+.ui-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-md);
+  box-shadow: 0 1px 2px rgba(16, 17, 20, 0.04);
+}
+
+/* Input / Select */
+.ui-input,
+.ui-select {
+  height: 40px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+}
+.ui-input:focus,
+.ui-select:focus {
+  border-color: var(--color-primary);
+}
+.ui-input::placeholder {
+  color: var(--color-text-light);
+}
+
+/* StatTile */
+.ui-stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.ui-stat-tile__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+.ui-stat-tile__value {
+  font-size: var(--font-size-xxl);
+  font-weight: var(--font-weight-black);
+  letter-spacing: -0.8px;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.ui-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Badge */
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 4px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+.ui-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.ui-badge--neutral {
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+.ui-badge--neutral .ui-badge__dot {
+  background: var(--color-text-light);
+}
+.ui-badge--approved {
+  background: #e9f8ef;
+  color: #1e7e46;
+}
+.ui-badge--approved .ui-badge__dot {
+  background: var(--color-success);
+}
+.ui-badge--review,
+.ui-badge--pending {
+  background: var(--color-review-bg);
+  color: #8a660b;
+}
+.ui-badge--review .ui-badge__dot,
+.ui-badge--pending .ui-badge__dot {
+  background: var(--color-review);
+}
+.ui-badge--rejected,
+.ui-badge--flagged {
+  background: var(--color-error-bg);
+  color: #96291d;
+}
+.ui-badge--rejected .ui-badge__dot,
+.ui-badge--flagged .ui-badge__dot {
+  background: var(--color-error);
+}
+
+/* Table */
+.ui-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+}
+.ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.ui-table thead th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.ui-table tbody td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  vertical-align: top;
+}
+.ui-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.ui-table__cell--right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

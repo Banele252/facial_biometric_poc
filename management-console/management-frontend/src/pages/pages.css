@@ -1,0 +1,222 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.page__subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: -8px 0 0;
+}
+
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.filters-row .ui-input {
+  min-width: 240px;
+  flex: 1;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+
+.chart-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.chart-card__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  margin: 0;
+}
+
+.risk-band-legend {
+  display: flex;
+  gap: var(--space-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.risk-band-legend__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.risk-band-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.payload-preview {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-family: ui-monospace, monospace;
+  font-size: var(--font-size-xs);
+  max-width: 320px;
+}
+
+.payload-preview pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.reasons-list {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+  padding: 0;
+  overflow: hidden;
+}
+
+.chat-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.chat-bubble {
+  max-width: 70%;
+  padding: 10px var(--space-md);
+  border-radius: 16px;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.chat-bubble p {
+  margin: 0 0 6px;
+}
+
+.chat-bubble ul {
+  margin: 0 0 6px;
+  padding-left: 1.2em;
+}
+
+.chat-bubble p:last-child,
+.chat-bubble ul:last-child {
+  margin-bottom: 0;
+}
+
+.chat-bubble code {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 0.9em;
+}
+
+.chat-bubble--user {
+  align-self: flex-end;
+  background: var(--color-secondary);
+  color: var(--color-surface);
+  border-bottom-right-radius: 4px;
+}
+
+.chat-bubble--system {
+  align-self: flex-start;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-panel__composer {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.chat-panel__composer .ui-input {
+  flex: 1;
+}
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background);
+}
+
+.login-page__card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding: var(--space-xl);
+}
+
+.login-page__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.login-page__brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-black);
+  font-size: var(--font-size-md);
+  flex-shrink: 0;
+}
+
+.login-page__brand-text {
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-tight);
+  color: var(--color-text);
+}
+
+.login-page__brand-subtext {
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.login-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.login-page__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.login-page__error {
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}

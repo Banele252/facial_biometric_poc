@@ -1,0 +1,70 @@
+flowchart TB
+
+    subgraph frontend["FRONT END"]
+        subgraph customerApp["Customer-Facing Application"]
+            webSpa["Web SPA<br/>React + Vite<br/>(frontend/)"]
+            mobileApp["Mobile App<br/>React Native / Expo<br/>(mobile/)"]
+        end
+        subgraph mgmtApp["Management-Console Application"]
+            mgmtDash["Management Dashboard<br/>React + Vite, admin<br/>(management-frontend/)"]
+        end
+    end
+
+    subgraph apiLayer["APPLICATION LAYER / API"]
+        subgraph appApi["App API Endpoints (Backend/app)"]
+            health["Health<br/>GET /healthz<br/>GET /readyz"]
+            validation["Validation<br/>POST /api/v1/validate-id"]
+            verification["Verification (single-provider)<br/>POST /api/v1/verify-identity<br/>GET /api/v1/credits"]
+            selfies["Selfies / Liveness<br/>POST /api/v1/selfies<br/>POST /api/v1/selfies/{id}/liveness"]
+            verifications["Verifications (orchestrator)<br/>POST /api/v1/verifications<br/>GET /api/v1/verifications/history"]
+            notifications["Notifications<br/>GET /api/v1/notifications"]
+            rica["RICA<br/>POST /api/v1/rica/records<br/>GET /api/v1/rica/records<br/>GET /api/v1/rica/records/{msisdn}<br/>POST /api/v1/rica/verify"]
+        end
+        subgraph mgmtApi["Management Backend API Endpoints (management-backend)"]
+            mgmtAuth["Auth<br/>POST /api/v1/auth/login"]
+            mgmtChat["Chat<br/>POST /api/v1/chat"]
+            mgmtAudit["Analytics: Audit Logs<br/>GET /api/v1/analytics/audit-logs"]
+            mgmtFraud["Analytics: Fraud Rejections<br/>GET /api/v1/analytics/fraud-rejections<br/>GET .../fraud-rejections/summary"]
+            mgmtSim["Analytics: SIM Swap Orders<br/>GET /api/v1/analytics/sim-swap-orders<br/>GET .../status-summary<br/>GET .../volume-by-day"]
+            mgmtTxn["Analytics: Transactions<br/>GET /api/v1/analytics/transactions<br/>GET .../status-summary<br/>GET .../volume-by-day<br/>GET .../{id}/report"]
+            mgmtHealth["Health<br/>GET /health"]
+        end
+    end
+
+    subgraph dbService["DATABASE / SERVICE"]
+        subgraph database["Database"]
+            biometricDb[("biometric — Postgres<br/>(used by App API)<br/>selfies, verification_attempts,<br/>notifications, process_log,<br/>rica_records, sim_swap_orders,<br/>active_sims, port_requests")]
+            analyticsDb[("analytics — Postgres<br/>(used by Management Backend API)<br/>process_log (mirror), rejected_requests,<br/>sim_swap_orders, transactions,<br/>users, process_docs (pgvector)")]
+            biometricDb -.->|analytics_sync Azure Function, every 15 min| analyticsDb
+        end
+        subgraph service["Service"]
+            subgraph appServices["Used by App API"]
+                verifyNow["VerifyNow<br/>external ID + face-match provider"]
+                ricaSvc["RICA Registry<br/>mock SIM registration"]
+                fraudEngine["Fraud Engine<br/>device risk, fraud intel, decisioning"]
+                simSwapSvc["SIM Swap / Number Port Service"]
+                liveness["Liveness Detection<br/>local mock"]
+                selfieStorage["Selfie Storage<br/>local / Azure Blob"]
+            end
+            subgraph mgmtServices["Used by Management Backend API"]
+                openaiAgents["OpenAI Agents SDK<br/>Fraud Assistant chatbot,<br/>report narrative writer"]
+                openaiEmbed["OpenAI Embeddings<br/>RAG search"]
+                pdfGen["PDF Report Generation<br/>(reportlab)"]
+            end
+        end
+    end
+
+    customerApp --> validation
+    customerApp --> verification
+    customerApp --> selfies
+    customerApp --> verifications
+    customerApp --> notifications
+
+    mgmtApp --> mgmtApi
+
+    verifications -.->|internal call| rica
+
+    appApi --> biometricDb
+    appApi --> appServices
+    mgmtApi --> analyticsDb
+    mgmtApi --> mgmtServices

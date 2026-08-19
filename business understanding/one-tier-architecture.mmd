@@ -1,0 +1,11 @@
+flowchart TB
+    subgraph app["Single application / process"]
+        direction TB
+        ui["Presentation<br/>(UI)"]
+        logic["Business logic"]
+        data["Data storage"]
+
+        ui --> logic --> data
+    end
+
+    user["User"] --> app

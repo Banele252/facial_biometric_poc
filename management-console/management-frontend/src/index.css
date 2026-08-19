@@ -1,0 +1,83 @@
+:root {
+  --color-primary: #ffcb05;
+  --color-primary-hover: #f2bf00;
+  --color-primary-shadow: rgba(255, 203, 5, 0.42);
+  --color-secondary: #101114;
+  --color-background: #fbf7ee;
+  --color-surface: #ffffff;
+  --color-text: #14110c;
+  --color-text-secondary: #5c574e;
+  --color-text-light: #8b9099;
+  --color-border: #e0ddd6;
+  --color-border-light: #f0de9c;
+  --color-error: #c0392b;
+  --color-error-bg: #fee9e7;
+  --color-success: #27ae60;
+  --color-review: #b8860b;
+  --color-review-bg: #fbf1de;
+
+  --font-family: 'Figtree', system-ui, sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-xxl: 32px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-black: 800;
+  --line-height-tight: 1.15;
+  --line-height-normal: 1.35;
+  --line-height-relaxed: 1.45;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 48px;
+
+  --radius-pill: 27px;
+  --radius-card: 16px;
+  --radius-input: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+table {
+  border-collapse: collapse;
+}
