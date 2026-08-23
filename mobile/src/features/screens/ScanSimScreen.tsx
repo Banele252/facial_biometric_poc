@@ -1,639 +1,2547 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+// src/features/screens/ScanSimScreen.tsx
+
 import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Easing,
-  TextInput,
-  ScrollView,
-  Modal,
-  StatusBar,
-  Platform,
+    useState,
+    useCallback,
+    useEffect,
+    useRef,
+} from 'react';
+
+import {
+    View,
+    StyleSheet,
+    TouchableOpacity,
+    ActivityIndicator,
+    Text,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    TextInput,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Typography } from '@/components/ui';
+
+import {
+    CameraView,
+    useCameraPermissions,
+} from 'expo-camera';
+
+import { useAudit } from '@/hooks/useAudit';
+import { apiClient } from '@/lib/apiClient';
+
+import {
+    storeIccid,
+    type IccidSource,
+} from '@/lib/journeyState';
+
+const DESIGN_WIDTH = 393;
+
+const Colors = {
+    background: '#FFFFFF',
+    text: '#111114',
+    muted: '#6E6E78',
+    error: '#E5484D',
+    success: '#79A54E',
+    primary: '#FFCB05',
+};
+
+const ACCENT = Colors.primary;
 
 interface Props {
-  navigate?: (screen: string, params?: any) => void;
-  goBack?: () => void;
-  dispatch?: (action: any) => void;
+    idNumber?: string;
+    phoneNumber?: string;
+    fullName?: string;
+    photoUrl?: string;
+    sessionId?: string;
+    selfieId?: string;
+
+    navigate?: (
+        screen: string,
+        params?: any,
+    ) => void;
+
+    goBack?: () => void;
+
+    dispatch?: (action: {
+        type: string;
+        payload?: any;
+    }) => void;
 }
 
-const STEP = 2;
-const TOTAL_STEPS = 6;
-const ACCENT = '#FFCB05';
+type Stage =
+    | 'camera'
+    | 'scanning'
+    | 'processing'
+    | 'failed'
+    | 'success'
+    | 'manual';
 
-/* ─── helpers ─── */
-const digits = (v: string) => (v || '').replace(/\D/g, '');
-const fmtIccid = (d: string) => ('89' + d).replace(/(.{4})/g, '$1 ').trim();
+/**
+ * Strip everything except digits.
+ */
+function normalizeIccid(
+    value: string,
+): string {
+    return value.replace(/\D/g, '');
+}
 
-/* ─── decorative barcode bars ─── */
-function DecorativeBars() {
-  const widths = [3,1.5,2,4,1.5,3,2,1.5,5,2,1.5,3,4,1.5,2,3,1.5,4,2,1.5,3,5,1.5,2,4,1.5,3,2,1.5,4,3,1.5,2,5,1.5,3,2,4,1.5,2,3,1.5];
-  return (
-    <View style={styles.barsRow}>
-      {widths.map((w, i) => {
-        const r = ((i * 9301 + 49297) % 233280) / 233280;
-        return (
-          <View
-            key={i}
-            style={{
-              flex: 1,
-              height: 32 + r * 30,
-              backgroundColor: `rgba(17,17,20,${0.16 + r * 0.24})`,
-              borderRadius: 1,
-              marginHorizontal: 1.5,
-            }}
-          />
+/**
+ * South African / standard SIM ICCIDs normally:
+ * - start with 89
+ * - contain 19 or 20 digits
+ */
+function isValidICCID(
+    value: string,
+): boolean {
+    const normalized =
+        normalizeIccid(value);
+
+    return /^89\d{17,18}$/.test(
+        normalized,
+    );
+}
+
+/**
+ * Barcode readers may return:
+ *
+ * 8957012345678901234
+ *
+ * ICCID: 8957012345678901234
+ *
+ * 89 5701 2345 6789 0123 4
+ *
+ * or even packaging text around the number.
+ *
+ * We extract the ICCID instead of requiring the
+ * entire scanner value to exactly equal an ICCID.
+ */
+function extractIccidFromBarcode(
+    raw: string,
+): string | null {
+    if (!raw) {
+        return null;
+    }
+
+    const digits =
+        normalizeIccid(raw);
+
+    const match =
+        digits.match(
+            /89\d{17,18}/,
         );
-      })}
-    </View>
-  );
+
+    if (!match) {
+        return null;
+    }
+
+    const candidate =
+        match[0];
+
+    if (
+        !isValidICCID(
+            candidate,
+        )
+    ) {
+        return null;
+    }
+
+    return candidate;
 }
 
-/* ─── corner bracket ─── */
-function CornerBracket({ color, position }: { color: string; position: 'tl' | 'tr' | 'bl' | 'br' }) {
-  const isTop = position.startsWith('t');
-  const isLeft = position.endsWith('l');
-  return (
-    <View
-      style={[
-        styles.cornerBracket,
-        {
-          borderColor: color,
-          borderTopWidth: isTop ? 4 : 0,
-          borderBottomWidth: !isTop ? 4 : 0,
-          borderLeftWidth: isLeft ? 4 : 0,
-          borderRightWidth: !isLeft ? 4 : 0,
-          top: isTop ? -2 : undefined,
-          bottom: !isTop ? -2 : undefined,
-          left: isLeft ? -2 : undefined,
-          right: !isLeft ? -2 : undefined,
-          borderTopLeftRadius: isTop && isLeft ? 12 : 0,
-          borderTopRightRadius: isTop && !isLeft ? 12 : 0,
-          borderBottomLeftRadius: !isTop && isLeft ? 12 : 0,
-          borderBottomRightRadius: !isTop && !isLeft ? 12 : 0,
-        },
-      ]}
-    />
-  );
+async function capturedPhotoToDataUrl(
+    photo: {
+        base64?: string | null;
+        uri?: string;
+    },
+): Promise<string> {
+    const rawBase64 = photo.base64?.trim();
+
+    if (rawBase64) {
+        return rawBase64.startsWith('data:image/')
+            ? rawBase64
+            : `data:image/jpeg;base64,${rawBase64}`;
+    }
+
+    if (Platform.OS === 'web' && photo.uri) {
+        const response = await fetch(photo.uri);
+
+        if (!response.ok) {
+            throw new Error(
+                'Unable to read the captured SIM image.',
+            );
+        }
+
+        const blob = await response.blob();
+
+        return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onloadend = () => {
+                if (typeof reader.result === 'string') {
+                    resolve(reader.result);
+                    return;
+                }
+
+                reject(
+                    new Error(
+                        'Unable to convert the captured SIM image.',
+                    ),
+                );
+            };
+
+            reader.onerror = () => {
+                reject(
+                    new Error(
+                        'Unable to read the captured SIM image.',
+                    ),
+                );
+            };
+
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    throw new Error(
+        'Camera did not return image data for the SIM barcode.',
+    );
 }
 
-export default function ScanSimScreen({ navigate, goBack, dispatch }: Props) {
-  const [stage, setStage] = useState<-1 | 0 | 1>(-1); // -1 idle, 0 busy, 1 recognised
-  const [submitPhase, setSubmitPhase] = useState<'idle' | 'busy'>('idle');
-  const [cam, setCam] = useState<'off' | 'ask' | 'opening' | 'live' | 'locked'>('off');
-  const [torch, setTorch] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manual, setManual] = useState('');
-  const [manualUsed, setManualUsed] = useState(false);
-  const [iccid, setIccid] = useState('8957 0012 3456 7890 123');
-  const [permission, requestPermission] = useCameraPermissions();
+export default function ScanSimScreen({
+                                          idNumber = '',
+                                          phoneNumber = '',
+                                          fullName = '',
+                                          photoUrl = '',
+                                          sessionId = '',
+                                          selfieId = '',
+                                          navigate,
+                                          goBack,
+                                          dispatch,
+                                      }: Props) {
+    const audit =
+        useAudit('ScanSimScreen');
 
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const sweepAnim = useRef(new Animated.Value(-72)).current;
-  const shutterOpacity = useRef(new Animated.Value(1)).current;
-  const glowPulse = useRef(new Animated.Value(0.4)).current;
+    const [
+        permission,
+        requestPermission,
+    ] =
+        useCameraPermissions();
 
-  /* ─── cleanup ─── */
-  useEffect(() => {
-    return () => timersRef.current.forEach(clearTimeout);
-  }, []);
+    const [
+        stage,
+        setStage,
+    ] =
+        useState<Stage>(
+            'camera',
+        );
 
-  /* ─── sweep animation ─── */
-  useEffect(() => {
-    if (stage !== 0) {
-      sweepAnim.setValue(-72);
-      return;
-    }
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(sweepAnim, { toValue: 72, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(sweepAnim, { toValue: -72, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]),
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [stage, sweepAnim]);
+    const [
+        error,
+        setError,
+    ] =
+        useState<string | null>(
+            null,
+        );
 
-  /* ─── glow pulse ─── */
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowPulse, { toValue: 0.8, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(glowPulse, { toValue: 0.4, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]),
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [glowPulse]);
+    const [
+        iccid,
+        setIccid,
+    ] =
+        useState<string | null>(
+            null,
+        );
 
-  /* ─── camera flow ─── */
-  const openCamera = () => {
-    if (!permission?.granted) {
-      setCam('ask');
-      return;
-    }
-    startCameraSequence();
-  };
+    const [
+        manualIccid,
+        setManualIccid,
+    ] =
+        useState('');
 
-  const startCameraSequence = () => {
-    setCam('opening');
-    shutterOpacity.setValue(1);
-    Animated.timing(shutterOpacity, { toValue: 0, duration: 500, easing: Easing.easeOut, useNativeDriver: true }).start();
+    const [
+        isProcessing,
+        setIsProcessing,
+    ] =
+        useState(false);
 
-    timersRef.current.push(setTimeout(() => setCam('live'), 900));
-    timersRef.current.push(setTimeout(() => setCam('locked'), 3400));
-    timersRef.current.push(setTimeout(() => { setCam('off'); setStage(0); }, 4100));
-    timersRef.current.push(setTimeout(() => {
-      setStage(1);
-      setIccid(manualUsed ? fmtIccid(manual) : '8957 0012 3456 7890 123');
-    }, 5800));
-  };
+    const cameraRef =
+        useRef<CameraView>(
+            null,
+        );
 
-  const allowCam = async () => {
-    const { granted } = await requestPermission();
-    setCam('off');
-    if (granted) {
-      setTimeout(() => startCameraSequence(), 200);
-    } else {
-      setManualOpen(true);
-    }
-  };
+    const timersRef =
+        useRef<
+            ReturnType<
+                typeof setTimeout
+            >[]
+        >([]);
 
-  const denyCam = () => {
-    timersRef.current.forEach(clearTimeout);
-    setCam('off');
-    setManualOpen(true);
-  };
 
-  const toggleTorch = () => setTorch((t) => !t);
+    // Camera permission
 
-  const rescan = () => {
-    timersRef.current.forEach(clearTimeout);
-    setStage(-1);
-    setCam('off');
-    setTorch(false);
-    setManualUsed(false);
-    setManualOpen(false);
-  };
 
-  /* ─── barcode handler ─── */
-  const handleBarCode = useCallback(({ data }: { data: string }) => {
-    if (stage !== 0) return;
-    const d = digits(data);
-    if (d.length >= 19) {
-      setIccid(fmtIccid(d.slice(2)));
-      setStage(1);
-      setCam('off');
-    }
-  }, [stage]);
+    useEffect(() => {
+        if (
+            !permission?.granted
+        ) {
+            void requestPermission();
+        }
+    }, [
+        permission,
+        requestPermission,
+    ]);
 
-  /* ─── manual entry ─── */
-  const manualValid = manual.length === 17;
-  const handleManualChange = (text: string) => setManual(digits(text).slice(0, 17));
-  const submitManual = () => {
-    if (!manualValid) return;
-    timersRef.current.forEach(clearTimeout);
-    setStage(1);
-    setManualOpen(false);
-    setManualUsed(true);
-    setIccid(fmtIccid(manual));
-  };
 
-  /* ─── primary CTA ─── */
-  const handlePrimary = () => {
-    if (stage < 1) {
-      openCamera();
-      return;
-    }
-    if (submitPhase !== 'idle') return;
-    setSubmitPhase('busy');
-    timersRef.current.push(setTimeout(() => {
-      setSubmitPhase('idle');
-      if (navigate) navigate('ReviewScreen');
-      else if (dispatch) dispatch({ type: 'NAVIGATE', payload: { screen: 'ReviewScreen' } });
-    }, 1250));
-  };
+    // Timer cleanup
 
-  const handleBack = () => {
-    if (goBack) goBack();
-    else if (dispatch) dispatch({ type: 'GO_BACK' });
-  };
 
-  /* ─── derived ─── */
-  const idle = stage === -1;
-  const busy = stage === 0;
-  const recognised = stage >= 1;
-  const frameColor = recognised ? ACCENT : '#111114';
-  const showManual = manualUsed || manualOpen;
+    useEffect(() => {
+        const timers =
+            timersRef.current;
 
-  const stepBars = Array.from({ length: TOTAL_STEPS }, (_, n) => ({
-    bg: n === STEP ? ACCENT : n < STEP ? 'rgba(255,203,5,0.55)' : '#DEDEE4',
-  }));
+        return () => {
+            timers.forEach(
+                clearTimeout,
+            );
+        };
+    }, []);
 
-  const ctaText = submitPhase === 'busy'
-    ? 'Continuing…'
-    : recognised
-      ? 'Continue'
-      : busy
-        ? 'Scanning…'
-        : 'Start Scan';
 
-  return (
-    <SafeAreaView style={styles.shell}>
-      <StatusBar barStyle="dark-content" backgroundColor="#EFEFF2" />
+    // Navigation
 
-      {/* ─── Camera Permission Modal ─── */}
-      <Modal visible={cam === 'ask'} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.camIconBg}>
-              <View style={styles.camIcon}>
-                <View style={styles.camLens} />
-              </View>
-            </View>
-            <Typography variant="h2" style={styles.modalTitle}>Allow camera access?</Typography>
-            <Typography variant="caption" style={styles.modalBody}>
-              Used only to read the barcode on your new SIM. Nothing is recorded.
-            </Typography>
-            <TouchableOpacity onPress={allowCam} style={styles.modalPrimary} activeOpacity={0.9}>
-              <Typography variant="body" style={styles.modalPrimaryText}>Allow camera</Typography>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={denyCam} style={styles.modalSecondary} activeOpacity={0.7}>
-              <Typography variant="caption" style={styles.modalSecondaryText}>Not now</Typography>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
-      {/* ─── Full-screen Camera ─── */}
-      {cam !== 'off' && cam !== 'ask' && permission?.granted && (
-        <View style={styles.camFull}>
-          <View style={styles.camGradient} />
-          <View style={[styles.camTorchWash, { opacity: torch ? 0.22 : 0 }]} />
+    const proceedToFaceCheck =
+        useCallback(
+            (
+                finalIccid: string,
+                source:
+                IccidSource,
+            ) => {
+                const params = {
+                    idNumber,
+                    phoneNumber,
+                    fullName,
+                    photoUrl,
+                    sessionId,
+                    selfieId,
 
-          <CameraView
-            style={StyleSheet.absoluteFill}
-            facing="back"
-            enableTorch={torch}
-            barcodeScannerSettings={{ barcodeTypes: ['code128', 'code39', 'ean13', 'itf14'] }}
-            onBarcodeScanned={handleBarCode}
-          />
+                    iccid:
+                    finalIccid,
 
-          {/* Floating barcode card */}
-          <View style={styles.floatingCard}>
-            <DecorativeBars />
-            <Typography variant="caption" style={styles.floatingIccid}>{iccid}</Typography>
-          </View>
+                    iccidSource:
+                    source,
+                };
 
-          {/* Frame brackets */}
-          <View style={styles.camFrame}>
-            <CornerBracket color={ACCENT} position="tl" />
-            <CornerBracket color={ACCENT} position="tr" />
-            <CornerBracket color={ACCENT} position="bl" />
-            <CornerBracket color={ACCENT} position="br" />
-            {cam === 'live' && (
-              <Animated.View style={[styles.camSweep, { transform: [{ translateY: sweepAnim }] }]} />
-            )}
-          </View>
+                if (navigate) {
+                    navigate(
+                        'FaceCheckScreen',
+                        params,
+                    );
 
-          {/* Top bar */}
-          <View style={styles.camTopBar}>
-            <TouchableOpacity onPress={denyCam} style={styles.camCancelBtn}>
-              <Typography variant="caption" style={styles.camCancelText}>Cancel</Typography>
-            </TouchableOpacity>
-            <View style={styles.camLiveBadge}>
-              <View style={styles.camLiveDot} />
-              <Typography variant="caption" style={styles.camLiveText}>Camera</Typography>
-            </View>
-            <TouchableOpacity onPress={toggleTorch} style={[styles.camFlashBtn, { backgroundColor: torch ? ACCENT : 'rgba(255,255,255,0.14)' }]}>
-              <Ionicons name={torch ? 'flashlight' : 'flashlight-outline'} size={18} color={torch ? '#111114' : '#fff'} />
-            </TouchableOpacity>
-          </View>
+                    return;
+                }
 
-          {/* Bottom hint */}
-          <View style={styles.camBottom}>
-            <Typography variant="body" style={styles.camHintTitle}>
-              {cam === 'opening' ? 'Starting camera…' : cam === 'locked' ? 'Barcode captured' : 'Looking for a barcode…'}
-            </Typography>
-            <Typography variant="caption" style={styles.camHintSub}>
-              Line the barcode up inside the yellow frame and hold steady.
-            </Typography>
-          </View>
+                dispatch?.({
+                    type: 'NAVIGATE',
 
-          {/* Shutter overlay */}
-          {cam === 'opening' && (
-            <Animated.View style={[styles.shutter, { opacity: shutterOpacity }]} />
-          )}
-        </View>
-      )}
+                    payload: {
+                        screen:
+                            'FaceCheckScreen',
 
-      {/* ─── Main Content ─── */}
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Top Bar */}
-        <View style={styles.topBar}>
-          <View style={styles.topBarLeft}>
-            <TouchableOpacity onPress={handleBack} style={styles.backButton} activeOpacity={0.8}>
-              <Ionicons name="chevron-back" size={22} color="#111114" />
-            </TouchableOpacity>
-            <View style={styles.logoPill}>
-              <View style={styles.logoMtn}>
-                <Typography variant="caption" style={styles.logoMtnText}>MTN</Typography>
-              </View>
-              <Typography variant="body" style={styles.logoTrust}>trust</Typography>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.langButton} activeOpacity={0.7}>
-            <Typography variant="caption" style={styles.langText}>EN</Typography>
-            <Ionicons name="chevron-down" size={12} color="#6E6E78" />
-          </TouchableOpacity>
-        </View>
+                        params,
+                    },
+                });
+            },
+            [
+                idNumber,
+                phoneNumber,
+                fullName,
+                photoUrl,
+                sessionId,
+                selfieId,
+                navigate,
+                dispatch,
+            ],
+        );
 
-        {/* Step Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Typography variant="body" style={styles.cardTitle}>Scan your new SIM</Typography>
-            <Typography variant="caption" style={styles.cardStep}>Step 3 of 6</Typography>
-          </View>
-          <View style={styles.stepBars}>
-            {stepBars.map((s, i) => (
-              <View key={i} style={[styles.stepBar, { backgroundColor: s.bg }]} />
-            ))}
-          </View>
-          <Typography variant="caption" style={styles.cardSub}>
-            Scan the barcode on your new SIM card. We only read the ICCID printed on it.
-          </Typography>
-        </View>
 
-        {/* Scan Stage Card */}
-        <View style={[styles.stageCard, { borderColor: recognised ? '#EFEFF3' : '#EFEFF3' }]}>
-          <Animated.View style={[styles.stageGlow, { opacity: glowPulse }]} />
+    // Automatic barcode scanning
 
-          {/* Frame area */}
-          <View style={styles.frameArea}>
-            <CornerBracket color={frameColor} position="tl" />
-            <CornerBracket color={frameColor} position="tr" />
-            <CornerBracket color={frameColor} position="bl" />
-            <CornerBracket color={frameColor} position="br" />
-            {busy && (
-              <Animated.View style={[styles.sweepLine, { transform: [{ translateY: sweepAnim }] }]} />
-            )}
-          </View>
 
-          {/* Status */}
-          <View style={styles.statusRow}>
-            {busy && <View style={styles.miniSpinner}><View style={styles.miniSpinnerInner} /></View>}
-            {recognised && (
-              <View style={styles.miniCheck}>
-                <Ionicons name="checkmark" size={12} color="#111114" />
-              </View>
-            )}
-            <Typography variant="h2" style={styles.statusTitle}>
-              {busy ? 'Reading barcode…' : recognised ? 'SIM recognised' : 'Ready when you are'}
-            </Typography>
-          </View>
-          <Typography variant="caption" style={styles.statusBody}>
-            {busy
-              ? 'Hold the barcode steady inside the frame.'
-              : recognised
-                ? (manualUsed ? 'Number accepted — ready for activation.' : 'Your new SIM is valid and ready for activation.')
-                : 'Have your new SIM card in hand, then start the scan.'}
-          </Typography>
+    const handleBarcodeScanned =
+        useCallback(
+            async (
+                result: {
+                    data: string;
+                    type?: string;
+                },
+            ) => {
+                if (
+                    stage !== 'camera' ||
+                    isProcessing ||
+                    iccid
+                ) {
+                    return;
+                }
 
-          {/* ICCID chip */}
-          {recognised && (
-            <View style={styles.iccidChip}>
-              <Typography variant="caption" style={styles.iccidLabel}>ICCID</Typography>
-              <Typography variant="body" style={styles.iccidValue}>{iccid}</Typography>
-            </View>
-          )}
+                // CameraView is the live trigger. Ignore unrelated or partial barcodes.
+                const detectedIccid =
+                    extractIccidFromBarcode(result.data);
 
-          {/* Tips */}
-          {idle && (
-            <View style={styles.tipsRow}>
-              {['Good light', 'Hold steady', 'Takes ~10s'].map((t, i) => (
-                <View key={i} style={styles.tipPill}>
-                  <Typography variant="caption" style={styles.tipText}>{t}</Typography>
+                if (!detectedIccid) {
+                    return;
+                }
+
+                setIsProcessing(true);
+                setError(null);
+                setStage('scanning');
+
+                try {
+                    if (!cameraRef.current) {
+                        throw new Error(
+                            'Camera is not available.',
+                        );
+                    }
+
+                    /*
+                     * The live reader detected a likely ICCID.
+                     * Capture the frame automatically and let the backend
+                     * /api/v1/iccid/extract endpoint perform the authoritative
+                     * barcode extraction and validation.
+                     */
+                    const photo =
+                        await cameraRef.current.takePictureAsync({
+                            base64: true,
+                            quality: 0.9,
+                            skipProcessing: false,
+                        });
+
+                    if (!photo) {
+                        throw new Error(
+                            'Unable to capture the replacement SIM barcode.',
+                        );
+                    }
+
+                    const imageBase64 =
+                        await capturedPhotoToDataUrl(photo);
+
+                    setStage('processing');
+
+                    const resolved =
+                        await apiClient.resolveIccid({
+                            imageBase64,
+                        });
+
+                    const finalIccid =
+                        normalizeIccid(resolved.iccid);
+
+                    if (!isValidICCID(finalIccid)) {
+                        throw new Error(
+                            'The backend returned an invalid ICCID.',
+                        );
+                    }
+
+                    await storeIccid(
+                        finalIccid,
+                        'barcode',
+                    );
+
+                    setIccid(finalIccid);
+
+                    audit.log(
+                        'ICCID_CAPTURED',
+                        {
+                            outcome: 'success',
+                            metadata: {
+                                iccidLast4:
+                                    finalIccid.slice(-4),
+                                method: 'barcode',
+                                backendSource:
+                                resolved.source,
+                                barcodeType:
+                                    resolved.barcode_type ||
+                                    result.type ||
+                                    'unknown',
+                                sessionId,
+                            },
+                        },
+                    );
+
+                    setStage('success');
+
+                    const timer =
+                        setTimeout(
+                            () => {
+                                proceedToFaceCheck(
+                                    finalIccid,
+                                    'barcode',
+                                );
+                            },
+                            700,
+                        );
+
+                    timersRef.current.push(timer);
+                } catch (err: any) {
+                    const message =
+                        err?.message ||
+                        'Unable to read the SIM barcode. Hold it steady and try again.';
+
+                    setError(message);
+                    setStage('failed');
+                    setIsProcessing(false);
+                    setIccid(null);
+
+                    audit.log(
+                        'ICCID_CAPTURE_FAILED',
+                        {
+                            outcome: 'failure',
+                            reason: message,
+                            metadata: {
+                                operation:
+                                    'backend_iccid_barcode_resolution',
+                                sessionId,
+                            },
+                        },
+                    );
+                }
+            },
+            [
+                stage,
+                isProcessing,
+                iccid,
+                audit,
+                sessionId,
+                proceedToFaceCheck,
+            ],
+        );
+
+    // Manual ICCID fallback
+
+    const handleManualSubmit =
+        useCallback(
+            async () => {
+                const enteredDigits =
+                    normalizeIccid(manualIccid);
+
+                const candidate =
+                    `89${enteredDigits}`;
+
+                if (!isValidICCID(candidate)) {
+                    setError(
+                        'Please enter a valid 19–20 digit ICCID beginning with 89.',
+                    );
+                    return;
+                }
+
+                setIsProcessing(true);
+                setError(null);
+                setStage('processing');
+
+                try {
+                    /*
+                     * Manual entry uses the same backend resolver.
+                     * The backend response is the authoritative ICCID value.
+                     */
+                    const resolved =
+                        await apiClient.resolveIccid({
+                            iccid: candidate,
+                        });
+
+                    const finalIccid =
+                        normalizeIccid(resolved.iccid);
+
+                    if (!isValidICCID(finalIccid)) {
+                        throw new Error(
+                            'The backend returned an invalid ICCID.',
+                        );
+                    }
+
+                    await storeIccid(
+                        finalIccid,
+                        'manual',
+                    );
+
+                    setIccid(finalIccid);
+
+                    audit.log(
+                        'ICCID_CAPTURED',
+                        {
+                            outcome: 'success',
+                            metadata: {
+                                iccidLast4:
+                                    finalIccid.slice(-4),
+                                method: 'manual',
+                                backendSource:
+                                resolved.source,
+                                sessionId,
+                            },
+                        },
+                    );
+
+                    setStage('success');
+
+                    const timer =
+                        setTimeout(
+                            () => {
+                                proceedToFaceCheck(
+                                    finalIccid,
+                                    'manual',
+                                );
+                            },
+                            700,
+                        );
+
+                    timersRef.current.push(timer);
+                } catch (err: any) {
+                    const message =
+                        err?.message ||
+                        'Failed to validate the replacement SIM ICCID.';
+
+                    setError(message);
+                    setStage('failed');
+                    setIsProcessing(false);
+                    setIccid(null);
+
+                    audit.log(
+                        'ERROR_OCCURRED',
+                        {
+                            outcome: 'failure',
+                            reason: message,
+                            metadata: {
+                                operation:
+                                    'backend_iccid_manual_resolution',
+                                sessionId,
+                            },
+                        },
+                    );
+                }
+            },
+            [
+                manualIccid,
+                audit,
+                sessionId,
+                proceedToFaceCheck,
+            ],
+        );
+
+
+    // Retry
+
+
+    const handleRetry =
+        useCallback(() => {
+            setIccid(null);
+
+            setError(null);
+
+            setManualIccid('');
+
+            setIsProcessing(
+                false,
+            );
+
+            setStage(
+                'camera',
+            );
+        }, []);
+
+    // Permission UI
+
+    if (
+        !permission?.granted
+    ) {
+        return (
+            <SafeAreaView
+                style={styles.center}
+            >
+                <StatusBar style="dark" />
+
+                <View
+                    style={
+                        styles.permissionBrand
+                    }
+                >
+                    <View
+                        style={
+                            styles.headerBrand
+                        }
+                    >
+                        <View
+                            style={
+                                styles.mtnBadge
+                            }
+                        >
+                            <Text
+                                style={
+                                    styles.mtnText
+                                }
+                            >
+                                MTN
+                            </Text>
+                        </View>
+
+                        <Text
+                            style={
+                                styles.trustText
+                            }
+                        >
+                            trust
+                        </Text>
+                    </View>
                 </View>
-              ))}
-            </View>
-          )}
 
-          {/* Rescan */}
-          {recognised && (
-            <TouchableOpacity onPress={rescan} style={styles.rescanBtn} activeOpacity={0.8}>
-              <Typography variant="caption" style={styles.rescanText}>Scan a different SIM</Typography>
-            </TouchableOpacity>
-          )}
-        </View>
+                <View
+                    style={
+                        styles.permissionIcon
+                    }
+                >
+                    <Ionicons
+                        name="barcode-outline"
+                        size={44}
+                        color={
+                            Colors.text
+                        }
+                    />
+                </View>
 
-        {/* CTA */}
-        <TouchableOpacity
-          onPress={handlePrimary}
-          activeOpacity={busy || submitPhase !== 'idle' ? 1 : 0.9}
-          style={[styles.ctaButton, { backgroundColor: busy || submitPhase !== 'idle' ? '#EFEFF4' : ACCENT }]}
-          disabled={busy || submitPhase !== 'idle'}
+                <Text
+                    style={
+                        styles.permissionTitle
+                    }
+                >
+                    Camera access required
+                </Text>
+
+                <Text
+                    style={
+                        styles.permissionText
+                    }
+                >
+                    We need camera access to
+                    automatically read the
+                    barcode on your replacement
+                    SIM card.
+                </Text>
+
+                <TouchableOpacity
+                    style={
+                        styles.ctaButton
+                    }
+                    onPress={
+                        requestPermission
+                    }
+                    activeOpacity={0.9}
+                >
+                    <View
+                        style={
+                            styles.ctaTextWrap
+                        }
+                    >
+                        <Text
+                            style={
+                                styles.ctaLabel
+                            }
+                        >
+                            Allow Camera
+                        </Text>
+
+                        <Ionicons
+                            name="arrow-forward"
+                            size={18}
+                            color={
+                                Colors.text
+                            }
+                        />
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={
+                        styles.manualEntryBtn
+                    }
+                    onPress={() => {
+                        setError(null);
+
+                        setStage(
+                            'manual',
+                        );
+                    }}
+                >
+                    <Ionicons
+                        name="keypad-outline"
+                        size={18}
+                        color={
+                            Colors.text
+                        }
+                    />
+
+                    <Text
+                        style={
+                            styles.manualEntryText
+                        }
+                    >
+                        Enter ICCID manually
+                    </Text>
+                </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
+
+
+    // Main UI
+
+
+    return (
+        <SafeAreaView
+            style={
+                styles.safeArea
+            }
         >
-          <View style={styles.ctaInner}>
-            {!recognised && !busy && (
-              <Ionicons name="camera-outline" size={20} color={busy ? '#A2A2AC' : '#111114'} />
-            )}
-            <Typography variant="body" style={[styles.ctaText, { color: busy || submitPhase !== 'idle' ? '#A2A2AC' : '#111114' }]}>
-              {ctaText}
-            </Typography>
-            {submitPhase === 'busy' && (
-              <View style={styles.miniSpinner}><View style={styles.miniSpinnerInner} /></View>
-            )}
-            {recognised && submitPhase === 'idle' && (
-              <Typography variant="body" style={styles.ctaArrow}>→</Typography>
-            )}
-          </View>
-          {submitPhase === 'busy' && <View style={styles.ctaProgress} />}
-        </TouchableOpacity>
-        <Typography variant="caption" style={styles.footHint}>
-          {busy ? 'Reading the ICCID on your new SIM' : recognised ? 'Next: review and confirm' : 'Camera opens on the next tap'}
-        </Typography>
+            <StatusBar style="dark" />
 
-        {/* Manual Entry Accordion */}
-        <View style={[styles.manualCard, { borderColor: '#EFEFF3' }]}>
-          <TouchableOpacity
-            onPress={() => setManualOpen((v) => !v)}
-            style={styles.manualHeader}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconBox, { backgroundColor: manualOpen || manualValid ? '#FFF3C9' : '#F4F4F7' }]}>
-              <Typography variant="body" style={styles.iconGlyph}>⌨</Typography>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Typography variant="body" style={styles.manualTitle}>Enter the number manually</Typography>
-              <Typography variant="caption" style={styles.manualSub}>
-                {manualUsed ? 'Entered manually — tap to edit' : "We couldn't read the barcode — type it instead"}
-              </Typography>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={16}
-              color="#9A9AA4"
-              style={{ transform: [{ rotate: manualOpen ? '90deg' : '0deg' }] }}
-            />
-          </TouchableOpacity>
+            <KeyboardAvoidingView
+                behavior={
+                    Platform.OS ===
+                    'ios'
+                        ? 'padding'
+                        : 'height'
+                }
+                style={
+                    styles.scrollView
+                }
+            >
+                <ScrollView
+                    contentContainerStyle={
+                        styles.scrollContent
+                    }
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={
+                        false
+                    }
+                >
+                    {/* HEADER */}
 
-          {manualOpen && (
-            <View style={styles.manualBody}>
-              <Typography variant="caption" style={styles.inputLabel}>ICCID number</Typography>
-              <View style={[styles.manualInputRow, { backgroundColor: manualValid ? '#FFFBEC' : '#F7F7FA', borderColor: '#EFEFF3' }]}>
-                <View style={[styles.prefixBox, { backgroundColor: manualOpen || manualValid ? '#FFF3C9' : '#F4F4F7' }]}>
-                  <Typography variant="caption" style={styles.prefixText}>89</Typography>
-                </View>
-                <TextInput
-                  value={manual.replace(/(.{4})/g, '$1 ').trim()}
-                  onChangeText={handleManualChange}
-                  placeholder="5700 1234 5678 9012 3"
-                  keyboardType="numeric"
-                  maxLength={21}
-                  style={styles.manualInput}
-                  placeholderTextColor="#B4B4BE"
-                />
-                {manualValid && (
-                  <View style={styles.miniCheck}>
-                    <Ionicons name="checkmark" size={12} color="#111114" />
-                  </View>
-                )}
-              </View>
-              <Typography variant="caption" style={[styles.manualHint, { color: manualValid ? '#8A6A00' : '#8A8A94' }]}>
-                {manualValid ? 'Looks good' : '17 digits after the 89 prefix'}
-              </Typography>
-              <TouchableOpacity
-                onPress={submitManual}
-                activeOpacity={manualValid ? 0.9 : 1}
-                style={[styles.manualCta, { backgroundColor: manualValid ? ACCENT : '#E8E8ED' }]}
-                disabled={!manualValid}
-              >
-                <Typography variant="body" style={[styles.manualCtaText, { color: manualValid ? '#111114' : '#A2A2AC' }]}>
-                  Use this number
-                </Typography>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+                    <View
+                        style={
+                            styles.header
+                        }
+                    >
+                        <View
+                            style={
+                                styles.headerLeft
+                            }
+                        >
+                            <TouchableOpacity
+                                onPress={
+                                    goBack
+                                }
+                                style={
+                                    styles.backBtn
+                                }
+                                hitSlop={8}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons
+                                    name="chevron-back"
+                                    size={22}
+                                    color={
+                                        Colors.text
+                                    }
+                                />
+                            </TouchableOpacity>
 
-        <Typography variant="caption" style={styles.footer}>
-          Encrypted · POPIA compliant · ICCID only
-        </Typography>
-      </ScrollView>
-    </SafeAreaView>
-  );
+                            <View
+                                style={
+                                    styles.headerBrand
+                                }
+                            >
+                                <View
+                                    style={
+                                        styles.mtnBadge
+                                    }
+                                >
+                                    <Text
+                                        style={
+                                            styles.mtnText
+                                        }
+                                    >
+                                        MTN
+                                    </Text>
+                                </View>
+
+                                <Text
+                                    style={
+                                        styles.trustText
+                                    }
+                                >
+                                    trust
+                                </Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={
+                                styles.langBtn
+                            }
+                        >
+                            <Text
+                                style={
+                                    styles.langText
+                                }
+                            >
+                                EN
+                            </Text>
+
+                            <Ionicons
+                                name="chevron-down"
+                                size={14}
+                                color={
+                                    Colors.text
+                                }
+                            />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* PROGRESS */}
+
+                    <View
+                        style={
+                            styles.progressContainer
+                        }
+                    >
+                        <View
+                            style={
+                                styles.progressBarBg
+                            }
+                        >
+                            <View
+                                style={[
+                                    styles.progressBarFill,
+                                    {
+                                        width:
+                                            '60%',
+                                    },
+                                ]}
+                            />
+                        </View>
+
+                        <Text
+                            style={
+                                styles.stepText
+                            }
+                        >
+                            STEP 3 OF 5
+                        </Text>
+                    </View>
+
+                    {/* TITLE  */}
+
+                    <Text
+                        style={
+                            styles.title
+                        }
+                    >
+                        Scan your new SIM
+                    </Text>
+
+                    <Text
+                        style={
+                            styles.lead
+                        }
+                    >
+                        Hold the replacement SIM
+                        barcode inside the yellow
+                        frame. We will capture it
+                        automatically.
+                    </Text>
+
+                    {/*  CAMERA */}
+
+                    {stage !==
+                        'manual' && (
+                            <View
+                                style={
+                                    styles.cameraContainer
+                                }
+                            >
+                                {(
+                                    stage ===
+                                    'camera' ||
+                                    stage ===
+                                    'scanning'
+                                ) && (
+                                    <CameraView
+                                        ref={
+                                            cameraRef
+                                        }
+                                        style={
+                                            styles.camera
+                                        }
+                                        facing="back"
+                                        barcodeScannerSettings={{
+                                            barcodeTypes: [
+                                                'code128',
+                                                'code39',
+                                                'code93',
+                                                'codabar',
+                                                'itf14',
+                                                'ean13',
+                                                'upc_a',
+                                                'qr',
+                                            ],
+                                        }}
+                                        onBarcodeScanned={
+                                            stage ===
+                                            'camera' &&
+                                            !isProcessing &&
+                                            !iccid
+                                                ? handleBarcodeScanned
+                                                : undefined
+                                        }
+                                    />
+                                )}
+
+                                {/* scanner overlay */}
+
+                                <View
+                                    pointerEvents="none"
+                                    style={
+                                        styles.cameraOverlay
+                                    }
+                                >
+                                    <View
+                                        style={
+                                            styles.frame
+                                        }
+                                    >
+                                        <View
+                                            style={[
+                                                styles.corner,
+                                                styles.cornerTL,
+                                            ]}
+                                        />
+
+                                        <View
+                                            style={[
+                                                styles.corner,
+                                                styles.cornerTR,
+                                            ]}
+                                        />
+
+                                        <View
+                                            style={[
+                                                styles.corner,
+                                                styles.cornerBL,
+                                            ]}
+                                        />
+
+                                        <View
+                                            style={[
+                                                styles.corner,
+                                                styles.cornerBR,
+                                            ]}
+                                        />
+
+                                        <View
+                                            style={
+                                                styles.scanLine
+                                            }
+                                        />
+                                    </View>
+
+                                    {stage ===
+                                        'camera' && (
+                                            <View
+                                                style={
+                                                    styles.autoScanHint
+                                                }
+                                            >
+                                                <View
+                                                    style={
+                                                        styles.scanPulseDot
+                                                    }
+                                                />
+
+                                                <Text
+                                                    style={
+                                                        styles.camHint
+                                                    }
+                                                >
+                                                    Scanning automatically ·
+                                                    Hold the barcode steady
+                                                </Text>
+                                            </View>
+                                        )}
+                                </View>
+
+                                {/* processing */}
+
+                                {(
+                                    stage ===
+                                    'scanning' ||
+                                    stage ===
+                                    'processing'
+                                ) && (
+                                    <View
+                                        style={
+                                            styles.processingWrap
+                                        }
+                                    >
+                                        <ActivityIndicator
+                                            size="large"
+                                            color={
+                                                ACCENT
+                                            }
+                                        />
+
+                                        <Text
+                                            style={
+                                                styles.processingTitle
+                                            }
+                                        >
+                                            {stage ===
+                                            'scanning'
+                                                ? 'SIM barcode detected'
+                                                : 'Saving ICCID'}
+                                        </Text>
+
+                                        <Text
+                                            style={
+                                                styles.processingText
+                                            }
+                                        >
+                                            {stage ===
+                                            'scanning'
+                                                ? 'Validating the replacement SIM…'
+                                                : 'Securing the replacement SIM details…'}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* failed */}
+
+                                {stage ===
+                                    'failed' && (
+                                        <View
+                                            style={
+                                                styles.resultWrap
+                                            }
+                                        >
+                                            <View
+                                                style={
+                                                    styles.failureIcon
+                                                }
+                                            >
+                                                <Ionicons
+                                                    name="close"
+                                                    size={28}
+                                                    color="#FFFFFF"
+                                                />
+                                            </View>
+
+                                            <Text
+                                                style={
+                                                    styles.resultTitle
+                                                }
+                                            >
+                                                Unable to save SIM
+                                            </Text>
+
+                                            <Text
+                                                style={
+                                                    styles.resultText
+                                                }
+                                            >
+                                                {error}
+                                            </Text>
+
+                                            <TouchableOpacity
+                                                style={
+                                                    styles.ctaButton
+                                                }
+                                                onPress={
+                                                    handleRetry
+                                                }
+                                                activeOpacity={0.9}
+                                            >
+                                                <View
+                                                    style={
+                                                        styles.ctaTextWrap
+                                                    }
+                                                >
+                                                    <Text
+                                                        style={
+                                                            styles.ctaLabel
+                                                        }
+                                                    >
+                                                        Try Again
+                                                    </Text>
+
+                                                    <Ionicons
+                                                        name="refresh"
+                                                        size={18}
+                                                        color={
+                                                            Colors.text
+                                                        }
+                                                    />
+                                                </View>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+
+                                {/* success */}
+
+                                {stage ===
+                                    'success' && (
+                                        <View
+                                            style={
+                                                styles.resultWrap
+                                            }
+                                        >
+                                            <View
+                                                style={
+                                                    styles.successIcon
+                                                }
+                                            >
+                                                <Ionicons
+                                                    name="checkmark"
+                                                    size={30}
+                                                    color={
+                                                        Colors.text
+                                                    }
+                                                />
+                                            </View>
+
+                                            <Text
+                                                style={
+                                                    styles.resultTitle
+                                                }
+                                            >
+                                                SIM captured
+                                            </Text>
+
+                                            <Text
+                                                style={
+                                                    styles.resultText
+                                                }
+                                            >
+                                                Replacement SIM ICCID
+                                                captured successfully.
+                                            </Text>
+
+                                            {iccid ? (
+                                                <View
+                                                    style={
+                                                        styles.iccidConfirmation
+                                                    }
+                                                >
+                                                    <Text
+                                                        style={
+                                                            styles.iccidConfirmationLabel
+                                                        }
+                                                    >
+                                                        ICCID
+                                                    </Text>
+
+                                                    <Text
+                                                        style={
+                                                            styles.iccidConfirmationValue
+                                                        }
+                                                    >
+                                                        •••• •••• ••••{' '}
+                                                        {iccid.slice(
+                                                            -4,
+                                                        )}
+                                                    </Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
+                                    )}
+                            </View>
+                        )}
+
+                    {/* ---------------------------------------------------------------
+              MANUAL FALLBACK LINK
+          --------------------------------------------------------------- */}
+
+                    {stage !==
+                        'manual' &&
+                        !iccid && (
+                            <TouchableOpacity
+                                style={
+                                    styles.manualEntryBtn
+                                }
+                                onPress={() => {
+                                    setError(null);
+
+                                    setStage(
+                                        'manual',
+                                    );
+                                }}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons
+                                    name="keypad-outline"
+                                    size={19}
+                                    color={
+                                        Colors.text
+                                    }
+                                />
+
+                                <Text
+                                    style={
+                                        styles.manualEntryText
+                                    }
+                                >
+                                    Enter ICCID manually
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                    {/* ---------------------------------------------------------------
+              MANUAL FORM
+          --------------------------------------------------------------- */}
+
+                    {stage ===
+                        'manual' && (
+                            <View
+                                style={
+                                    styles.manualInputContainer
+                                }
+                            >
+                                <View
+                                    style={
+                                        styles.manualHeader
+                                    }
+                                >
+                                    <View
+                                        style={
+                                            styles.manualIcon
+                                        }
+                                    >
+                                        <Ionicons
+                                            name="keypad-outline"
+                                            size={20}
+                                            color={
+                                                Colors.text
+                                            }
+                                        />
+                                    </View>
+
+                                    <View
+                                        style={
+                                            styles.manualHeaderText
+                                        }
+                                    >
+                                        <Text
+                                            style={
+                                                styles.manualTitle
+                                            }
+                                        >
+                                            Enter ICCID manually
+                                        </Text>
+
+                                        <Text
+                                            style={
+                                                styles.manualSubtitle
+                                            }
+                                        >
+                                            Use the number printed on
+                                            the replacement SIM.
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <Text
+                                    style={
+                                        styles.label
+                                    }
+                                >
+                                    ICCID number
+                                </Text>
+
+                                <View
+                                    style={
+                                        styles.inputWrapper
+                                    }
+                                >
+                                    <Text
+                                        style={
+                                            styles.prefixText
+                                        }
+                                    >
+                                        89
+                                    </Text>
+
+                                    <TextInput
+                                        style={
+                                            styles.input
+                                        }
+                                        value={
+                                            manualIccid
+                                        }
+                                        onChangeText={(
+                                            value,
+                                        ) => {
+                                            setManualIccid(
+                                                value.replace(
+                                                    /\D/g,
+                                                    '',
+                                                ),
+                                            );
+
+                                            setError(null);
+                                        }}
+                                        placeholder="0000 0000 0000 0000 00"
+                                        placeholderTextColor="#A1A1AA"
+                                        keyboardType="number-pad"
+                                        maxLength={18}
+                                        editable={
+                                            !isProcessing
+                                        }
+                                    />
+                                </View>
+
+                                {error ? (
+                                    <View
+                                        style={
+                                            styles.inlineError
+                                        }
+                                    >
+                                        <Ionicons
+                                            name="alert-circle"
+                                            size={15}
+                                            color={
+                                                Colors.error
+                                            }
+                                        />
+
+                                        <Text
+                                            style={
+                                                styles.hintError
+                                            }
+                                        >
+                                            {error}
+                                        </Text>
+                                    </View>
+                                ) : null}
+
+                                <Text
+                                    style={
+                                        styles.manualHint
+                                    }
+                                >
+                                    The ICCID usually contains
+                                    19–20 digits and starts with
+                                    89.
+                                </Text>
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.ctaButton,
+                                        styles.manualContinueButton,
+
+                                        isProcessing &&
+                                        styles.ctaBusy,
+                                    ]}
+                                    onPress={
+                                        handleManualSubmit
+                                    }
+                                    disabled={
+                                        isProcessing
+                                    }
+                                    activeOpacity={0.9}
+                                >
+                                    {isProcessing ? (
+                                        <ActivityIndicator
+                                            color={
+                                                Colors.text
+                                            }
+                                        />
+                                    ) : (
+                                        <View
+                                            style={
+                                                styles.ctaTextWrap
+                                            }
+                                        >
+                                            <Text
+                                                style={
+                                                    styles.ctaLabel
+                                                }
+                                            >
+                                                Continue
+                                            </Text>
+
+                                            <Ionicons
+                                                name="arrow-forward"
+                                                size={18}
+                                                color={
+                                                    Colors.text
+                                                }
+                                            />
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={
+                                        styles.backToCameraBtn
+                                    }
+                                    onPress={() => {
+                                        setStage(
+                                            'camera',
+                                        );
+
+                                        setManualIccid(
+                                            '',
+                                        );
+
+                                        setError(null);
+
+                                        setIccid(null);
+
+                                        setIsProcessing(
+                                            false,
+                                        );
+                                    }}
+                                >
+                                    <Ionicons
+                                        name="barcode-outline"
+                                        size={17}
+                                        color={
+                                            Colors.text
+                                        }
+                                    />
+
+                                    <Text
+                                        style={
+                                            styles.backToCameraText
+                                        }
+                                    >
+                                        Back to automatic scan
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                    {/* ---------------------------------------------------------------
+              TRUST FOOTER
+          --------------------------------------------------------------- */}
+
+                    <View
+                        style={
+                            styles.trustRow
+                        }
+                    >
+                        <Ionicons
+                            name="lock-closed-outline"
+                            size={13}
+                            color={
+                                Colors.muted
+                            }
+                        />
+
+                        <Text
+                            style={
+                                styles.trustRowText
+                            }
+                        >
+                            Encrypted · POPIA compliant ·
+                            ICCID only
+                        </Text>
+                    </View>
+
+                    <View
+                        style={
+                            styles.footerHint
+                        }
+                    >
+                        <Text
+                            style={
+                                styles.footerText
+                            }
+                        >
+                            Having trouble scanning?
+                            Enter the ICCID manually.
+                        </Text>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
+    );
 }
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: '#EFEFF2' },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingTop: 10, paddingBottom: 24 },
+const styles =
+    StyleSheet.create({
+        safeArea: {
+            flex: 1,
 
-  /* top bar */
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingTop: 4 },
-  topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  backButton: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: '#EFEFF3', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#111114', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 14, elevation: 2 },
-  logoPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#000', borderRadius: 999, paddingVertical: 5, paddingHorizontal: 12, paddingLeft: 6 },
-  logoMtn: { width: 52, height: 27, borderRadius: 13, borderWidth: 2.5, borderColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
-  logoMtnText: { fontSize: 12.5, fontWeight: '800', color: ACCENT },
-  logoTrust: { fontSize: 16, fontWeight: '800', letterSpacing: -0.32, color: '#fff', marginLeft: 9 },
-  langButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 6 },
-  langText: { fontSize: 12.5, fontWeight: '700', color: '#6E6E78' },
+            backgroundColor:
+            Colors.background,
 
-  /* cards */
-  card: { borderRadius: 20, padding: 16, paddingHorizontal: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EFEFF3', shadowColor: '#111114', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 22, elevation: 2, marginBottom: 12 },
-  cardHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
-  cardTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.32, color: '#111114' },
-  cardStep: { fontSize: 12, fontWeight: '700', color: '#6E6E78' },
-  stepBars: { flexDirection: 'row', gap: 6, marginTop: 12 },
-  stepBar: { flex: 1, height: 4, borderRadius: 2 },
-  cardSub: { marginTop: 12, fontSize: 13, lineHeight: 19.5, color: '#5A5A64' },
+            width:
+                Platform.OS ===
+                'web'
+                    ? '100%'
+                    : DESIGN_WIDTH,
 
-  /* stage card */
-  stageCard: { borderRadius: 20, padding: 26, paddingHorizontal: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EFEFF3', shadowColor: '#111114', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 22, elevation: 2, marginBottom: 12, alignItems: 'center', overflow: 'hidden' },
-  stageGlow: { position: 'absolute', left: '50%', top: '26%', width: 210, height: 150, marginLeft: -105, backgroundColor: 'rgba(255,203,5,0.28)', borderRadius: 105, transform: [{ scale: 1.2 }], zIndex: 0 },
-  frameArea: { position: 'relative', width: 215, height: 143, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  cornerBracket: { position: 'absolute', width: 34, height: 34, backgroundColor: 'transparent' },
-  sweepLine: { position: 'absolute', left: 8, right: 8, height: 2.5, backgroundColor: '#F5C000', shadowColor: '#FFCB05', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 18, elevation: 8, zIndex: 2 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 20, zIndex: 1 },
-  statusTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.6, color: '#111114' },
-  statusBody: { marginTop: 8, fontSize: 13, lineHeight: 19.5, color: '#5A5A64', textAlign: 'center', maxWidth: 280, zIndex: 1 },
-  iccidChip: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 16, paddingVertical: 9, paddingHorizontal: 14, borderRadius: 14, backgroundColor: '#FFFBEC', borderWidth: 1, borderColor: '#EFEFF3', zIndex: 1 },
-  iccidLabel: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.84, textTransform: 'uppercase', color: '#8A6A00' },
-  iccidValue: { fontSize: 12.5, fontWeight: '800', letterSpacing: 0.625, color: '#111114' },
-  tipsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 16, zIndex: 1 },
-  tipPill: { paddingVertical: 5, paddingHorizontal: 9, borderRadius: 7, backgroundColor: '#F4F4F7', borderWidth: 1, borderColor: '#E6E6EC' },
-  tipText: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.42, textTransform: 'uppercase', color: '#4A4A55' },
-  rescanBtn: { marginTop: 14, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 14, borderWidth: 1, borderColor: '#EFEFF3', backgroundColor: '#FFFFFF', shadowColor: '#111114', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 1 },
-  rescanText: { fontSize: 13, fontWeight: '700', color: '#4A4A55' },
+            maxWidth:
+                Platform.OS ===
+                'web'
+                    ? 520
+                    : DESIGN_WIDTH,
 
-  /* cta */
-  ctaButton: { width: '100%', height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 12, shadowColor: 'rgba(255,203,5,0.9)', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 24, elevation: 6 },
-  ctaInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  ctaText: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.155 },
-  ctaArrow: { fontSize: 16, color: '#111114' },
-  ctaProgress: { position: 'absolute', left: 0, bottom: 0, height: 3, backgroundColor: 'rgba(17,17,20,0.35)' },
-  footHint: { textAlign: 'center', fontSize: 11.5, fontWeight: '600', color: '#8A8A94', marginTop: 6 },
+            alignSelf:
+                'center',
+        },
 
-  /* manual */
-  manualCard: { borderRadius: 20, padding: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EFEFF3', shadowColor: '#111114', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 22, elevation: 2, marginTop: 12 },
-  manualHeader: { flexDirection: 'row', alignItems: 'center', gap: 13 },
-  manualTitle: { fontSize: 14, fontWeight: '700', letterSpacing: -0.14, color: '#111114' },
-  manualSub: { fontSize: 12.5, color: '#6E6E78', marginTop: 2 },
-  manualBody: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#EDEDF1' },
-  manualInputRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1 },
-  manualInput: { flex: 1, fontSize: 15, fontWeight: '700', letterSpacing: 0.6, color: '#111114', padding: 0 },
-  manualHint: { marginTop: 7, paddingLeft: 2, fontSize: 11.5, fontWeight: '600', lineHeight: 16 },
-  manualCta: { width: '100%', height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  manualCtaText: { fontSize: 14, fontWeight: '800', letterSpacing: -0.14 },
+        scrollView: {
+            flex: 1,
+        },
 
-  /* shared */
-  iconBox: { width: 38, height: 38, borderRadius: 11, borderWidth: 1, borderColor: '#EFEFF3', alignItems: 'center', justifyContent: 'center' },
-  iconGlyph: { fontSize: 16, color: '#8A6A00' },
-  prefixBox: { height: 38, paddingHorizontal: 11, borderRadius: 11, borderWidth: 1, borderColor: '#EFEFF3', alignItems: 'center', justifyContent: 'center' },
-  prefixText: { fontSize: 12, fontWeight: '800', color: '#111114' },
-  inputLabel: { fontSize: 13, fontWeight: '700', color: '#111114' },
-  miniSpinner: { width: 17, height: 17, borderRadius: 8.5, borderWidth: 2.5, borderColor: 'rgba(17,17,20,0.14)', borderTopColor: '#F5C000' },
-  miniSpinnerInner: { width: '100%', height: '100%' },
-  miniCheck: { width: 22, height: 22, borderRadius: 11, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center' },
-  footer: { textAlign: 'center', fontSize: 11.5, fontWeight: '600', color: '#8A8A94', lineHeight: 17, marginTop: 14 },
+        scrollContent: {
+            paddingTop: 12,
+            paddingHorizontal: 20,
+            paddingBottom: 40,
+        },
 
-  /* modal */
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(12,12,16,0.5)', justifyContent: 'flex-end', padding: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 14 },
-  modalSheet: { borderRadius: 22, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EFEFF3', padding: 24, paddingHorizontal: 20, paddingBottom: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 30 }, shadowOpacity: 0.5, shadowRadius: 60, elevation: 10 },
-  camIconBg: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#111114', alignItems: 'center', justifyContent: 'center' },
-  camIcon: { width: 22, height: 16, borderWidth: 2.5, borderColor: ACCENT, borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
-  camLens: { width: 8, height: 8, borderRadius: 4, borderWidth: 2.5, borderColor: ACCENT },
-  modalTitle: { marginTop: 14, fontSize: 17, fontWeight: '800', letterSpacing: -0.34, color: '#111114' },
-  modalBody: { marginTop: 6, fontSize: 13, lineHeight: 19.5, color: '#5A5A64', textAlign: 'center', maxWidth: 260 },
-  modalPrimary: { width: '100%', height: 52, borderRadius: 16, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center', marginTop: 20, shadowColor: 'rgba(255,203,5,0.9)', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 24, elevation: 6 },
-  modalPrimaryText: { fontSize: 15, fontWeight: '800', letterSpacing: -0.15, color: '#111114' },
-  modalSecondary: { width: '100%', height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  modalSecondaryText: { fontSize: 14, fontWeight: '700', color: '#6E6E78' },
+        center: {
+            flex: 1,
 
-  /* full-screen camera */
-  camFull: { ...StyleSheet.absoluteFillObject, zIndex: 70, backgroundColor: '#0A0A0C', overflow: 'hidden' },
-  camGradient: { ...StyleSheet.absoluteFillObject, backgroundColor: '#0A0A0C' },
-  camTorchWash: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,240,190,0.22)' },
-  floatingCard: { position: 'absolute', left: '50%', top: '48%', width: 300, marginLeft: -150, marginTop: -50, borderRadius: 10, backgroundColor: '#F7F7F5', padding: 16, paddingBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 30 }, shadowOpacity: 0.9, shadowRadius: 50, elevation: 10, alignItems: 'center' },
-  barsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 66, width: '100%' },
-  floatingIccid: { marginTop: 8, fontSize: 11.5, fontWeight: '700', letterSpacing: 0.92, color: '#111114', textAlign: 'center' },
-  camFrame: { position: 'absolute', left: '50%', top: '48%', width: 330, height: 190, marginLeft: -165, marginTop: -95, borderRadius: 18 },
-  camSweep: { position: 'absolute', left: 6, right: 6, height: 2.5, backgroundColor: ACCENT, shadowColor: ACCENT, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 18, elevation: 8 },
-  camTopBar: { position: 'absolute', left: 0, right: 0, top: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 14, paddingTop: Platform.OS === 'ios' ? 50 : 14 },
-  camCancelBtn: { minHeight: 44, paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.14)' },
-  camCancelText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  camLiveBadge: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  camLiveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF4D4D' },
-  camLiveText: { fontSize: 12.5, fontWeight: '700', color: '#fff' },
-  camFlashBtn: { minHeight: 44, minWidth: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  camBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 22, paddingBottom: Platform.OS === 'ios' ? 40 : 24, alignItems: 'center' },
-  camHintTitle: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.31, color: '#fff' },
-  camHintSub: { marginTop: 5, fontSize: 12.5, lineHeight: 18, color: '#B7B7C2', textAlign: 'center', maxWidth: 280 },
-  shutter: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', zIndex: 10 },
-});
+            justifyContent:
+                'center',
+
+            alignItems:
+                'center',
+
+            paddingHorizontal: 30,
+
+            backgroundColor:
+            Colors.background,
+        },
+
+        permissionBrand: {
+            marginBottom: 28,
+        },
+
+        permissionIcon: {
+            width: 82,
+            height: 82,
+
+            borderRadius: 24,
+
+            backgroundColor:
+                '#FFF6C7',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+        },
+
+        permissionTitle: {
+            fontSize: 24,
+
+            fontWeight: '800',
+
+            color:
+            Colors.text,
+
+            textAlign:
+                'center',
+
+            marginTop: 20,
+        },
+
+        permissionText: {
+            color:
+            Colors.muted,
+
+            textAlign:
+                'center',
+
+            fontSize: 15,
+
+            lineHeight: 22,
+
+            marginTop: 9,
+
+            marginBottom: 24,
+
+            maxWidth: 360,
+        },
+
+        header: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'space-between',
+
+            paddingBottom: 14,
+
+            paddingTop: 4,
+        },
+
+        headerLeft: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            gap: 8,
+        },
+
+        backBtn: {
+            width: 40,
+            height: 40,
+
+            borderRadius: 20,
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+        },
+
+        headerBrand: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            backgroundColor:
+                '#000000',
+
+            borderRadius: 999,
+
+            paddingVertical: 5,
+
+            paddingRight: 12,
+
+            paddingLeft: 6,
+        },
+
+        mtnBadge: {
+            width: 46,
+            height: 26,
+
+            borderRadius: 999,
+
+            borderWidth: 2.5,
+
+            borderColor:
+            ACCENT,
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+
+            backgroundColor:
+                '#000000',
+        },
+
+        mtnText: {
+            fontSize: 12.5,
+
+            fontWeight: '800',
+
+            letterSpacing: 0.1,
+
+            color:
+            ACCENT,
+        },
+
+        trustText: {
+            marginLeft: 9,
+
+            color:
+                '#FFFFFF',
+
+            fontSize: 16,
+
+            fontWeight: '800',
+
+            letterSpacing:
+                -0.32,
+        },
+
+        langBtn: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            gap: 4,
+
+            paddingHorizontal: 12,
+
+            paddingVertical: 7,
+
+            backgroundColor:
+                '#F3F4F6',
+
+            borderRadius: 20,
+        },
+
+        langText: {
+            color:
+            Colors.text,
+
+            fontWeight: '700',
+
+            fontSize: 13,
+        },
+
+        progressContainer: {
+            marginBottom: 24,
+
+            marginTop: 4,
+        },
+
+        progressBarBg: {
+            height: 4,
+
+            backgroundColor:
+                '#E5E7EB',
+
+            borderRadius: 999,
+
+            marginBottom: 8,
+
+            overflow: 'hidden',
+        },
+
+        progressBarFill: {
+            height:
+                '100%',
+
+            backgroundColor:
+            ACCENT,
+        },
+
+        stepText: {
+            color:
+            Colors.muted,
+
+            fontWeight:
+                '800',
+
+            fontSize: 10.5,
+
+            letterSpacing: 0.8,
+        },
+
+        title: {
+            color:
+            Colors.text,
+
+            fontSize: 28,
+
+            lineHeight: 34,
+
+            fontWeight:
+                '800',
+
+            letterSpacing:
+                -0.78,
+
+            marginBottom: 10,
+        },
+
+        lead: {
+            color:
+            Colors.muted,
+
+            marginBottom: 22,
+
+            lineHeight: 22,
+
+            fontSize: 15,
+        },
+
+        cameraContainer: {
+            width: '100%',
+
+            height: 300,
+
+            borderRadius: 22,
+
+            overflow: 'hidden',
+
+            backgroundColor:
+                '#000000',
+
+            marginBottom: 12,
+
+            position:
+                'relative',
+        },
+
+        camera: {
+            width: '100%',
+
+            height:
+                '100%',
+        },
+
+        cameraOverlay: {
+            ...StyleSheet.absoluteFillObject,
+
+            justifyContent:
+                'center',
+
+            alignItems:
+                'center',
+
+            paddingHorizontal: 18,
+        },
+
+        frame: {
+            width: '88%',
+
+            maxWidth: 330,
+
+            height: 150,
+
+            position:
+                'relative',
+
+            justifyContent:
+                'center',
+
+            alignItems:
+                'center',
+        },
+
+        corner: {
+            position:
+                'absolute',
+
+            width: 34,
+
+            height: 34,
+
+            borderColor:
+            ACCENT,
+
+            borderWidth: 4,
+        },
+
+        cornerTL: {
+            top: 0,
+            left: 0,
+
+            borderBottomWidth: 0,
+
+            borderRightWidth: 0,
+
+            borderTopLeftRadius: 14,
+        },
+
+        cornerTR: {
+            top: 0,
+            right: 0,
+
+            borderBottomWidth: 0,
+
+            borderLeftWidth: 0,
+
+            borderTopRightRadius: 14,
+        },
+
+        cornerBL: {
+            bottom: 0,
+            left: 0,
+
+            borderTopWidth: 0,
+
+            borderRightWidth: 0,
+
+            borderBottomLeftRadius: 14,
+        },
+
+        cornerBR: {
+            bottom: 0,
+            right: 0,
+
+            borderTopWidth: 0,
+
+            borderLeftWidth: 0,
+
+            borderBottomRightRadius: 14,
+        },
+
+        scanLine: {
+            position:
+                'absolute',
+
+            left: 20,
+
+            right: 20,
+
+            height: 2,
+
+            backgroundColor:
+            ACCENT,
+
+            opacity: 0.9,
+        },
+
+        autoScanHint: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+
+            gap: 8,
+
+            backgroundColor:
+                'rgba(0,0,0,0.62)',
+
+            borderRadius: 999,
+
+            paddingHorizontal: 14,
+
+            paddingVertical: 9,
+
+            marginTop: 22,
+        },
+
+        scanPulseDot: {
+            width: 8,
+            height: 8,
+
+            borderRadius: 4,
+
+            backgroundColor:
+            ACCENT,
+        },
+
+        camHint: {
+            flexShrink: 1,
+
+            color:
+                '#FFFFFF',
+
+            fontSize: 12.5,
+
+            lineHeight: 17,
+
+            fontWeight:
+                '700',
+
+            textAlign:
+                'center',
+        },
+
+        processingWrap: {
+            ...StyleSheet.absoluteFillObject,
+
+            justifyContent:
+                'center',
+
+            alignItems:
+                'center',
+
+            backgroundColor:
+                'rgba(0,0,0,0.82)',
+
+            paddingHorizontal: 28,
+        },
+
+        processingTitle: {
+            color:
+                '#FFFFFF',
+
+            fontSize: 18,
+
+            fontWeight:
+                '800',
+
+            marginTop: 16,
+        },
+
+        processingText: {
+            color:
+                '#D1D5DB',
+
+            fontSize: 14,
+
+            textAlign:
+                'center',
+
+            lineHeight: 20,
+
+            marginTop: 7,
+        },
+
+        resultWrap: {
+            ...StyleSheet.absoluteFillObject,
+
+            justifyContent:
+                'center',
+
+            alignItems:
+                'center',
+
+            backgroundColor:
+                'rgba(0,0,0,0.88)',
+
+            paddingHorizontal: 28,
+        },
+
+        successIcon: {
+            width: 60,
+            height: 60,
+
+            borderRadius: 20,
+
+            backgroundColor:
+            ACCENT,
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+        },
+
+        failureIcon: {
+            width: 60,
+            height: 60,
+
+            borderRadius: 20,
+
+            backgroundColor:
+            Colors.error,
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+        },
+
+        resultTitle: {
+            color:
+                '#FFFFFF',
+
+            fontSize: 22,
+
+            fontWeight:
+                '800',
+
+            marginTop: 16,
+
+            textAlign:
+                'center',
+        },
+
+        resultText: {
+            color:
+                '#D1D5DB',
+
+            fontSize: 14,
+
+            lineHeight: 20,
+
+            textAlign:
+                'center',
+
+            marginTop: 7,
+
+            marginBottom: 16,
+        },
+
+        iccidConfirmation: {
+            backgroundColor:
+                'rgba(255,255,255,0.10)',
+
+            borderRadius: 12,
+
+            paddingVertical: 10,
+
+            paddingHorizontal: 18,
+
+            alignItems:
+                'center',
+
+            marginTop: 2,
+        },
+
+        iccidConfirmationLabel: {
+            color:
+                '#AFAFB8',
+
+            fontSize: 10,
+
+            fontWeight:
+                '700',
+
+            letterSpacing: 1,
+        },
+
+        iccidConfirmationValue: {
+            color:
+                '#FFFFFF',
+
+            fontSize: 14,
+
+            fontWeight:
+                '800',
+
+            marginTop: 3,
+        },
+
+        manualEntryBtn: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+
+            gap: 7,
+
+            paddingVertical: 13,
+
+            marginBottom: 8,
+        },
+
+        manualEntryText: {
+            color:
+            Colors.text,
+
+            fontWeight:
+                '700',
+
+            fontSize: 14,
+
+            textDecorationLine:
+                'underline',
+        },
+
+        manualInputContainer: {
+            backgroundColor:
+                '#F9FAFB',
+
+            borderRadius: 20,
+
+            padding: 20,
+
+            marginBottom: 18,
+
+            borderWidth: 1,
+
+            borderColor:
+                '#EFEFF3',
+        },
+
+        manualHeader: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            gap: 12,
+
+            marginBottom: 20,
+        },
+
+        manualIcon: {
+            width: 42,
+            height: 42,
+
+            borderRadius: 12,
+
+            backgroundColor:
+                '#FFF5C2',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+        },
+
+        manualHeaderText: {
+            flex: 1,
+        },
+
+        manualTitle: {
+            color:
+            Colors.text,
+
+            fontSize: 17,
+
+            fontWeight:
+                '800',
+        },
+
+        manualSubtitle: {
+            color:
+            Colors.muted,
+
+            fontSize: 12.5,
+
+            lineHeight: 18,
+
+            marginTop: 2,
+        },
+
+        label: {
+            color:
+            Colors.text,
+
+            marginBottom: 8,
+
+            fontWeight:
+                '700',
+
+            fontSize: 13.5,
+        },
+
+        inputWrapper: {
+            flexDirection:
+                'row',
+
+            alignItems:
+                'center',
+
+            backgroundColor:
+                '#FFFFFF',
+
+            borderWidth: 1,
+
+            borderColor:
+                '#DADAE1',
+
+            borderRadius: 13,
+
+            marginBottom: 8,
+        },
+
+        prefixText: {
+            paddingHorizontal: 15,
+
+            paddingVertical: 15,
+
+            color:
+            Colors.text,
+
+            fontWeight:
+                '800',
+
+            fontSize: 16,
+
+            borderRightWidth: 1,
+
+            borderColor:
+                '#E5E7EB',
+        },
+
+        input: {
+            flex: 1,
+
+            paddingVertical: 15,
+
+            paddingHorizontal: 14,
+
+            fontSize: 15,
+
+            color:
+            Colors.text,
+
+            fontWeight:
+                '600',
+        },
+
+        inlineError: {
+            flexDirection: 'row',
+
+            alignItems:
+                'center',
+
+            gap: 5,
+
+            marginTop: 3,
+        },
+
+        hintError: {
+            color:
+            Colors.error,
+
+            fontSize: 12,
+
+            fontWeight:
+                '600',
+
+            flex: 1,
+        },
+
+        manualHint: {
+            color:
+            Colors.muted,
+
+            fontSize: 12,
+
+            lineHeight: 17,
+
+            marginTop: 5,
+        },
+
+        manualContinueButton: {
+            marginTop: 18,
+        },
+
+        backToCameraBtn: {
+            marginTop: 14,
+
+            flexDirection:
+                'row',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+
+            gap: 6,
+
+            paddingVertical: 8,
+        },
+
+        backToCameraText: {
+            color:
+            Colors.text,
+
+            fontWeight:
+                '700',
+
+            fontSize: 13.5,
+
+            textDecorationLine:
+                'underline',
+        },
+
+        trustRow: {
+            flexDirection:
+                'row',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+
+            gap: 6,
+
+            marginBottom: 16,
+
+            marginTop: 8,
+        },
+
+        trustRowText: {
+            color:
+            Colors.muted,
+
+            fontSize: 11.5,
+
+            fontWeight:
+                '700',
+
+            letterSpacing: 0.1,
+
+            textAlign:
+                'center',
+        },
+
+        ctaButton: {
+            borderRadius: 18,
+
+            paddingVertical: 17,
+
+            paddingHorizontal: 18,
+
+            minHeight: 56,
+
+            flexDirection:
+                'row',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+
+            backgroundColor:
+            ACCENT,
+
+            width: '100%',
+
+            maxWidth: 420,
+        },
+
+        ctaBusy: {
+            opacity: 0.75,
+        },
+
+        ctaTextWrap: {
+            flexDirection:
+                'row',
+
+            alignItems:
+                'center',
+
+            justifyContent:
+                'center',
+
+            gap: 8,
+        },
+
+        ctaLabel: {
+            fontSize: 15,
+
+            fontWeight:
+                '800',
+
+            letterSpacing:
+                -0.25,
+
+            color:
+            Colors.text,
+        },
+
+        footerHint: {
+            alignItems:
+                'center',
+
+            marginTop: 5,
+        },
+
+        footerText: {
+            textAlign:
+                'center',
+
+            color:
+                '#8A8A94',
+
+            fontSize: 12,
+
+            fontWeight:
+                '600',
+
+            lineHeight: 18,
+        },
+    });

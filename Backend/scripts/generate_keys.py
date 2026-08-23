@@ -1,4 +1,6 @@
+# Backend/scripts/generate_keys.py
 """Generate RSA key pair for JWT signing."""
+from __future__ import annotations
 
 import os
 import sys
@@ -9,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 def generate_keys(output_dir: str = "./keys") -> None:
+    """Generate RSA key pair and write to disk with .env.local."""
     if os.getenv("ENV") == "production":
         print("ERROR: This script is for local development only.")
         sys.exit(1)
@@ -53,7 +56,7 @@ def generate_keys(output_dir: str = "./keys") -> None:
         "",
     ]
 
-    env_path = out / ".env.example"
+    env_path = out / ".env.local"
     env_path.write_text("\n".join(env_lines), encoding="utf-8")
     print(f"Keys written to {out.resolve()}")
 

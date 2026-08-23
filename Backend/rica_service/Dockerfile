@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1.7
+# File: Dockerfile
+# Location: Backend/rica_service/Dockerfile
 #
 # Standalone image for the mock RICA registration service.
 # Build from the REPO ROOT so this can reach pyproject.toml/uv.lock:
-#
-#   docker build -f Backend/rica_service/Dockerfile -t facial-biometric-rica .
-#   docker run -p 8000:8000 --env-file .env facial-biometric-rica
+# docker build -f Backend/rica_service/Dockerfile -t facial-biometric-rica .
+# docker run -p 8000:8000 --env-file .env facial-biometric-rica
 
 # ---------- Stage 1: resolve Python dependencies ----------
 FROM python:3.12.9-slim-bookworm AS deps
@@ -18,22 +18,21 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
+
 # --no-dev keeps pytest/ruff out of the runtime image.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
-
 # ---------- Stage 2: runtime ----------
 FROM python:3.12.9-slim-bookworm AS runtime
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # High UID — Defender for DevOps flags low-numbered UIDs as host-user collisions.
-RUN groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
+RUN groupadd --gid 10001 app && \
+    useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
 
 WORKDIR /app
 

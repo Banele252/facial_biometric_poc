@@ -1,12 +1,14 @@
 // src/shared/api.ts
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { http } from '@/lib/http';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
-const REQUEST_TIMEOUT_MS = 120_000;
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
 export type TransactionKind = 'sim_swap' | 'number_port';
 
+/*  responses  */
 export interface ValidationResponse {
   id_number_length: number;
   valid: boolean;
@@ -26,6 +28,12 @@ export interface LivenessResponse {
   is_live: boolean;
   score: number;
   provider: string;
+  detail: string;
+}
+
+export interface FaceMatchResponse {
+  match: boolean;
+  score: number;
   detail: string;
 }
 
@@ -84,6 +92,53 @@ export interface NotificationRecord {
   created_at: string;
 }
 
+/*  SIM swap  */
+export interface InitiateSwapRequest {
+  id_number: string;
+  msisdn: string;
+  iccid: string;
+  selfie_id?: string;
+  device_id?: string;
+}
+
+export interface InitiateSwapResponse {
+  order_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reference: string;
+  message: string;
+}
+
+export interface CreateOrderRequest {
+  id_number: string;
+  msisdn: string;
+  iccid: string;
+  selfie_id?: string;
+}
+
+export interface SimSwapOrder {
+  order_id: string;
+  id_number: string;
+  msisdn: string;
+  iccid: string;
+  status: string;
+  reference: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/*  ICCID  */
+export interface IccidResolveRequest {
+  iccid?: string;
+  image_base64?: string;
+}
+
+export interface IccidResolveResponse {
+  iccid: string;
+  raw: string;
+  barcode_type: string;
+  source: 'manual' | 'barcode_scan';
+}
+
 export const CHECK_LABELS: Record<string, string> = {
   length_is_13: 'Is 13 digits long',
   is_numeric: 'Contains digits only',
@@ -112,8 +167,7 @@ function extractMessage(detail: unknown): string | null {
   if (typeof responseBody.detail === 'string') return responseBody.detail;
   if (Array.isArray(responseBody.detail) && responseBody.detail.length > 0) {
     const firstError = responseBody.detail[0];
-    if (typeof firstError === 'object' && firstError !== null && 'msg' in firstError
-        && typeof firstError.msg === 'string') {
+    if (typeof firstError === 'object' && firstError !== null && 'msg' in firstError && typeof firstError.msg === 'string') {
       return firstError.msg;
     }
   }
@@ -122,57 +176,39 @@ function extractMessage(detail: unknown): string | null {
 }
 
 export async function request<T>(
-  path: string,
-  init: RequestInit = {},
+    path: string,
+    init: RequestInit = {},
 ): Promise<T> {
-  if (!path.startsWith('/api/')) {
-    throw new Error(`API path must start with "/api/": ${path}`);
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const externalSignal = init.signal;
-  let onAbort: (() => void) | null = null;
-
-  if (externalSignal) {
-    onAbort = () => controller.abort();
-    externalSignal.addEventListener('abort', onAbort);
-    if (externalSignal.aborted) controller.abort();
+  if (!path.startsWith('/api/') && !path.startsWith('/auth/')) {
+    throw new Error(`API path must start with "/api/" or "/auth/": ${path}`);
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...init.headers,
-      },
-      signal: controller.signal,
+    const headers = Object.fromEntries(new Headers(init.headers).entries());
+    let data: unknown = init.body;
+
+    if (typeof init.body === 'string' && headers['content-type']?.includes('application/json')) {
+      try { data = JSON.parse(init.body); } catch { data = init.body; }
+    }
+
+    const response = await http.request<T>({
+      url: path,
+      method: (init.method ?? 'GET').toLowerCase(),
+      headers,
+      data,
+      signal: init.signal ?? undefined,
     });
-
-    const responseText = await response.text();
-    let responseBody: unknown = null;
-    if (responseText.trim().length > 0) {
-      try { responseBody = JSON.parse(responseText); } catch { responseBody = responseText; }
-    }
-
-    if (!response.ok) {
-      const message = extractMessage(responseBody) ?? `Request failed with HTTP ${response.status}`;
-      throw new ApiError(response.status, response.statusText, responseBody ?? message);
-    }
-    return responseBody as T;
+    return response.data;
   } catch (error) {
-    if (error instanceof ApiError) throw error;
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new ApiError(0,
-        'Request timed out', `The request exceeded ${REQUEST_TIMEOUT_MS} ms`);
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status ?? 0;
+      const body = error.response?.data ?? error.message;
+      const message = extractMessage(body) ?? error.message ?? 'Network error';
+      throw new ApiError(status, error.response?.statusText ?? message, body);
     }
+    if (error instanceof ApiError) throw error;
     if (error instanceof Error) throw new ApiError(0, 'Network error', error.message);
     throw new ApiError(0, 'Network error', error);
-  } finally {
-    clearTimeout(timeout);
-    if (externalSignal && onAbort) externalSignal.removeEventListener('abort', onAbort);
   }
 }
 
@@ -182,7 +218,7 @@ export async function getDeviceId(): Promise<string> {
     try {
       const existingId = localStorage.getItem(storageKey);
       if (existingId) return existingId;
-      const newId = `web-${crypto.randomUUID()}`;
+      const newId = `web-${Date.now()}-${Math.random().toString(36).slice(2, 15)}`;
       localStorage.setItem(storageKey, newId);
       return newId;
     } catch { return 'web-unavailable'; }
@@ -196,6 +232,7 @@ export async function getDeviceId(): Promise<string> {
   } catch { return 'native-unavailable'; }
 }
 
+/*  identity  */
 export function validateId(idNumber: string): Promise<ValidationResponse> {
   return request<ValidationResponse>('/api/v1/validate-id', {
     method: 'POST',
@@ -203,6 +240,7 @@ export function validateId(idNumber: string): Promise<ValidationResponse> {
   });
 }
 
+/*  selfies  */
 export function captureSelfie(idNumber: string, image: string): Promise<SelfieResponse> {
   return request<SelfieResponse>('/api/v1/selfies', {
     method: 'POST',
@@ -214,6 +252,15 @@ export function checkLiveness(selfieId: string): Promise<LivenessResponse> {
   return request<LivenessResponse>(`/api/v1/selfies/${encodeURIComponent(selfieId)}/liveness`, { method: 'POST' });
 }
 
+/*  face match  */
+export function faceMatch(selfieId: string, idNumber: string): Promise<FaceMatchResponse> {
+  return request<FaceMatchResponse>('/api/v1/face-match', {
+    method: 'POST',
+    body: JSON.stringify({ selfie_id: selfieId, id_number: idNumber }),
+  });
+}
+
+/*  verification  */
 export function verifyIdentity(input: VerificationInput): Promise<VerificationDecision> {
   return request<VerificationDecision>('/api/v1/verifications', {
     method: 'POST',
@@ -222,11 +269,54 @@ export function verifyIdentity(input: VerificationInput): Promise<VerificationDe
 }
 
 export function getHistory(idNumber: string): Promise<AttemptRecord[]> {
-  const query = new URLSearchParams({ id_number: idNumber });
-  return request<AttemptRecord[]>(`/api/v1/verifications/history?${query.toString()}`, { method: 'GET' });
+  return request<AttemptRecord[]>('/api/v1/verifications/history', {
+    method: 'POST',
+    body: JSON.stringify({ id_number: idNumber }),
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
+/*  notifications  */
 export function getNotifications(idNumber: string): Promise<NotificationRecord[]> {
-  const query = new URLSearchParams({ id_number: idNumber });
-  return request<NotificationRecord[]>(`/api/v1/notifications?${query.toString()}`, { method: 'GET' });
+  return request<NotificationRecord[]>('/api/v1/notifications', {
+    method: 'POST',
+    body: JSON.stringify({ id_number: idNumber }),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/*  SIM swap  */
+export function initiateSimSwap(payload: InitiateSwapRequest): Promise<InitiateSwapResponse> {
+  return request<InitiateSwapResponse>('/api/v1/sim-swap/initiate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createSimSwapOrder(payload: CreateOrderRequest): Promise<SimSwapOrder> {
+  return request<SimSwapOrder>('/api/v1/sim-swap/create', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getSimSwapOrder(orderId: string): Promise<SimSwapOrder> {
+  return request<SimSwapOrder>(`/api/v1/sim-swap/${encodeURIComponent(orderId)}`, { method: 'GET' });
+}
+
+export function activateSimSwapOrder(orderId: string): Promise<SimSwapOrder> {
+  return request<SimSwapOrder>(`/api/v1/sim-swap/${encodeURIComponent(orderId)}/activate`, { method: 'POST' });
+}
+
+/*  ICCID  */
+export function resolveIccid(payload: IccidResolveRequest): Promise<IccidResolveResponse> {
+  return request<IccidResolveResponse>('/api/v1/iccid/extract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function extractIccid(imageBase64: string): Promise<IccidResolveResponse> {
+  return resolveIccid({ image_base64: imageBase64 });
 }

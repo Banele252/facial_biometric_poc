@@ -1,11 +1,8 @@
 # syntax=docker/dockerfile:1.7
-#
-# Standalone image for the fraud engine service (device risk, fraud
-# intelligence, risk assessment, decisioning). Build from the REPO ROOT so
-# this can reach pyproject.toml/uv.lock:
-#
-#   docker build -f Backend/fraud_engine/Dockerfile -t facial-biometric-fraud .
-#   docker run -p 8000:8000 --env-file .env facial-biometric-fraud
+# Standalone image for the fraud engine service.
+# Build from the REPO ROOT so this can reach pyproject.toml/uv.lock:
+# docker build -f Backend/fraud_engine/Dockerfile -t facial-biometric-fraud .
+# docker run -p 8000:8000 --env-file .env facial-biometric-fraud
 
 # ---------- Stage 1: resolve Python dependencies ----------
 FROM python:3.12.9-slim-bookworm AS deps
@@ -17,24 +14,21 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
-
 COPY pyproject.toml uv.lock ./
-# --no-dev keeps pytest/ruff out of the runtime image.
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
-
 
 # ---------- Stage 2: runtime ----------
 FROM python:3.12.9-slim-bookworm AS runtime
 
-RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # High UID — Defender for DevOps flags low-numbered UIDs as host-user collisions.
-RUN groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
+RUN groupadd --gid 10001 app && \
+    useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
 
 WORKDIR /app
 
@@ -44,14 +38,12 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8000
 
 COPY --from=deps --chown=10001:10001 /app/.venv /app/.venv
-# Only this service's own directory - it runs standalone with flat imports,
-# independent of Backend/app and the other services.
+
+# Only this service's own directory
 COPY --chown=10001:10001 Backend/fraud_engine/ ./Backend/fraud_engine/
 
 WORKDIR /app/Backend/fraud_engine
-
 USER 10001:10001
-
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

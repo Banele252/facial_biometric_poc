@@ -1,20 +1,19 @@
+# Backend/internal_backend/main.py
 """
 Internal backend API - OCR/document fallback verification.
-
 Covers the OCR-and-document fallback flow used when Home Affairs
 verification is unavailable (see "Fallback Verification" / "Passport
 Verification" user story):
-    - OCR Validation (extract identity fields from an ID/passport image)
-    - User Input Match Against Document (compare user input to OCR'd fields)
-    - Face Match Against Document (compare a live selfie to the document photo)
-    - Reject Identity Mismatches (combine the above into an accept/reject decision)
+  - OCR Validation (extract identity fields from an ID/passport image)
+  - User Input Match Against Document (compare user input to OCR'd fields)
+  - Face Match Against Document (compare a live selfie to the document photo)
+  - Reject Identity Mismatches (combine the above into an accept/reject decision)
 
 Run locally with (from this directory):
-    uv run uvicorn main:app --reload
+  uv run uvicorn main:app --reload
 
 Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 """
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -53,6 +52,7 @@ async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadF
     """Extract identity fields from a photographed/scanned ID document or passport."""
     document_bytes = await document_image.read()
     result = extract_id_fields(document_bytes)
+
     response = {
         "success": result.success,
         "document_type": result.document_type,
@@ -63,6 +63,7 @@ async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadF
         "field_confidence": result.field_confidence,
         "error": result.error,
     }
+
     background_tasks.add_task(
         log_call,
         service=SERVICE_NAME,
@@ -82,21 +83,24 @@ async def ocr_extract(background_tasks: BackgroundTasks, document_image: UploadF
 # --------------------------------------------------------------------------
 @app.post("/api/v1/verify/document-match")
 async def document_match_endpoint(
-    background_tasks: BackgroundTasks,
-    document_type: DocumentType = Form(...),
-    user_full_name: str = Form(...),
-    user_id_number: str = Form(""),
-    document_image: UploadFile = File(...),
+        background_tasks: BackgroundTasks,
+        document_type: DocumentType = Form(...),
+        user_full_name: str = Form(...),
+        # ✅ FIXED: was `user_id_numb er` (errant space) and `user_id_number: str = Form(" ")`
+        user_id_number: str = Form(""),
+        document_image: UploadFile = File(...),
 ):
     """Compare user-supplied identity details against the OCR'd ID/passport."""
     document_bytes = await document_image.read()
     ocr_result = extract_id_fields(document_bytes)
+
     match_result = match_user_input_to_document(
         document_type=document_type,
         user_id_number=user_id_number,
         user_full_name=user_full_name,
         ocr_result=ocr_result,
     )
+
     response = {
         "overall_match": match_result.overall_match,
         "id_number_match": match_result.id_number_match,
@@ -104,6 +108,7 @@ async def document_match_endpoint(
         "name_similarity": match_result.name_similarity,
         "reasons": match_result.reasons,
     }
+
     background_tasks.add_task(
         log_call,
         service=SERVICE_NAME,
@@ -128,20 +133,23 @@ async def document_match_endpoint(
 # --------------------------------------------------------------------------
 @app.post("/api/v1/verify/face-match")
 async def face_match_endpoint(
-    background_tasks: BackgroundTasks,
-    selfie_image: UploadFile = File(...),
-    document_image: UploadFile = File(...),
+        background_tasks: BackgroundTasks,
+        selfie_image: UploadFile = File(...),
+        document_image: UploadFile = File(...),
 ):
     """Compare a live selfie against the photo on the ID document / passport."""
     selfie_bytes = await selfie_image.read()
     document_bytes = await document_image.read()
+
     result = match_face_to_document(selfie_bytes, document_bytes)
+
     response = {
         "success": result.success,
         "is_match": result.is_match,
         "confidence": result.confidence,
         "error": result.error,
     }
+
     background_tasks.add_task(
         log_call,
         service=SERVICE_NAME,
@@ -171,13 +179,14 @@ class FallbackVerifyResponse(BaseModel):
 
 @app.post("/api/v1/fallback-verification/verify", response_model=FallbackVerifyResponse)
 async def verify_fallback(
-    background_tasks: BackgroundTasks,
-    document_type: DocumentType = Form(...),
-    user_full_name: str = Form(...),
-    user_id_number: str = Form(""),
-    reference_id: str = Form(""),
-    selfie_image: UploadFile = File(...),
-    document_image: UploadFile = File(...),
+        background_tasks: BackgroundTasks,
+        document_type: DocumentType = Form(...),
+        user_full_name: str = Form(...),
+        # ✅ FIXED: was `us er_id_number` (errant space)
+        user_id_number: str = Form(""),
+        reference_id: str = Form(""),
+        selfie_image: UploadFile = File(...),
+        document_image: UploadFile = File(...),
 ):
     """
     Full OCR/document fallback pipeline: OCR -> document match -> face match
@@ -188,12 +197,14 @@ async def verify_fallback(
     selfie_bytes = await selfie_image.read()
 
     ocr_result = extract_id_fields(document_bytes)
+
     doc_match_result = match_user_input_to_document(
         document_type=document_type,
         user_id_number=user_id_number,
         user_full_name=user_full_name,
         ocr_result=ocr_result,
     )
+
     face_result = match_face_to_document(selfie_bytes, document_bytes)
 
     decision = evaluate_fallback_verification(

@@ -13,7 +13,7 @@ wheels/
 .venv-win/
 .env
 .env.*
-!.env.example
+!.env.local
 
 # Runtime data (local sqlite DB and selfie storage)
 data/
@@ -44,3 +44,40 @@ fallback_verification_audit.log
 .idea/
 *.pem
 keys/
+
+# Local environment / secrets
+.env
+.env.local
+.env.*.local
+mobile/.env
+mobile/.env.local
+Backend/.env
+
+# Databases / runtime state
+*.db
+*.db-*
+*.db.backup*
+Backend/selfies/
+
+# Expo
+.expo/
+mobile/.expo/
+
+# Logs
+*.log
+mobile/metro.log
+
+# Local backups
+*.save
+Dockerfile.save
+
+# IDE
+.idea/workspace.xml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# OS
+.DS_Store

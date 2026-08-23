@@ -1,98 +1,113 @@
-import React from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet } from 'react-native';
-import { NavigationProvider, useNavigation } from '@/navigation/NavigationProvider';
-import { ScreenName } from '@/navigation/types';
-import SIMSwapCompleteScreen from '@/features/screens/SIMSwapCompleteScreen';
-import SIMSwapApprovedScreen from '@/features/screens/SIMSwapApprovedScreen';
-import FraudIntelligenceChecksScreen from '@/features/screens/FraudIntelligenceChecksScreen';
-import FacialVerificationScreen from '@/features/screens/FacialVerificationScreen';
-import LivenessDetectionScreen from '@/features/screens/LivenessDetectionScreen';
-import { IDDocumentScanScreen } from '@/features/screens/IDDocumentScanScreen';
-import ConsentScreen from '@/features/screens/ConsentScreen';
-import SimBarcodeScanScreen from '@/features/screens/SimBarcodeScanScreen';
-import { SAIDSelectionScreen } from '@/features/screens/SAIDSelectionScreen';
-import IdentityValidationScreen from '@/features/screens/IdentityValidationScreen';
-import { RequestSimSwapScreen } from '@/features/screens/RequestSimSwapScreen';
-import LandingScreen from '@/features/screens/LandingScreen';
+// src/navigation/AppNavigator.tsx
+import React, { useMemo } from 'react';
+import { useNavigation } from './NavigationProvider';
+import type { ScreenName, NavigationParams } from './types';
 
-const SCREEN_MAP: Record<ScreenName, React.FC<any>> = {
-  LandingScreen: LandingScreen,
-  RequestSimSwap: RequestSimSwapScreen,
-  SAIDSelection: SAIDSelectionScreen,
-  IdentityValidation: IdentityValidationScreen,
-  ConsentScreen: ConsentScreen,
-  SimBarcodeScan: SimBarcodeScanScreen,
-  IDDocumentScan: IDDocumentScanScreen,
-  FacialVerification: FacialVerificationScreen,
-  LivenessDetection: LivenessDetectionScreen,
-  FraudIntelligenceChecks: FraudIntelligenceChecksScreen,
-  SIMSwapApproved: SIMSwapApprovedScreen,
-  SIMSwapComplete: SIMSwapCompleteScreen,
+/* ─── screens ─── */
+import LandingScreen from '@/features/screens/LandingScreen';
+import ConsentScreen from '@/features/screens/ConsentScreen';
+import VerifyDetailsScreen from '@/features/screens/VerifyDetailsScreen';
+import FaceCheckScreen from '@/features/screens/FaceCheckScreen';
+import ScanSimScreen from '@/features/screens/ScanSimScreen';
+import ReviewScreen from '@/features/screens/ReviewScreen';
+import CompleteScreen from '@/features/screens/CompleteScreen';
+
+const SCREEN_MAP: Record<ScreenName, React.ComponentType<any>> = {
+  LandingScreen,
+  ConsentScreen,
+  VerifyDetailsScreen,
+  FaceCheckScreen,
+  ScanSimScreen,
+  ReviewScreen,
+  CompleteScreen,
 };
 
-function ErrorScreen({ message }: { message: string }) {
-  return (
-    <View style={styles.errorShell}>
-      <Text style={styles.errorTitle}>Router Error</Text>
-      <Text style={styles.errorBody}>{message}</Text>
-      <Text style={styles.errorHint}>Check types.ts and SCREEN_MAP</Text>
-    </View>
-  );
-}
+export default function AppNavigator() {
+  const { currentScreen, currentParams, navigate, goBack, dispatch } =
+      useNavigation();
 
-function Router() {
-  const { state, dispatch, navigate, goBack } = useNavigation();
-  const screen = state.current.screen as ScreenName;
-  const Screen = SCREEN_MAP[screen];
+  const ScreenComponent = SCREEN_MAP[currentScreen];
 
-  if (!Screen) {
-    console.error(`Screen "${screen}" not found in SCREEN_MAP`);
-    return <ErrorScreen message={`Screen "${screen}" is missing from the router.`} />;
+  const screenProps = useMemo(() => {
+    const base = {
+      navigate,
+      goBack,
+      dispatch,
+    };
+
+    switch (currentScreen) {
+    case 'LandingScreen':
+      return base;
+
+    case 'ConsentScreen':
+      return {
+        ...base,
+        routeParams: currentParams,
+      };
+
+    case 'VerifyDetailsScreen':
+      return base;
+
+    case 'FaceCheckScreen': {
+      const p = currentParams as NavigationParams['FaceCheckScreen'] | undefined;
+      return {
+        ...base,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        fullName: p?.fullName,
+        photoUrl: p?.photoUrl,
+      };
+    }
+
+    case 'ScanSimScreen': {
+      const p = currentParams as NavigationParams['ScanSimScreen'] | undefined;
+      return {
+        ...base,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        fullName: p?.fullName,
+        photoUrl: p?.photoUrl,
+        sessionId: p?.sessionId,
+        selfieId: p?.selfieId,
+      };
+    }
+
+    case 'ReviewScreen': {
+      const p = currentParams as NavigationParams['ReviewScreen'] | undefined;
+      return {
+        ...base,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        fullName: p?.fullName,
+        photoUrl: p?.photoUrl,
+        sessionId: p?.sessionId,
+        selfieId: p?.selfieId,
+        iccid: p?.iccid,
+        matchScore: p?.matchScore,
+        matchConfidence: p?.matchConfidence,
+        reason: p?.reason,
+      };
+    }
+
+    case 'CompleteScreen': {
+      const p = currentParams as NavigationParams['CompleteScreen'] | undefined;
+      return {
+        ...base,
+        swapId: p?.swapId,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        onFinish: p?.onFinish as (() => void) | undefined,
+      };
+    }
+
+    default:
+      return base;
+    }
+  }, [currentScreen, currentParams, navigate, goBack, dispatch]);
+
+  if (!ScreenComponent) {
+    return null;
   }
 
-  return (
-    <Screen
-      navigate={navigate}
-      goBack={goBack}
-      dispatch={dispatch}
-      routeParams={state.current.params}
-    />
-  );
+  return <ScreenComponent {...screenProps} />;
 }
-
-export default function App() {
-  return (
-    <SafeAreaProvider>
-      <NavigationProvider>
-        <Router />
-      </NavigationProvider>
-    </SafeAreaProvider>
-  );
-}
-
-const styles = StyleSheet.create({
-  errorShell: {
-    flex: 1,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#C0362C',
-    marginBottom: 8,
-  },
-  errorBody: {
-    fontSize: 14,
-    color: '#5A5A64',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  errorHint: {
-    fontSize: 12,
-    color: '#8A8A94',
-  },
-});

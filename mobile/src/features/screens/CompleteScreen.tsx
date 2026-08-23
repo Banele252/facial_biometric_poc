@@ -1,404 +1,846 @@
-import React, { useState, useRef } from 'react';
+// src/features/screens/CompleteScreen.tsx
+
 import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  // @ts-ignore Clipboard is deprecated but still present in many Expo/RN builds
-  Clipboard,
+    useCallback,
+    useEffect,
+} from 'react';
+
+import {
+    View,
+    StyleSheet,
+    TouchableOpacity,
+    ScrollView,
+    Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { Typography, Card, Container, Button } from '@/components/ui';
-import { Colors } from '@/theme';
+
+import {
+    SafeAreaView,
+} from 'react-native-safe-area-context';
+
+import {
+    StatusBar,
+} from 'expo-status-bar';
+
+import {
+    Ionicons,
+} from '@expo/vector-icons';
+
+import {
+    Typography,
+} from '@/components/ui';
+
+import {
+    useAudit,
+} from '@/hooks/useAudit';
 
 interface Props {
-  dispatch: (action: any) => void;
-  reference?: string;
-  nextStepCount?: number;
-  showConfetti?: boolean;
-  showCopy?: boolean;
-  showSecondaryAction?: boolean;
-  stepCount?: number;
-  activeStep?: number;
+    swapId?: string;
+    reference?: string;
+    idNumber?: string;
+    phoneNumber?: string;
+    iccid?: string;
+
+    onFinish?: () => void;
+
+    navigate?: (
+        screen: string,
+        params?: any,
+    ) => void;
+
+    goBack?: () => void;
 }
 
-export default function SIMSwapCompleteScreen({
-  dispatch,
-  reference = 'S1234567890',
-  nextStepCount = 3,
-  showConfetti = true,
-  showCopy = true,
-  showSecondaryAction = true,
-  stepCount = 6,
-  activeStep = 6,
-}: Props) {
-  const [copied, setCopied] = useState(false);
-  const [containerWidth, setContainerWidth] = useState(300);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+const MTN_YELLOW = '#FFCB05';
+const MTN_BLACK = '#111114';
+const BG = '#EFEFF2';
+const MUTED = '#6E6E78';
+const CARD = '#FDFDFF';
+const BORDER = '#EFEFF3';
 
-  const copyRef = () => {
-     
-    Clipboard.setString(reference);
-    setCopied(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setCopied(false);
-      timerRef.current = null;
-    }, 1800);
-  };
+export default function CompleteScreen({
+                                           swapId,
+                                           reference,
+                                           idNumber: _idNumber,
+                                           phoneNumber: _phoneNumber,
+                                           iccid: _iccid,
+                                           onFinish,
+                                           navigate,
+                                           goBack: _goBack,
+                                       }: Props) {
+    const audit =
+        useAudit('CompleteScreen');
 
-  const handleDone = () => {
-    dispatch({ type: 'NAVIGATE', payload: { screen: 'Splash' } });
-  };
+    const resolvedReference =
+        reference ||
+        swapId ||
+        'Processing';
 
-  const nextSteps = [
-    'Insert your new SIM card',
-    'Restart your phone if needed',
-    'Dial *123# to confirm activation',
-  ].slice(0, nextStepCount);
+    useEffect(() => {
+        audit.log(
+            'SCREEN_VIEWED',
+            {
+                outcome: 'success',
+                metadata: {
+                    swapId: swapId ?? null,
+                    reference: reference ?? null,
+                    status: 'submitted',
+                },
+            },
+        );
+    }, [
+        audit,
+        swapId,
+        reference,
+    ]);
 
-  const colors = ['#FFCB05', '#2FA96B', '#14110C', '#FF7A59', '#4A90D9'];
+    const handleDone =
+        useCallback(() => {
+            audit.log(
+                'SIM_SWAP_JOURNEY_COMPLETED',
+                {
+                    outcome: 'success',
+                    metadata: {
+                        swapId: swapId ?? null,
+                        reference:
+                        resolvedReference,
+                    },
+                },
+            );
 
-  const totalDots = stepCount;
-  const activeDot = Math.min(Math.max(activeStep, 1), totalDots) - 1;
+            if (onFinish) {
+                onFinish();
+                return;
+            }
 
-  return (
-    <SafeAreaView style={styles.shell}>
-      <StatusBar style="dark" />
-      <Container>
-        <Card style={styles.cardContainer}>
-          {/* Confetti */}
-          {showConfetti && (
-            <View
-              style={styles.confettiContainer}
-              pointerEvents="none"
-              onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+            navigate?.(
+                'LandingScreen',
+            );
+        }, [
+            audit,
+            swapId,
+            resolvedReference,
+            onFinish,
+            navigate,
+        ]);
+
+    return (
+        <SafeAreaView
+            style={styles.safeArea}
+        >
+            <StatusBar style="dark" />
+
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.page}
             >
-              {Array.from({ length: 18 }).map((_, i) => {
-                const r = (n: number) =>
-                  ((i * 9301 + n * 49297) % 233280) / 233280;
-                return (
-                  <View
-                    key={i}
-                    style={{
-                      position: 'absolute',
-                      left: Math.round(((6 + r(1) * 88) / 100) * containerWidth),
-                      top: Math.round(r(0) * 280),
-                      width: r(2) > 0.5 ? 7 : 5,
-                      height: r(3) > 0.5 ? 9 : 5,
-                      borderRadius: r(4) > 0.6 ? 4 : 2,
-                      backgroundColor: colors[i % colors.length],
-                      opacity: r(5) > 0.3 ? 0.8 : 0.4,
-                    }}
-                  />
-                );
-              })}
-            </View>
-          )}
+                <View style={styles.shell}>
+                    {/* Floating header from the HTML reference */}
+                    <View style={styles.header}>
+                        <View style={styles.brandPill}>
+                            <View style={styles.mtnBadge}>
+                                <Typography
+                                    variant="body"
+                                    style={styles.mtnText}
+                                >
+                                    MTN
+                                </Typography>
+                            </View>
 
-          {/* Success Icon */}
-          <View style={styles.iconContainer}>
-            <View style={styles.icon}>
-              <View style={styles.iconInner} />
-            </View>
-          </View>
+                            <Typography
+                                variant="body"
+                                style={styles.trustText}
+                            >
+                                trust
+                            </Typography>
+                        </View>
 
-          {/* Headline */}
-          <View style={styles.headlineContainer}>
-            <Typography variant="h1" style={styles.headline}>
-                SIM Swap Complete
-            </Typography>
-            <Typography variant="body" color="textSecondary" style={styles.subline}>
-                Your new SIM is now active. You can start using it shortly.
-            </Typography>
-          </View>
+                        <View style={styles.languageButton}>
+                            <Typography
+                                variant="body"
+                                style={styles.languageText}
+                            >
+                                EN
+                            </Typography>
 
-          {/* Reference Card */}
-          <View style={styles.referenceContainer}>
-            <View style={styles.referenceTextContainer}>
-              <Typography
-                variant="caption"
-                color="textSecondary"
-                style={[styles.referenceLabel, { fontWeight: '600' }]}
-              >
-                  Reference number
-              </Typography>
-              <Typography variant="h2" style={styles.referenceValue}>
-                {reference}
-              </Typography>
-            </View>
-            {showCopy && (
-              <TouchableOpacity
-                onPress={copyRef}
-                style={[styles.copyButton, copied && styles.copyButtonSuccess]}
-              >
-                <Typography
-                  variant="caption"
-                  style={[styles.copyButtonText, { fontWeight: '700' }]}
-                >
-                  {copied ? 'Copied' : 'Copy'}
-                </Typography>
-              </TouchableOpacity>
-            )}
-          </View>
+                            <Ionicons
+                                name="chevron-down"
+                                size={13}
+                                color={MUTED}
+                            />
+                        </View>
+                    </View>
 
-          {/* Next Steps */}
-          <View style={styles.nextStepsContainer}>
-            <Typography variant="body" style={styles.nextStepsTitle}>
-                What is next?
-            </Typography>
-            <View style={styles.nextStepsList}>
-              {nextSteps.map((text, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.nextStepRow,
-                    i === nextSteps.length - 1 && styles.nextStepRowLast,
-                  ]}
-                >
-                  <View style={styles.nextStepNumber}>
-                    <Typography
-                      variant="caption"
-                      style={[styles.nextStepNumberText, { fontWeight: '800' }]}
-                    >
-                      {i + 1}
-                    </Typography>
-                  </View>
-                  <Typography variant="body" style={styles.nextStepText}>
-                    {text}
-                  </Typography>
+                    {/* Completion hero */}
+                    <View style={styles.heroCard}>
+                        <View style={styles.heroGlow} />
+
+                        <View style={styles.successHalo}>
+                            <View style={styles.successTile}>
+                                <Ionicons
+                                    name="checkmark"
+                                    size={42}
+                                    color={MTN_BLACK}
+                                />
+                            </View>
+                        </View>
+
+                        <Typography
+                            variant="h2"
+                            style={styles.heroTitle}
+                        >
+                            All set!
+                        </Typography>
+
+                        <Typography
+                            variant="body"
+                            style={styles.heroSubtitle}
+                        >
+                            Your SIM swap request has been submitted. Follow the steps
+                            below to bring your new SIM online.
+                        </Typography>
+
+                        <View style={styles.segmentRow}>
+                            {[0, 1, 2, 3, 4, 5].map((segment) => (
+                                <View
+                                    key={segment}
+                                    style={styles.segment}
+                                />
+                            ))}
+                        </View>
+                    </View>
+
+                    {/* Do this now */}
+                    <View style={styles.glassCard}>
+                        <Typography
+                            variant="body"
+                            style={styles.eyebrow}
+                        >
+                            DO THIS NOW
+                        </Typography>
+
+                        <View style={styles.todoRail}>
+                            <View style={styles.railBase} />
+
+                            <TodoRow
+                                number="1"
+                                label="Insert your new SIM"
+                                meta="Now"
+                            />
+
+                            <TodoRow
+                                number="2"
+                                label="Restart your phone"
+                                meta="~30s"
+                            />
+
+                            <TodoRow
+                                number="3"
+                                label="Wait for signal to return"
+                                meta="~2 min"
+                            />
+                        </View>
+
+                        <View style={styles.sectionDivider} />
+
+                        <MetaRow
+                            icon="checkmark-circle-outline"
+                            label="Request status"
+                            value="Submitted"
+                        />
+
+                        <View style={styles.metaDivider} />
+
+                        <MetaRow
+                            icon="receipt-outline"
+                            label="Reference number"
+                            value={resolvedReference}
+                        />
+                    </View>
+
+                    {/* Help card */}
+                    <View style={styles.helpCard}>
+                        <View style={styles.helpIcon}>
+                            <Ionicons
+                                name="call-outline"
+                                size={18}
+                                color="#8A6A00"
+                            />
+                        </View>
+
+                        <View style={styles.helpBody}>
+                            <Typography
+                                variant="body"
+                                style={styles.helpTitle}
+                            >
+                                No signal after 5 minutes?
+                            </Typography>
+
+                            <Typography
+                                variant="body"
+                                style={styles.helpSubtitle}
+                            >
+                                Two things to try before you call
+                            </Typography>
+
+                            <HelpLine>
+                                Restart your phone once more — most SIMs pick up signal on
+                                the second boot.
+                            </HelpLine>
+
+                            <HelpLine>
+                                Still nothing? Call 135 free from any MTN line and quote
+                                your reference.
+                            </HelpLine>
+                        </View>
+                    </View>
+
+                    {/* Premium CTA panel */}
+                    <View style={styles.ctaPanel}>
+                        <TouchableOpacity
+                            style={styles.doneButton}
+                            onPress={handleDone}
+                            activeOpacity={0.88}
+                        >
+                            <Typography
+                                variant="body"
+                                style={styles.doneText}
+                            >
+                                Done
+                            </Typography>
+
+                            <Ionicons
+                                name="arrow-forward"
+                                size={18}
+                                color={MTN_BLACK}
+                            />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.securityFooter}>
+                        <Ionicons
+                            name="lock-closed-outline"
+                            size={13}
+                            color="#8A8A94"
+                        />
+
+                        <Typography
+                            variant="body"
+                            style={styles.securityText}
+                        >
+                            Encrypted · POPIA compliant · Verified by MTN Trust
+                        </Typography>
+                    </View>
                 </View>
-              ))}
+            </ScrollView>
+        </SafeAreaView>
+    );
+}
+
+function TodoRow({
+                     number,
+                     label,
+                     meta,
+                 }: {
+    number: string;
+    label: string;
+    meta: string;
+}) {
+    return (
+        <View style={styles.todoRow}>
+            <View style={styles.todoNumber}>
+                <Typography
+                    variant="body"
+                    style={styles.todoNumberText}
+                >
+                    {number}
+                </Typography>
             </View>
-          </View>
 
-          <View style={styles.spacer} />
+            <Typography
+                variant="body"
+                style={styles.todoLabel}
+            >
+                {label}
+            </Typography>
 
-          {/* Actions */}
-          <View style={styles.actionContainer}>
-            <Button onPress={handleDone} variant="primary">
-                Done
-            </Button>
-            {showSecondaryAction && (
-              <Button
-                onPress={() => {}}
-                variant="outline"
-                style={styles.secondaryButton}
-              >
-                    Something is wrong
-              </Button>
-            )}
-          </View>
+            <Typography
+                variant="body"
+                style={styles.todoMeta}
+            >
+                {meta}
+            </Typography>
+        </View>
+    );
+}
 
-          {/* Step dots */}
-          <View style={styles.dotsContainer}>
-            {Array.from({ length: totalDots }).map((_, i) => (
-              <View
-                key={i}
-                style={[styles.dot, i === activeDot ? styles.dotActive : styles.dotInactive]}
-              />
-            ))}
-          </View>
-        </Card>
-      </Container>
-    </SafeAreaView>
-  );
+function MetaRow({
+                     icon,
+                     label,
+                     value,
+                 }: {
+    icon: React.ComponentProps<typeof Ionicons>['name'];
+    label: string;
+    value: string;
+}) {
+    return (
+        <View style={styles.metaRow}>
+            <View style={styles.metaIcon}>
+                <Ionicons
+                    name={icon}
+                    size={18}
+                    color="#8A6A00"
+                />
+            </View>
+
+            <View style={styles.metaBody}>
+                <Typography
+                    variant="body"
+                    style={styles.metaLabel}
+                >
+                    {label}
+                </Typography>
+
+                <Typography
+                    variant="body"
+                    style={styles.metaValue}
+                >
+                    {value}
+                </Typography>
+            </View>
+        </View>
+    );
+}
+
+function HelpLine({
+                      children,
+                  }: {
+    children: React.ReactNode;
+}) {
+    return (
+        <View style={styles.helpLine}>
+            <View style={styles.helpCheck}>
+                <Ionicons
+                    name="checkmark"
+                    size={11}
+                    color="#8A6A00"
+                />
+            </View>
+
+            <Typography
+                variant="body"
+                style={styles.helpLineText}
+            >
+                {children}
+            </Typography>
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  shell: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  cardContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  confettiContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 60,
-    height: 300,
-    overflow: 'hidden',
-    pointerEvents: 'none',
-  },
-  iconContainer: {
-    width: 92,
-    height: 92,
-    marginTop: 44,
-    marginBottom: 24,
-  },
-  icon: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 46,
-    backgroundColor: '#1E9E5F',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#1E9E5F',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.32,
-    shadowRadius: 28,
-    elevation: 10,
-  },
-  iconInner: {
-    width: 42,
-    height: 42,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderColor: Colors.surface,
-    transform: [{ rotate: '45deg' }],
-  },
-  headlineContainer: {
-    alignItems: 'center',
-    gap: 9,
-    marginBottom: 24,
-  },
-  headline: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.6,
-    textAlign: 'center',
-  },
-  subline: {
-    fontSize: 14.5,
-    lineHeight: 22,
-    fontWeight: '500',
-    textAlign: 'center',
-    maxWidth: 268,
-  },
-  referenceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    borderWidth: 1.5,
-    borderColor: '#C4E7D2',
-    borderRadius: 20,
-    backgroundColor: '#F3FBF6',
-    padding: 16,
-    marginBottom: 16,
-  },
-  referenceTextContainer: {
-    flex: 1,
-    gap: 3,
-  },
-  referenceLabel: {
-    fontSize: 12.5,
-    color: '#57806A',
-  },
-  referenceValue: {
-    fontSize: 19,
-    fontWeight: '800',
-    color: '#1B7A4B',
-    letterSpacing: 0.6,
-    fontVariant: ['tabular-nums'],
-  },
-  copyButton: {
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: '#C4E7D2',
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  copyButtonSuccess: {
-    borderColor: '#2FA96B',
-    backgroundColor: '#2FA96B',
-  },
-  copyButtonText: {
-    fontSize: 13.5,
-    color: '#1B7A4B',
-  },
-  nextStepsContainer: {
-    width: '100%',
-    borderWidth: 1.5,
-    borderColor: '#ECE8DF',
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    padding: 16,
-    paddingBottom: 6,
-    shadowColor: Colors.secondary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  nextStepsTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.2,
-    marginBottom: 4,
-  },
-  nextStepsList: {
-    marginTop: 4,
-  },
-  nextStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F4F1EA',
-  },
-  nextStepRowLast: {
-    borderBottomWidth: 0,
-  },
-  nextStepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    backgroundColor: '#FFF7DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  nextStepNumberText: {
-    fontSize: 12,
-    color: Colors.text,
-  },
-  nextStepText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-    color: '#4A453D',
-  },
-  spacer: {
-    flex: 1,
-  },
-  actionContainer: {
-    gap: 10,
-    width: '100%',
-    marginTop: 24,
-  },
-  secondaryButton: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1.5,
-    borderColor: '#F0DE9C',
-  },
-  dotsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 22,
-  },
-  dot: {
-    height: 7,
-    borderRadius: 4,
-  },
-  dotActive: {
-    width: 22,
-    backgroundColor: Colors.primary,
-  },
-  dotInactive: {
-    width: 7,
-    backgroundColor: '#E2DFD7',
-  },
+    safeArea: {
+        flex: 1,
+        backgroundColor: BG,
+    },
+
+    page: {
+        flexGrow: 1,
+        alignItems: 'center',
+        backgroundColor: BG,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+    },
+
+    shell: {
+        width: '100%',
+        maxWidth: Platform.OS === 'web' ? 430 : undefined,
+    },
+
+    header: {
+        minHeight: 58,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 4,
+        marginBottom: 8,
+    },
+
+    brandPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#000000',
+        borderRadius: 999,
+        paddingVertical: 5,
+        paddingLeft: 6,
+        paddingRight: 12,
+    },
+
+    mtnBadge: {
+        width: 52,
+        height: 27,
+        borderRadius: 999,
+        borderWidth: 2.5,
+        borderColor: MTN_YELLOW,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    mtnText: {
+        color: MTN_YELLOW,
+        fontSize: 12.5,
+        fontWeight: '800',
+    },
+
+    trustText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '800',
+        marginLeft: 9,
+    },
+
+    languageButton: {
+        minHeight: 44,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 6,
+    },
+
+    languageText: {
+        color: MUTED,
+        fontSize: 12.5,
+        fontWeight: '700',
+    },
+
+    heroCard: {
+        position: 'relative',
+        overflow: 'hidden',
+        backgroundColor: '#FFF8DE',
+        borderWidth: 1,
+        borderColor: BORDER,
+        borderRadius: 20,
+        paddingHorizontal: 20,
+        paddingTop: 28,
+        paddingBottom: 24,
+        alignItems: 'center',
+        shadowColor: '#111114',
+        shadowOpacity: 0.08,
+        shadowRadius: 22,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 3,
+    },
+
+    heroGlow: {
+        position: 'absolute',
+        top: -32,
+        width: 250,
+        height: 190,
+        borderRadius: 125,
+        backgroundColor: '#FFF1A8',
+        opacity: 0.56,
+    },
+
+    successHalo: {
+        width: 108,
+        height: 108,
+        borderRadius: 34,
+        backgroundColor: 'rgba(255,203,5,0.16)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    successTile: {
+        width: 84,
+        height: 84,
+        borderRadius: 26,
+        backgroundColor: MTN_YELLOW,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#BE8C00',
+        shadowOpacity: 0.32,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 5,
+    },
+
+    heroTitle: {
+        color: MTN_BLACK,
+        marginTop: 16,
+        fontSize: 29,
+        lineHeight: 34,
+        fontWeight: '800',
+        letterSpacing: -0.7,
+        textAlign: 'center',
+    },
+
+    heroSubtitle: {
+        color: '#5A5A64',
+        marginTop: 8,
+        maxWidth: 320,
+        fontSize: 13,
+        lineHeight: 20,
+        textAlign: 'center',
+    },
+
+    segmentRow: {
+        width: '100%',
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 16,
+    },
+
+    segment: {
+        flex: 1,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: MTN_YELLOW,
+    },
+
+    glassCard: {
+        marginTop: 12,
+        backgroundColor: CARD,
+        borderWidth: 1,
+        borderColor: BORDER,
+        borderRadius: 20,
+        padding: 18,
+        shadowColor: '#111114',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 2,
+    },
+
+    eyebrow: {
+        color: MUTED,
+        fontSize: 11,
+        fontWeight: '800',
+        letterSpacing: 1,
+    },
+
+    todoRail: {
+        position: 'relative',
+        marginTop: 16,
+        paddingLeft: 31,
+        gap: 2,
+    },
+
+    railBase: {
+        position: 'absolute',
+        left: 10,
+        top: 11,
+        bottom: 11,
+        width: 2,
+        borderRadius: 1,
+        backgroundColor: '#EDEDF1',
+    },
+
+    todoRow: {
+        minHeight: 44,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 11,
+        paddingVertical: 7,
+    },
+
+    todoNumber: {
+        position: 'absolute',
+        left: -31,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: '#F8EBBE',
+        backgroundColor: '#FFF7DA',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    todoNumberText: {
+        color: '#8A6A00',
+        fontSize: 10,
+        fontWeight: '800',
+    },
+
+    todoLabel: {
+        flex: 1,
+        color: MTN_BLACK,
+        fontSize: 13.5,
+        fontWeight: '700',
+    },
+
+    todoMeta: {
+        color: '#8A8A94',
+        fontSize: 11,
+        fontWeight: '700',
+    },
+
+    sectionDivider: {
+        height: 1,
+        backgroundColor: '#EDEDF1',
+        marginTop: 18,
+        marginBottom: 2,
+    },
+
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 13,
+        paddingVertical: 14,
+    },
+
+    metaIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 11,
+        backgroundColor: '#F4F4F7',
+        borderWidth: 1,
+        borderColor: BORDER,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    metaBody: {
+        flex: 1,
+        minWidth: 0,
+    },
+
+    metaLabel: {
+        color: MUTED,
+        fontSize: 12,
+        fontWeight: '700',
+    },
+
+    metaValue: {
+        color: MTN_BLACK,
+        fontSize: 14,
+        fontWeight: '800',
+        letterSpacing: -0.2,
+        marginTop: 2,
+    },
+
+    metaDivider: {
+        height: 1,
+        backgroundColor: '#EDEDF1',
+    },
+
+    helpCard: {
+        marginTop: 12,
+        backgroundColor: CARD,
+        borderWidth: 1,
+        borderColor: BORDER,
+        borderRadius: 20,
+        padding: 18,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 13,
+        shadowColor: '#111114',
+        shadowOpacity: 0.07,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 2,
+    },
+
+    helpIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 11,
+        backgroundColor: '#FFF3C9',
+        borderWidth: 1,
+        borderColor: '#F2DC8E',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    helpBody: {
+        flex: 1,
+        minWidth: 0,
+    },
+
+    helpTitle: {
+        color: MTN_BLACK,
+        fontSize: 14,
+        fontWeight: '700',
+    },
+
+    helpSubtitle: {
+        color: MUTED,
+        fontSize: 12.5,
+        marginTop: 2,
+        marginBottom: 10,
+    },
+
+    helpLine: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 9,
+        marginTop: 8,
+    },
+
+    helpCheck: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: '#FFF7DA',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+    },
+
+    helpLineText: {
+        flex: 1,
+        color: '#5A5A64',
+        fontSize: 12.5,
+        lineHeight: 18,
+    },
+
+    ctaPanel: {
+        marginTop: 12,
+        padding: 10,
+        borderRadius: 22,
+        backgroundColor: '#F8F8FA',
+        borderWidth: 1,
+        borderColor: '#EDEDF1',
+        shadowColor: '#111114',
+        shadowOpacity: 0.09,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 9 },
+        elevation: 3,
+    },
+
+    doneButton: {
+        minHeight: 52,
+        borderRadius: 16,
+        backgroundColor: MTN_YELLOW,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        shadowColor: MTN_YELLOW,
+        shadowOpacity: 0.34,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 4,
+    },
+
+    doneText: {
+        color: MTN_BLACK,
+        fontSize: 15,
+        fontWeight: '800',
+    },
+
+    securityFooter: {
+        marginTop: 14,
+        marginBottom: 4,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+
+    securityText: {
+        color: '#8A8A94',
+        fontSize: 11.5,
+        lineHeight: 18,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
 });

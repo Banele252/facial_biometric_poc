@@ -1,3 +1,4 @@
+# Backend/app/services/number_port.py
 """Number port authorisation.
 
 The CARB names SIM swap and number port as the two high-risk transactions this
@@ -14,10 +15,9 @@ persisted so an authorisation can be evidenced afterwards.
 
 This is the PoC boundary. A real port also needs the donor network's
 acceptance and a porting window, neither of which exists here — a request in
-``PENDING`` means MTN has authorised the customer's identity, not that the
+`PENDING` means MTN has authorised the customer's identity, not that the
 number has moved.
 """
-
 from __future__ import annotations
 
 import logging
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def _sanitize_for_log(value: str) -> str:
     """Remove line-break characters to prevent log injection."""
-    return value.replace("\r", "").replace("\n", "")
+    return value.replace("\r", " ").replace("\n", " ")
 
 
 # Authorised by MTN; the port itself completes out of band.
@@ -50,11 +50,11 @@ class PortResult:
 
 
 def create_port_request(
-    msisdn: str,
-    target_network: str,
-    identity_reference: str,
-    identity_verified: bool,
-    fraud_approved: bool,
+        msisdn: str,
+        target_network: str,
+        identity_reference: str,
+        identity_verified: bool,
+        fraud_approved: bool,
 ) -> PortResult:
     """Authorise a number port, if identity and fraud both allow it."""
     reasons: list[str] = []

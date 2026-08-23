@@ -1,3 +1,6 @@
+# test_ocr_validator.py
+from __future__ import annotations
+
 from datetime import date
 from types import SimpleNamespace
 
@@ -22,7 +25,7 @@ def fake_country_field(value: str, content: str, confidence=0.98):
 
 
 def make_fake_result(
-    first_name="Thabo", last_name="Nkosi", document_number="9001015011082", dob="1990-01-01"
+        first_name="Thabo", last_name="Nkosi", document_number="9001015011082", dob="1990-01-01"
 ):
     doc = SimpleNamespace(
         doc_type="idDocument",

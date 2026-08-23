@@ -1,6 +1,6 @@
+# Backend/rica_service/main.py
 """
 Mock RICA registration service.
-
 A stand-in for South Africa's RICA (SIM registration) database: stores which
 ID number + full name a given MSISDN is registered to, plus the most recent
 new SIM number issued to it via a SIM swap. Exists so the SIM swap flow
@@ -8,11 +8,9 @@ new SIM number issued to it via a SIM swap. Exists so the SIM swap flow
 against instead of trusting the caller's claims outright.
 
 Run locally with (from this directory):
-    uv run uvicorn main:app --reload
-
+uv run uvicorn main:app --reload
 Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 """
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -23,15 +21,13 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from Backend.rica_service.db import get_db
-from Backend.rica_service.store import get_by_msisdn, list_records, upsert_record, verify
+from Backend.app.db import get_db
+from .store import get_by_msisdn, list_records, upsert_record, verify
 
 load_dotenv()
 
 # Routes live on a router so the same service can either run standalone
-# (``uvicorn Backend.rica_service.main:app``) or be mounted into the main
-# application, which is how it is deployed — the infrastructure runs a single
-# container, so a second port would have nowhere to listen.
+# (`uvicorn main:app`) or be mounted into the main application.
 router = APIRouter(prefix="/api/v1/rica", tags=["rica"])
 
 
@@ -60,16 +56,15 @@ class VerifyRequest(BaseModel):
 @router.post("/records", status_code=201)
 async def create_or_update_record(payload: RicaRecordRequest) -> dict[str, Any]:
     """Seed or update a mock RICA registration.
-
     Returns the stored record so a successful call is immediately visible -
     this is what to check when testing that data was parsed and saved.
     """
-    record = upsert_record(
-        id_number=payload.id_number,
-        full_name=payload.full_name,
-        msisdn=payload.msisdn,
-        new_sim_number=payload.new_sim_number,
-    )
+    record = upsert_record({
+        "id_number": payload.id_number,
+        "full_name": payload.full_name,
+        "msisdn": payload.msisdn,
+        "new_sim_number": payload.new_sim_number,
+    })
     return {"status": "stored", "record": record}
 
 

@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
-    "fastapi>=0.141.1",
+    "fastapi[standard]>=0.141.1",
     "python-multipart>=0.0.32",
     "requests>=2.34.2",
     "uvicorn[standard]>=0.52.0",
@@ -16,6 +16,11 @@ dependencies = [
     "azure-ai-vision-face>=1.0.0b2",
     "azure-core>=1.30.0",
     "psycopg[binary]>=3.3.4",
+    "pydantic-settings>=2.15.0",
+    "pyzbar>=0.1.9",
+    "pillow>=12.3.0",
+    "pyjwt>=2.13.0",
+    "cryptography>=50.0.0",
 ]
 
 [dependency-groups]

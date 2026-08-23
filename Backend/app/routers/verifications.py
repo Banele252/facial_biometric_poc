@@ -1,23 +1,28 @@
 """Verification orchestrator, fallback and history.
-
 Runs the SIM swap identity journey in the agreed order:
-
-    ID precheck -> liveness -> RICA registration -> external ID verification
-    -> Home Affairs face match -> decision
+ID precheck -> liveness -> RICA registration -> external ID verification
+-> Home Affairs face match -> decision
 
 HT2-73: Zero-trust security added. POST /verifications is Tier-1 (requires
-simswap:execute scope + X-API-Key via middleware). GET /verifications/history
-requires biometric:read scope.
+simswap:execute scope + X-API-Key via middleware). POST /verifications/history
+requires biometric:read scope and protects PII from URL logs.
 """
+import hashlib
 import logging
 import time
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from Backend.app import repository
 from Backend.app.config import get_settings
-from Backend.app.dependencies.security import get_correlation_id, require_biometric_read, require_simswap_execute
+from Backend.app.dependencies.security import (
+    get_correlation_id,
+    get_current_user,
+    require_biometric_read,
+    require_simswap_execute,
+)
 from Backend.app.routers.validation import run_structural_checks
 from Backend.app.services.audit import record_event
 from Backend.app.services.face_match import run_face_match
@@ -45,15 +50,9 @@ class VerificationRequest(BaseModel):
     transaction: str = Field("sim_swap", pattern="^(sim_swap|number_port)$")
     target_network: str | None = Field(None, max_length=64)
     device_id: str | None = Field(None, max_length=128)
-    selfie_id: str | None = Field(
-        None, description="Selfie that passed liveness; required for approval"
-    )
-    mode: str | None = Field(
-        None, pattern="^(production|sandbox)$", deprecated="Ignored; set VERIFY_MODE instead"
-    )
-    allow_fallback: bool = Field(
-        True, description="Permit fallback approval when the primary provider is down"
-    )
+    selfie_id: str | None = Field(None, description="Selfie that passed liveness; required for approval")
+    mode: str | None = Field(None, pattern="^(production|sandbox)$", deprecated="Ignored; set VERIFY_MODE instead")
+    allow_fallback: bool = Field(True, description="Permit fallback approval when the primary provider is down")
 
 
 class CheckResult(BaseModel):
@@ -88,6 +87,17 @@ class AttemptRecord(BaseModel):
     created_at: str
 
 
+class HistoryRequest(BaseModel):
+    id_number: str = Field(..., min_length=1, max_length=32)
+    status: str | None = Field(None, pattern="^(approved|rejected|review)$")
+    limit: int = Field(50, ge=1, le=200)
+
+
+def _hash_id(id_number: str) -> str:
+    """Hash ID number for logging without exposing PII."""
+    return hashlib.sha256(id_number.encode()).hexdigest()[:12]
+
+
 def _finalise(
         id_number: str,
         decision: bool | str,
@@ -99,10 +109,7 @@ def _finalise(
         mode: str | None = None,
         checks: list[CheckResult] | None = None,
 ) -> VerificationDecision:
-    if isinstance(decision, bool):
-        status_value = APPROVED if decision else REJECTED
-    else:
-        status_value = decision
+    status_value = (APPROVED if decision else REJECTED) if isinstance(decision, bool) else decision
 
     attempt = repository.record_attempt(
         id_number=id_number,
@@ -146,13 +153,20 @@ def _finalise(
 @router.post(
     "/verifications",
     response_model=VerificationDecision,
-    dependencies=[Depends(require_simswap_execute)])
-def verify(payload: VerificationRequest, correlation_id: str = Depends(get_correlation_id)) -> VerificationDecision:
+    dependencies=[Depends(require_simswap_execute)],
+)
+def verify(
+        request: Request,
+        payload: VerificationRequest,
+        user: Annotated[dict, Depends(get_current_user)],
+        correlation_id: Annotated[str, Depends(get_correlation_id)],
+) -> VerificationDecision:
     """Run the SIM swap identity journey and return the decision."""
     id_number = payload.id_number.strip()
     settings = get_settings()
     mode = settings.verify_mode
     checks: list[CheckResult] = []
+    user_ref = user.get("sub", "anonymous")
 
     record_event(
         "journey_started",
@@ -187,11 +201,7 @@ def verify(payload: VerificationRequest, correlation_id: str = Depends(get_corre
 
     # Liveness precondition
     if not payload.selfie_id:
-        checks.append(
-            CheckResult(
-                name="liveness", label="Liveness", status="fail", detail="No selfie provided"
-            )
-        )
+        checks.append(CheckResult(name="liveness", label="Liveness", status="fail", detail="No selfie provided"))
         return _finalise(
             id_number,
             decision=False,
@@ -201,9 +211,11 @@ def verify(payload: VerificationRequest, correlation_id: str = Depends(get_corre
             mode=mode,
             checks=checks,
         )
+
     selfie = repository.get_selfie(payload.selfie_id)
     if selfie is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selfie not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Selfie not found", headers={"X-Error-Code": "SELFIE_NOT_FOUND"})
+
     if selfie["liveness_status"] != "live":
         checks.append(
             CheckResult(
@@ -222,6 +234,7 @@ def verify(payload: VerificationRequest, correlation_id: str = Depends(get_corre
             mode=mode,
             checks=checks,
         )
+
     checks.append(
         CheckResult(
             name="liveness",
@@ -271,11 +284,7 @@ def verify(payload: VerificationRequest, correlation_id: str = Depends(get_corre
                 id_number,
                 decision=REVIEW if unregistered else REJECTED,
                 method="rica",
-                reason=(
-                    "This number is not registered, so the swap needs a manual check."
-                    if unregistered
-                    else f"RICA check failed: {detail}"
-                ),
+                reason="This number is not registered, so the swap needs a manual check." if unregistered else f"RICA check failed: {detail}",
                 selfie_id=payload.selfie_id,
                 provider_status="rica_unregistered" if unregistered else "rica_mismatch",
                 mode=mode,
@@ -292,22 +301,10 @@ def verify(payload: VerificationRequest, correlation_id: str = Depends(get_corre
         )
 
     if not settings.verify_now_configured:
-        checks.append(
-            CheckResult(
-                name="id_verification",
-                label="ID verification",
-                status="skipped",
-                detail="Provider not configured",
-            )
-        )
-        checks.append(
-            CheckResult(
-                name="face_match",
-                label="Home Affairs face match",
-                status="skipped",
-                detail="Provider not configured",
-            )
-        )
+        checks.extend([
+            CheckResult(name="id_verification", label="ID verification", status="skipped", detail="Provider not configured"),
+            CheckResult(name="face_match", label="Home Affairs face match", status="skipped", detail="Provider not configured"),
+        ])
         return _fallback(payload, id_number, mode, checks)
 
     # 3. External ID verification
@@ -346,9 +343,7 @@ def verify(payload: VerificationRequest, correlation_id: str = Depends(get_corre
             CheckResult(
                 name="face_match",
                 label="Home Affairs face match",
-                status="pass"
-                if match.outcome == APPROVED
-                else ("fail" if match.outcome == REJECTED else "review"),
+                status="pass" if match.outcome == APPROVED else ("fail" if match.outcome == REJECTED else "review"),
                 detail=match.detail,
                 score=match.score,
             )
@@ -408,9 +403,7 @@ def _fraud_and_swap(
         CheckResult(
             name="fraud",
             label="Fraud checks",
-            status="pass"
-            if fraud.outcome == APPROVED
-            else ("fail" if fraud.outcome == REJECTED else "review"),
+            status="pass" if fraud.outcome == APPROVED else ("fail" if fraud.outcome == REJECTED else "review"),
             detail=fraud.detail,
             score=fraud.risk_score,
         )
@@ -617,10 +610,7 @@ def _fallback(
         id_number,
         decision=True,
         method="fallback",
-        reason=(
-            "Face match unavailable; approved via fallback "
-            "(structural + liveness). Manual review recommended."
-        ),
+        reason="Face match unavailable; approved via fallback (structural + liveness). Manual review recommended.",
         selfie_id=payload.selfie_id,
         provider_status="provider_unavailable",
         mode=mode,
@@ -628,19 +618,30 @@ def _fallback(
     )
 
 
-@router.get(
+@router.post(
     "/verifications/history",
     response_model=list[AttemptRecord],
-    dependencies=[Depends(require_biometric_read)])
+    dependencies=[Depends(require_biometric_read)],
+)
 def verification_history(
-        id_number: str | None = Query(None, max_length=32),
-        status_filter: str | None = Query(None, alias="status", pattern="^(approved|rejected|review)$"),
-        limit: int = Query(50, ge=1, le=200),
-        correlation_id: str = Depends(get_correlation_id),
+        request: Request,
+        payload: HistoryRequest,
+        user: Annotated[dict, Depends(get_current_user)],
+        correlation_id: Annotated[str, Depends(get_correlation_id)] = "",
 ) -> list[AttemptRecord]:
+    """
+    Retrieve verification history for a specific ID number.
+    Implemented as POST to prevent South African ID numbers from leaking into URL access logs.
+    """
+    user_ref = user.get("sub", "anonymous")
+    logger.info(
+        "verifications.history correlation=%s user=%s id_hash=%s",
+        correlation_id, user_ref, _hash_id(payload.id_number),
+    )
+
     rows = repository.list_attempts(
-        id_number=id_number.strip() if id_number else None,
-        status=status_filter,
-        limit=limit,
+        id_number=payload.id_number.strip(),
+        status=payload.status,
+        limit=payload.limit,
     )
     return [AttemptRecord(**row) for row in rows]
