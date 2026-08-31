@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---------- Stage 1: build the frontend bundle ----------
-FROM node:26.5.1-bookworm-slim AS frontend
+FROM node:26.8.1-bookworm-slim AS frontend
 
 WORKDIR /build
 
