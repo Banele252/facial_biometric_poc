@@ -193,7 +193,7 @@ export default function VerifyDetailsScreen({
       });
 
       // Persist RSA ID + MSISDN for later RICA use.
-      // Local Step 2 intentionally does NOT call /api/v1/verify-identity.
+      // Local Step 2 intentionally does NOT call /api/v1/api/v1/validate-identity.
       // Identity-provider integration remains available for later/UAT flows.
       const fullName = 'PENDING';
 

@@ -2,13 +2,17 @@
   "expo": {
     "name": "Biometric Trust",
     "slug": "facial-biometric-poc",
+    "owner": "stols-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mtn.facialbiometricpoc"
+      "bundleIdentifier": "com.mtn.facialbiometricpoc",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,10 +22,10 @@
       },
       "package": "com.mtn.facialbiometricpoc",
       "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -55,14 +59,15 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.25"
+            "kotlinVersion": "1.9.25",
+            "usesCleartextTraffic": true
           }
         }
       ]
     ],
     "extra": {
       "eas": {
-        "projectId": "cf667e35-1fb7-478c-aa25-42b18edb6916"
+        "projectId": "54dc7812-629d-4d80-aa33-3798110ca223"
       }
     }
   }

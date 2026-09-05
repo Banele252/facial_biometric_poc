@@ -282,7 +282,7 @@ export const apiClient = {
     // Current VerifyDetailsScreen should not call this.
     verifyIdentity: (body: VerifyIdentityRequest) =>
         apiCall<VerifyIdentityResponse>(
-            '/api/v1/verify-identity',
+            '/api/v1/validate-id',
             {
                 method: 'POST',
                 body: {
