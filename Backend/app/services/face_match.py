@@ -1,19 +1,16 @@
+# Backend/app/services/face_match.py
 """Face match against Home Affairs — CARB journey step 8A (ABIS Match).
-
-Sends the stored selfie to VerifyNow's ``/facematch`` endpoint with the
-``facematch`` bundle, which compares it against the ID photo Home Affairs holds
+Sends the stored selfie to VerifyNow's `/facematch` endpoint with the
+`facematch` bundle, which compares it against the ID photo Home Affairs holds
 for that ID number. The other bundles need a caller-supplied reference image,
 which this journey never has.
-
-The provider returns its own decision at ``results.face_match.status`` — one of
-``Approved``, ``In Review`` or ``Declined`` — alongside a 0-100 ``score``. The
+The provider returns its own decision at `results.face_match.status` — one of
+`Approved`, `In Review` or `Declined` — alongside a 0-100 `score`. The
 status is authoritative; the score is applied as an additional floor so a
 low-confidence "Approved" still lands in review rather than straight through.
-
-Calls run in sandbox unless ``VERIFY_MODE=production`` is set explicitly, so a
+Calls run in sandbox unless `VERIFY_MODE=production` is set explicitly, so a
 demo cannot spend credits by accident.
 """
-
 from __future__ import annotations
 
 import base64
@@ -67,15 +64,13 @@ def _extract(body: dict) -> tuple[str, float | None, str | None, tuple[str, ...]
 
 
 def run_face_match(
-    id_number: str, storage_ref: str, settings: Settings | None = None
+        id_number: str, storage_ref: str, settings: Settings | None = None
 ) -> FaceMatchResult:
     """Run the Home Affairs face match for a stored selfie.
-
     Raises VerifyNowError if the provider cannot be reached, so the caller can
     fall back rather than failing the customer.
     """
     settings = settings or get_settings()
-
     raw = storage_service.get_storage(settings).load(storage_ref)
     selfie_b64 = base64.b64encode(raw).decode("ascii")
 

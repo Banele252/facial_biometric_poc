@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c0cc06f1-c833-458d-bd2a-3c1b8da199e8"
+      }
+    },
+    "android": {
+      "package": "com.tngxola.facial_biometric_poc"
+    }
+  }
+}

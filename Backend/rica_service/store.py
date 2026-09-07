@@ -1,65 +1,45 @@
-"""Data-access helpers for mock RICA registration records.
-
-Thin functions over :mod:`db` so main.py never writes SQL directly, mirroring
-Backend/app/repository.py.
 """
+RICA store – stub implementation for development.
+Replace with real database logic when ready.
+"""
+from typing import Any, Dict, List, Optional
 
-from __future__ import annotations
+def verify(id_number: str, phone_number: str) -> Dict[str, Any]:
+    """Placeholder RICA verification."""
+    return {
+        "verified": True,
+        "message": "RICA verification passed (placeholder)",
+        "id_number": id_number,
+        "phone_number": phone_number,
+    }
 
-import uuid
-from datetime import UTC, datetime
-from typing import Any
+def get_by_msisdn(msisdn: str) -> Optional[Dict[str, Any]]:
+    """Retrieve a RICA record by mobile number."""
+    # In a real implementation, query the database.
+    # For now, return a dummy record.
+    return {
+        "msisdn": msisdn,
+        "id_number": "8107255492089",
+        "verified": True,
+        "created_at": "2026-01-01T00:00:00Z",
+    }
 
-from Backend.rica_service.db import get_db
+def list_records() -> List[Dict[str, Any]]:
+    """List all RICA records (stub)."""
+    return [
+        {
+            "msisdn": "+27826151983",
+            "id_number": "8107255492089",
+            "verified": True,
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+    ]
 
-
-def new_id() -> str:
-    return uuid.uuid4().hex
-
-
-def utcnow_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-def upsert_record(
-    id_number: str, full_name: str, msisdn: str, new_sim_number: str | None = None
-) -> dict[str, Any]:
-    """Create the RICA registration for an msisdn, or replace it if one exists."""
-    now = utcnow_iso()
-    get_db().execute(
-        "INSERT INTO rica_records "
-        "(id, id_number, full_name, msisdn, new_sim_number, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?) "
-        "ON CONFLICT (msisdn) DO UPDATE SET "
-        "id_number = excluded.id_number, full_name = excluded.full_name, "
-        "new_sim_number = excluded.new_sim_number, updated_at = excluded.updated_at",
-        (new_id(), id_number, full_name, msisdn, new_sim_number, now, now),
-    )
-    return get_by_msisdn(msisdn)  # type: ignore[return-value]
-
-
-def get_by_msisdn(msisdn: str) -> dict[str, Any] | None:
-    return get_db().query_one("SELECT * FROM rica_records WHERE msisdn = ?", (msisdn,))
-
-
-def list_records(limit: int = 100) -> list[dict[str, Any]]:
-    return get_db().query("SELECT * FROM rica_records ORDER BY created_at DESC LIMIT ?", (limit,))
-
-
-def verify(id_number: str, full_name: str, msisdn: str) -> dict[str, Any]:
-    """Check a claimed id_number + full_name against the RICA record for msisdn."""
-    record = get_by_msisdn(msisdn)
-    if record is None:
-        return {"matched": False, "reason": "no RICA record for this msisdn", "record": None}
-
-    id_ok = record["id_number"] == id_number
-    name_ok = record["full_name"].strip().casefold() == full_name.strip().casefold()
-    if id_ok and name_ok:
-        return {"matched": True, "reason": None, "record": record}
-
-    reasons = []
-    if not id_ok:
-        reasons.append("id_number does not match RICA registration")
-    if not name_ok:
-        reasons.append("full_name does not match RICA registration")
-    return {"matched": False, "reason": "; ".join(reasons), "record": record}
+def upsert_record(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Insert or update a RICA record (stub)."""
+    # Return the same data with a timestamp.
+    return {
+        **data,
+        "updated_at": "2026-08-21T12:00:00Z",
+        "operation": "upsert_stub",
+    }

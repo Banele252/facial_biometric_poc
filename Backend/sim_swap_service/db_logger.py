@@ -1,18 +1,14 @@
+# Backend/sim_swap_service/db_logger.py
 """
 Database logging for API request/response audit trail.
-
 Logs a structured summary of each API call (endpoint, method, request
 fields, response body, status) to Postgres, per the audit/tracing
 requirement in the RDS ("record transaction events using date and time").
-
 Best-effort: a DB outage or missing credentials never breaks the API - the
 call just goes unlogged, with a warning printed to the service's logs.
-
 Requires the following environment variables (see .env):
-    postgres_host, postgres_port, postgres_username, postgres_password,
-    database
+postgres_host, postgres_port, postgres_username, postgres_password, database
 """
-
 from __future__ import annotations
 
 import json
@@ -24,17 +20,17 @@ from typing import Any
 logger = logging.getLogger("db_logger")
 
 _TABLE_DDL = """
-CREATE TABLE IF NOT EXISTS api_call_log (
-    id BIGSERIAL PRIMARY KEY,
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    service TEXT NOT NULL,
-    endpoint TEXT NOT NULL,
-    method TEXT NOT NULL,
-    status_code INTEGER,
-    request_summary JSONB,
-    response_summary JSONB
-)
-"""
+             CREATE TABLE IF NOT EXISTS api_call_log (
+                                                         id BIGSERIAL PRIMARY KEY,
+                                                         occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                 service TEXT NOT NULL,
+                 endpoint TEXT NOT NULL,
+                 method TEXT NOT NULL,
+                 status_code INTEGER,
+                 request_summary JSONB,
+                 response_summary JSONB
+                 ) \
+             """
 
 
 def _get_connection():
@@ -49,7 +45,6 @@ def _get_connection():
         return None
 
     import psycopg
-
     return psycopg.connect(
         host=host,
         port=port,
@@ -74,6 +69,7 @@ def ensure_table() -> None:
                 "Postgres env vars not set - API call logging to the database is disabled."
             )
             return
+
         with conn.cursor() as cur:
             cur.execute(_TABLE_DDL)
         conn.commit()
@@ -85,12 +81,12 @@ def ensure_table() -> None:
 
 
 def log_call(
-    service: str,
-    endpoint: str,
-    method: str,
-    request_summary: dict[str, Any],
-    response_summary: dict[str, Any],
-    status_code: int,
+        service: str,
+        endpoint: str,
+        method: str,
+        request_summary: dict[str, Any],
+        response_summary: dict[str, Any],
+        status_code: int,
 ) -> None:
     """
     Best-effort insert of one API call record. Never raises - intended to
@@ -102,12 +98,13 @@ def log_call(
         conn = _get_connection()
         if conn is None:
             return
+
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO api_call_log
-                    (occurred_at, service, endpoint, method, status_code,
-                     request_summary, response_summary)
+                (occurred_at, service, endpoint, method, status_code,
+                 request_summary, response_summary)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (

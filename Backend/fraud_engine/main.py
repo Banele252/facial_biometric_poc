@@ -1,18 +1,17 @@
+# Backend/fraud_engine/main.py
 """
 Fraud engine API.
-
 Covers the full fraud-checks flow:
-    - Device Risk Checks (UC014)
-    - Fraud Intelligence Checks (UC015)
-    - Risk Assessment (UC016)
-    - Decisioning (UC017)
+- Device Risk Checks (UC014)
+- Fraud Intelligence Checks (UC015)
+- Risk Assessment (UC016)
+- Decisioning (UC017)
 
 Run locally with (from this directory):
-    uv run uvicorn main:app --reload
+uv run uvicorn main:app --reload
 
 Then open http://127.0.0.1:8000/docs for interactive Swagger docs.
 """
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -69,9 +68,9 @@ _watchlist = Watchlist()
 # --------------------------------------------------------------------------
 @app.post("/api/v1/risk/device-check")
 async def device_check(
-    background_tasks: BackgroundTasks,
-    device_id: str = Form(...),
-    identity_reference: str = Form(...),
+        background_tasks: BackgroundTasks,
+        device_id: str = Form(...),
+        identity_reference: str = Form(...),
 ):
     """Assess the risk of the device attempting this SIM Swap request."""
     result = assess_device_risk(device_id, identity_reference, _device_attempt_store)
@@ -98,10 +97,10 @@ async def device_check(
 # --------------------------------------------------------------------------
 @app.post("/api/v1/risk/fraud-intelligence")
 async def fraud_intelligence_check(
-    background_tasks: BackgroundTasks,
-    identity_reference: str = Form(...),
-    msisdn: str = Form(...),
-    device_id: str = Form(...),
+        background_tasks: BackgroundTasks,
+        identity_reference: str = Form(...),
+        msisdn: str = Form(...),
+        device_id: str = Form(...),
 ):
     """Evaluate velocity, watchlist, and fraud-indicator signals."""
     result = assess_fraud_intelligence(
@@ -150,9 +149,9 @@ class FraudIntelligenceInput(BaseModel):
 
 @app.post("/api/v1/risk/score")
 async def risk_score(
-    background_tasks: BackgroundTasks,
-    device_risk: DeviceRiskInput,
-    fraud_intelligence: FraudIntelligenceInput,
+        background_tasks: BackgroundTasks,
+        device_risk: DeviceRiskInput,
+        fraud_intelligence: FraudIntelligenceInput,
 ):
     """
     Combine a device-risk result and a fraud-intelligence result into a
@@ -195,9 +194,9 @@ class RiskScoreInput(BaseModel):
 
 @app.post("/api/v1/risk/decision")
 async def risk_decision(
-    background_tasks: BackgroundTasks,
-    risk_result: RiskScoreInput,
-    watchlist_hit: bool = False,
+        background_tasks: BackgroundTasks,
+        risk_result: RiskScoreInput,
+        watchlist_hit: bool = False,
 ):
     """Apply APPROVE / REFER / REJECT thresholds to a risk score."""
     result = decide(
@@ -242,10 +241,10 @@ class FraudCheckResponse(BaseModel):
 
 @app.post("/api/v1/fraud-checks/assess", response_model=FraudCheckResponse)
 async def assess_fraud_checks(
-    background_tasks: BackgroundTasks,
-    device_id: str = Form(...),
-    identity_reference: str = Form(...),
-    msisdn: str = Form(...),
+        background_tasks: BackgroundTasks,
+        device_id: str = Form(...),
+        identity_reference: str = Form(...),
+        msisdn: str = Form(...),
 ):
     """
     Full fraud-checks pipeline: Device Risk -> Fraud Intelligence -> Risk

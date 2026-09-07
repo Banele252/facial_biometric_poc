@@ -1,17 +1,17 @@
+# Backend/app/services/sim_swap.py
 """SIM swap order creation — CARB journey steps 10 and 11.
 
 The last step of the journey: once identity is verified and the fraud checks
 pass, a SIM swap order is created. The gate itself lives in
-``sim_swap_service/sim_swap_request.py`` and is used unchanged — it refuses to
+`sim_swap_service/sim_swap_request.py` and is used unchanged — it refuses to
 create an order unless both inputs are positive, which is the control that
 matters here.
 
-Orders are persisted to ``sim_swap_orders`` rather than kept in the service's
-``InMemoryOrderStore``, so an order survives a restart and can be looked up
+Orders are persisted to `sim_swap_orders` rather than kept in the service's
+`InMemoryOrderStore`, so an order survives a restart and can be looked up
 afterwards. Losing the record of a completed swap would be worse than not
 recording it at all, because the customer's SIM has already changed.
 """
-
 from __future__ import annotations
 
 import logging
@@ -124,11 +124,11 @@ class SwapResult:
 
 
 def create_order(
-    msisdn: str,
-    new_sim_serial: str,
-    identity_reference: str,
-    identity_verified: bool,
-    fraud_approved: bool,
+        msisdn: str,
+        new_sim_serial: str,
+        identity_reference: str,
+        identity_verified: bool,
+        fraud_approved: bool,
 ) -> SwapResult:
     """Create the SIM swap order if both gates allow it."""
     result = create_sim_swap_request(
@@ -141,7 +141,6 @@ def create_order(
         fraud_decision=FraudDecision.APPROVE if fraud_approved else FraudDecision.REJECT,
         store=_store,
     )
-
     created = result.order is not None
     reasons = tuple(str(r) for r in (result.reasons or []))
     detail = (
@@ -149,7 +148,6 @@ def create_order(
         if created
         else (reasons[0] if reasons else "SIM swap order was not created")
     )
-
     logger.info("SIM swap order creation: created=%s status=%s", created, result.status)
     return SwapResult(
         created=created,

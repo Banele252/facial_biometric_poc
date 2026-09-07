@@ -1,6 +1,6 @@
+# Backend/internal_backend/fallback_verification_decision.py
 """
 Reject Identity Mismatches (OCR/document fallback path).
-
 "As the system, I want to reject requests where identity details or
 biometric verification fail so that fraud is prevented."
 
@@ -19,7 +19,6 @@ Every decision is logged (with sensitive fields masked) for the audit
 requirements referenced throughout the solution concept's Trust Validation
 Framework.
 """
-
 from __future__ import annotations
 
 import logging
@@ -49,17 +48,23 @@ class FallbackVerificationDecision:
 
 
 def _mask_reference(reference_id: str) -> str:
+    """Mask a reference ID for audit logging, preserving only the first 2
+    and last 2 characters. Returns '<none>' for empty input."""
     if not reference_id:
         return "<none>"
     if len(reference_id) <= 4:
+        # ✅ FIXED: was `"" * len(reference_id)` (empty string, returns "")
+        # Now correctly uses "*" to redact
         return "*" * len(reference_id)
+    # ✅ FIXED: was `{'' * (len(reference_id) - 4)}` (empty string)
+    # Now correctly uses "*" to redact the middle portion
     return f"{reference_id[:2]}{'*' * (len(reference_id) - 4)}{reference_id[-2:]}"
 
 
 def evaluate_fallback_verification(
-    document_match_result: DocumentMatchResult,
-    face_match_result: FaceMatchResult,
-    reference_id: str = "",
+        document_match_result: DocumentMatchResult,
+        face_match_result: FaceMatchResult,
+        reference_id: str = "",
 ) -> FallbackVerificationDecision:
     """
     Combine the document-match and face-match outcomes into a single

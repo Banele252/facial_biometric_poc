@@ -1,3 +1,4 @@
+# Backend/external_backend/main.py
 """VerifyNow client.
 
 Previously this module read environment variables and built request headers at
@@ -5,9 +6,7 @@ import time, which made it impossible to import from a long-running service or
 a test without the environment already populated. The request logic is
 unchanged — it is now behind functions that resolve configuration when called.
 """
-
 import os
-
 import requests
 from dotenv import load_dotenv
 
@@ -27,6 +26,7 @@ class VerifyNowError(RuntimeError):
 
 
 def _headers(mode: str = "production") -> dict[str, str]:
+    """Build request headers for VerifyNow API calls."""
     headers = {
         "x-api-key": os.getenv("VERIFY_NOW_API_KEY", ""),
         "Content-Type": "application/json",
@@ -40,6 +40,7 @@ def _headers(mode: str = "production") -> dict[str, str]:
 
 
 def _base_url() -> str:
+    """Resolve the VerifyNow base URL from environment."""
     base_url = os.getenv("VERIFY_BASE_URL")
     if not base_url:
         raise VerifyNowError("VERIFY_BASE_URL is not configured")
@@ -86,15 +87,15 @@ def verify_said(id_number: str, mode: str = "production", timeout: float = 15.0)
 
 
 def face_match(
-    id_number: str,
-    selfie_image_base64: str,
-    mode: str = "sandbox",
-    timeout: float = 30.0,
+        id_number: str,
+        selfie_image_base64: str,
+        mode: str = "sandbox",
+        timeout: float = 30.0,
 ) -> dict:
     """Match a selfie against the Home Affairs ID photo for the given ID number.
 
     Returns the raw provider body. The decision lives at
-    ``results.face_match.status`` with a 0-100 ``score`` beside it.
+    results.face_match.status with a 0-100 score beside it.
     """
     return _post(
         FACEMATCH_ENDPOINT,
@@ -139,8 +140,10 @@ def get_credits(timeout: float = 15.0) -> dict:
 
 
 def main() -> None:
+    """Smoke test: verify a known-good sandbox ID."""
     load_dotenv(override=True)
-    print(verify_said(id_number=""))
+    # Use a valid test ID number for sandbox testing
+    print(verify_said(id_number="9001015800086", mode="sandbox"))
 
 
 if __name__ == "__main__":

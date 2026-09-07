@@ -1,13 +1,14 @@
+# Backend/fraud_engine/test_decisioning.py
 from Backend.fraud_engine.decisioning import FraudDecision, decide
 from Backend.fraud_engine.fraud_intelligence_check import FraudIntelligenceResult, FraudRiskLevel
 from Backend.fraud_engine.risk_assessment import OverallRiskBand, RiskScoreResult
 
 
-def make_risk_result(band, score=0, factors=None):
+def make_risk_result(band: OverallRiskBand, score: float = 0.0, factors: list[str] | None = None) -> RiskScoreResult:
     return RiskScoreResult(score=score, band=band, contributing_factors=factors or [])
 
 
-def make_fraud_intel(watchlist_hit=False):
+def make_fraud_intel(watchlist_hit: bool = False) -> FraudIntelligenceResult:
     return FraudIntelligenceResult(
         risk_level=FraudRiskLevel.LOW,
         velocity_count_in_window=1,

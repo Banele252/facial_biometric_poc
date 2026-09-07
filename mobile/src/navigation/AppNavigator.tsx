@@ -1,98 +1,113 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { NavigationProvider, useNavigation } from './NavigationProvider';
-import { RootStackParamList } from './types';
+// src/navigation/AppNavigator.tsx
+import React, { useMemo } from 'react';
+import { useNavigation } from './NavigationProvider';
+import type { ScreenName, NavigationParams } from './types';
 
-import SplashScreen from '../features/screens/SplashScreen';
-import { RequestSimSwapScreen } from '@/features/screens/RequestSimSwapScreen';
-import { SAIDSelectionScreen } from '@/features/screens/SAIDSelectionScreen';
-import IdentityValidationScreen from '../features/screens/IdentityValidationScreen';
-import SimSwapDetailsScreen from '../features/screens/SimSwapDetailsScreen';
-import { IDDocumentScanScreen } from '@/features/screens/IDDocumentScanScreen';
-import FacialVerificationScreen from '../features/screens/FacialVerificationScreen';
-import LivenessDetectionScreen from '../features/screens/LivenessDetectionScreen';
-import FraudIntelligenceChecksScreen from '../features/screens/FraudIntelligenceChecksScreen';
-import SIMSwapApprovedScreen from '../features/screens/SIMSwapApprovedScreen';
-import SIMSwapCompleteScreen from '../features/screens/SIMSwapCompleteScreen';
+/* ─── screens ─── */
+import LandingScreen from '@/features/screens/LandingScreen';
+import ConsentScreen from '@/features/screens/ConsentScreen';
+import VerifyDetailsScreen from '@/features/screens/VerifyDetailsScreen';
+import FaceCheckScreen from '@/features/screens/FaceCheckScreen';
+import ScanSimScreen from '@/features/screens/ScanSimScreen';
+import ReviewScreen from '@/features/screens/ReviewScreen';
+import CompleteScreen from '@/features/screens/CompleteScreen';
 
-const Stack = createStackNavigator<RootStackParamList>();
-
-function AppContent() {
-  const { state, dispatch, navigate, goBack } = useNavigation();
-
-  const dispatchNav = {
-    navigate: (screen: string, params?: any) => navigate(screen as any, params),
-    goBack: () => goBack(),
-  };
-
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {state.current.screen === 'Splash' && (
-        <Stack.Screen name="Splash">
-          {() => <SplashScreen {...dispatchNav} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'RequestSimSwap' && (
-        <Stack.Screen name="RequestSimSwap">
-          {() => <RequestSimSwapScreen {...dispatchNav} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'SAIDSelection' && (
-        <Stack.Screen name="SAIDSelection">
-          {() => <SAIDSelectionScreen {...dispatchNav} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'IdentityValidation' && (
-        <Stack.Screen name="IdentityValidation">
-          {() => <IdentityValidationScreen {...dispatchNav} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'SimSwapDetails' && (
-        <Stack.Screen name="SimSwapDetails">
-          {() => <SimSwapDetailsScreen dispatch={dispatch} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'IDDocumentScan' && (
-        <Stack.Screen name="IDDocumentScan">
-          {() => <IDDocumentScanScreen dispatch={dispatch} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'FacialVerification' && (
-        <Stack.Screen name="FacialVerification">
-          {() => <FacialVerificationScreen dispatch={dispatch} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'LivenessDetection' && (
-        <Stack.Screen name="LivenessDetection">
-          {() => <LivenessDetectionScreen dispatch={dispatch} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'FraudIntelligenceChecks' && (
-        <Stack.Screen name="FraudIntelligenceChecks">
-          {() => <FraudIntelligenceChecksScreen dispatch={dispatch} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'SIMSwapApproved' && (
-        <Stack.Screen name="SIMSwapApproved">
-          {() => <SIMSwapApprovedScreen dispatch={dispatch} />}
-        </Stack.Screen>
-      )}
-      {state.current.screen === 'SIMSwapComplete' && (
-        <Stack.Screen name="SIMSwapComplete">
-          {() => <SIMSwapCompleteScreen dispatch={dispatch} />}
-        </Stack.Screen>
-      )}
-    </Stack.Navigator>
-  );
-}
+const SCREEN_MAP: Record<ScreenName, React.ComponentType<any>> = {
+  LandingScreen,
+  ConsentScreen,
+  VerifyDetailsScreen,
+  FaceCheckScreen,
+  ScanSimScreen,
+  ReviewScreen,
+  CompleteScreen,
+};
 
 export default function AppNavigator() {
-  return (
-    <NavigationProvider>
-      <NavigationContainer>
-        <AppContent />
-      </NavigationContainer>
-    </NavigationProvider>
-  );
+  const { currentScreen, currentParams, navigate, goBack, dispatch } =
+      useNavigation();
+
+  const ScreenComponent = SCREEN_MAP[currentScreen];
+
+  const screenProps = useMemo(() => {
+    const base = {
+      navigate,
+      goBack,
+      dispatch,
+    };
+
+    switch (currentScreen) {
+    case 'LandingScreen':
+      return base;
+
+    case 'ConsentScreen':
+      return {
+        ...base,
+        routeParams: currentParams,
+      };
+
+    case 'VerifyDetailsScreen':
+      return base;
+
+    case 'FaceCheckScreen': {
+      const p = currentParams as NavigationParams['FaceCheckScreen'] | undefined;
+      return {
+        ...base,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        fullName: p?.fullName,
+        photoUrl: p?.photoUrl,
+      };
+    }
+
+    case 'ScanSimScreen': {
+      const p = currentParams as NavigationParams['ScanSimScreen'] | undefined;
+      return {
+        ...base,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        fullName: p?.fullName,
+        photoUrl: p?.photoUrl,
+        sessionId: p?.sessionId,
+        selfieId: p?.selfieId,
+      };
+    }
+
+    case 'ReviewScreen': {
+      const p = currentParams as NavigationParams['ReviewScreen'] | undefined;
+      return {
+        ...base,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        fullName: p?.fullName,
+        photoUrl: p?.photoUrl,
+        sessionId: p?.sessionId,
+        selfieId: p?.selfieId,
+        iccid: p?.iccid,
+        matchScore: p?.matchScore,
+        matchConfidence: p?.matchConfidence,
+        reason: p?.reason,
+      };
+    }
+
+    case 'CompleteScreen': {
+      const p = currentParams as NavigationParams['CompleteScreen'] | undefined;
+      return {
+        ...base,
+        swapId: p?.swapId,
+        idNumber: p?.idNumber,
+        phoneNumber: p?.phoneNumber,
+        onFinish: p?.onFinish as (() => void) | undefined,
+      };
+    }
+
+    default:
+      return base;
+    }
+  }, [currentScreen, currentParams, navigate, goBack, dispatch]);
+
+  if (!ScreenComponent) {
+    return null;
+  }
+
+  return <ScreenComponent {...screenProps} />;
 }

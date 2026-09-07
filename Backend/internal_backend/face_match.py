@@ -1,3 +1,4 @@
+# Backend/internal_backend/face_match.py
 """
 Face Match Against Document photo.
 
@@ -5,9 +6,9 @@ Face Match Against Document photo.
 document (or passport) photograph so that identity can be verified."
 
 Uses Azure AI Face API's detect + verify operations:
-    1. Detect a face in the live selfie.
-    2. Detect a face in the ID/passport document image.
-    3. Verify whether the two detected faces belong to the same person.
+1. Detect a face in the live selfie.
+2. Detect a face in the ID/passport document image.
+3. Verify whether the two detected faces belong to the same person.
 
 IMPORTANT: Azure's Face API (detection with identification/verification
 attributes) is a Limited Access Azure Cognitive Service - it requires an
@@ -16,14 +17,13 @@ IDs usable for verification. Confirm this has been granted for your Azure
 resource before relying on this in a live demo.
 
 Requires the following environment variables (see .env):
-    AZURE_FACE_API_ENDPOINT
-    AZURE_FACE_API_KEY
+AZURE_FACE_API_ENDPOINT
+AZURE_FACE_API_KEY
 
 This module has not been tested against a live Azure resource. The
 orchestration logic is isolated from the Azure calls so it can be unit
 tested via mocking.
 """
-
 from __future__ import annotations
 
 import os
@@ -70,9 +70,9 @@ def _detect_face_id(client, image_bytes: bytes) -> str:
 
 
 def match_face_to_document(
-    selfie_bytes: bytes,
-    document_image_bytes: bytes,
-    confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+        selfie_bytes: bytes,
+        document_image_bytes: bytes,
+        confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
 ) -> FaceMatchResult:
     """
     Compare a live selfie against the photo on an ID document / passport.
@@ -86,7 +86,6 @@ def match_face_to_document(
         client = _get_client()
         selfie_face_id = _detect_face_id(client, selfie_bytes)
         document_face_id = _detect_face_id(client, document_image_bytes)
-
         verify_result = client.verify_face_to_face(
             face_id1=selfie_face_id,
             face_id2=document_face_id,
@@ -98,5 +97,4 @@ def match_face_to_document(
 
     confidence = float(verify_result.confidence)
     is_match = bool(verify_result.is_identical) and confidence >= confidence_threshold
-
     return FaceMatchResult(success=True, is_match=is_match, confidence=round(confidence, 4))

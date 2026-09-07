@@ -1,82 +1,90 @@
-"""Runtime configuration, read from the environment.
+# Backend/app/config.py
+"""Application settings."""
+from __future__ import annotations
 
-Values come from Container App secrets in deployed environments and from a
-local .env file during development. Nothing here is read at import time by
-the request path — call get_settings() so tests can override the environment.
-"""
-
-import os
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
+
+_DEFAULT_DB_PATH = Path(__file__).parent.parent / "facial_biometric.db"
 
 
-@dataclass(frozen=True)
-class Settings:
-    verify_now_api_key: str | None
-    verify_base_url: str | None
-    idempotency_key: str | None
-    static_dir: Path
-    request_timeout_seconds: float
-    # Persistence for verification history and the in-app notification inbox.
-    # Defaults to a local SQLite file; set to a postgresql:// URL to use the
-    # deployed Postgres (requires the optional `psycopg` package).
-    database_url: str
-    # Selfie storage. Defaults to a local directory; set an Azure Blob
-    # connection string + container to store in Blob (requires the optional
-    # `azure-storage-blob` package).
-    selfie_storage_dir: Path
-    azure_storage_connection_string: str | None
-    azure_storage_container: str
-    # Liveness detection. Azure AI Face is the target provider but is
-    # unavailable in the hackathon subscription, so the default is a
-    # dependency-free mock that keeps the flow demonstrable.
-    liveness_provider: str
-    liveness_min_score: float
-    # VerifyNow call mode. "sandbox" returns mock responses and consumes no
-    # credits; "production" bills per call. Sandbox is the default so no code
-    # path can spend credits without an explicit deployment-level opt-in.
-    verify_mode: str
-    # VerifyNow face match returns a 0-100 score alongside its own status. The
-    # status is authoritative; this is the floor applied to an approval.
-    face_match_min_score: float
-    # The VerifyNow sandbox enforces a ~10s per-IP cooldown across its routes,
-    # so a journey making two provider calls must wait between them or the
-    # second returns "Too Many Requests". Production has no such limit.
-    sandbox_cooldown_seconds: float
-
-    @property
-    def verify_now_configured(self) -> bool:
-        return bool(self.verify_now_api_key and self.verify_base_url)
+class Settings(BaseSettings):
+    env: str = "development"
+    verify_mode: Literal["production", "sandbox"] = "sandbox"
 
     @property
     def is_sandbox(self) -> bool:
-        return self.verify_mode == "sandbox"
+        return self.verify_mode == "sandbox" or self.env == "development"
+
+    verify_now_configured: bool = False
+    request_timeout_seconds: int = 30
+    sandbox_cooldown_seconds: int = 0
+    face_match_min_score: float = 60.0
+    liveness_provider: str = "mock"
+    liveness_min_score: float = 0.6
+    selfie_storage_dir: Path = Path(__file__).parent.parent / "selfies"
+
+    # JWT Configuration
+    jwt_private_key: str = ""
+    jwt_public_key: str = ""
+    jwt_algorithm: str = "RS256"
+    jwt_issuer: str = "facial-biometric-poc"
+    jwt_audience: str = "facial-biometric-api"
+    jwt_access_token_expire_minutes: int = 60
+
+    @field_validator("jwt_private_key", "jwt_public_key", mode="before")
+    @classmethod
+    def normalize_newlines(cls, v: str) -> str:
+        if isinstance(v, str):
+            return v.replace("\\n", "\n").strip()
+        return v
+
+    @property
+    def is_production(self) -> bool:
+        return self.env == "production"
+
+    # Database
+    database_url: str = f"sqlite:///{_DEFAULT_DB_PATH}"
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Security & Zero Trust
+    allowed_geo_fences: list[str] = Field(default_factory=lambda: ["ZA-jnb", "ZA-cpt", "ZA-dur"])
+    rate_limit_face_match_per_minute: int = 30
+    rate_limit_sim_swap_per_minute: int = 10
+    rate_limit_history_per_minute: int = 60
+    rate_limit_token_per_minute: int = 20
+    nonce_ttl_seconds: int = 300
+    sandbox_api_key: str | None = None
+    production_api_key: str | None = None
+    cors_allow_origins: str = ""
+
+    # Audit & Compliance
+    audit_secret_key: str = "change-me-in-production-use-256-bit-key-min-32-chars-long"
+    audit_mobile_batch_max: int = 50
+    audit_mobile_flush_interval_sec: int = 30
+    audit_retention_days: int = 1825
+
+    # Storage
+    azure_storage_connection_string: str | None = None
+    azure_storage_container: str = "selfies"
 
     @property
     def blob_storage_configured(self) -> bool:
         return bool(self.azure_storage_connection_string)
 
+    # Frontend
+    static_dir: Path = Path(__file__).parent.parent.parent / "mobile" / "dist"
 
-@lru_cache(maxsize=1)
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        extra = "ignore"
+
+
+@lru_cache
 def get_settings() -> Settings:
-    default_db = f"sqlite:///{(Path('data') / 'verifications.db').as_posix()}"
-    return Settings(
-        verify_now_api_key=os.getenv("VERIFY_NOW_API_KEY"),
-        verify_base_url=os.getenv("VERIFY_BASE_URL"),
-        # Casing matches the existing key used by Backend/external_backend.
-        idempotency_key=os.getenv("Idempotency_id_key"),
-        static_dir=Path(os.getenv("STATIC_DIR", "static")),
-        request_timeout_seconds=float(os.getenv("REQUEST_TIMEOUT_SECONDS", "15")),
-        database_url=os.getenv("DATABASE_URL", default_db),
-        selfie_storage_dir=Path(os.getenv("SELFIE_STORAGE_DIR", "data/selfies")),
-        azure_storage_connection_string=os.getenv("AZURE_STORAGE_CONNECTION_STRING"),
-        azure_storage_container=os.getenv("AZURE_STORAGE_CONTAINER", "selfies"),
-        liveness_provider=os.getenv("LIVENESS_PROVIDER", "mock"),
-        liveness_min_score=float(os.getenv("LIVENESS_MIN_SCORE", "0.6")),
-        # Anything other than an explicit "production" is treated as sandbox,
-        # so a typo or empty value fails safe rather than spending credits.
-        verify_mode="production" if os.getenv("VERIFY_MODE") == "production" else "sandbox",
-        face_match_min_score=float(os.getenv("FACE_MATCH_MIN_SCORE", "60")),
-        sandbox_cooldown_seconds=float(os.getenv("SANDBOX_COOLDOWN_SECONDS", "11")),
-    )
+    return Settings()

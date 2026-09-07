@@ -1,3 +1,4 @@
+// src/components/ui/Button.tsx
 import React from 'react';
 import { Pressable, PressableProps, StyleSheet, ActivityIndicator, View } from 'react-native';
 import { Typography } from './Typography';
@@ -8,6 +9,7 @@ interface Props extends PressableProps {
   size?: 'md' | 'lg';
   loading?: boolean;
   children: React.ReactNode;
+  accessibilityLabel?: string;
 }
 
 export const Button: React.FC<Props> = ({
@@ -17,6 +19,7 @@ export const Button: React.FC<Props> = ({
   children,
   style,
   disabled,
+  accessibilityLabel,
   ...props
 }) => {
   const isPrimary = variant === 'primary';
@@ -24,34 +27,34 @@ export const Button: React.FC<Props> = ({
   return (
     <Pressable
       style={({ pressed }) => {
-        const internalStyles = [
+        const internal = StyleSheet.flatten([
           styles.base,
           styles[size],
           styles[variant],
-          (pressed || disabled) && { opacity: 0.7 },
-        ];
-        const resolvedStyle = typeof style === 'function' ? style({ pressed }) : style;
-        return StyleSheet.flatten([...internalStyles, resolvedStyle]);
+          (pressed || disabled) && styles.dimmed,
+        ]);
+        const consumer = typeof style === 'function' ? style({ pressed }) : style;
+        return [internal, consumer];
       }}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || (typeof children === 'string' ? children : 'Button')}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       {...props}
     >
       <View style={styles.content}>
         {loading ? (
           <ActivityIndicator color={isPrimary ? Colors.text : Colors.primary} />
+        ) : typeof children === 'string' ? (
+          <Typography
+            variant="body"
+            color={isPrimary ? 'text' : 'textSecondary'}
+            style={{ fontWeight: '700' }}
+          >
+            {children}
+          </Typography>
         ) : (
-        // Only wrap in Typography if it's a plain string; otherwise render as‑is.
-          typeof children === 'string' ? (
-            <Typography
-              variant="body"
-              color={isPrimary ? 'text' : 'textSecondary'}
-              style={{ fontWeight: '700' }}
-            >
-              {children}
-            </Typography>
-          ) : (
-            children
-          )
+          children
         )}
       </View>
     </Pressable>
@@ -73,9 +76,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dimmed: { opacity: 0.7 },
   primary: {
     backgroundColor: Colors.primary,
-    shadowColor: Colors.primaryShadow,
+    shadowColor: (Colors as any).primaryShadow || `${Colors.primary}33`,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 1,
     shadowRadius: 20,

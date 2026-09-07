@@ -1,12 +1,12 @@
+# Backend/app/services/notifications.py
 """Notifications — HT2-24 (Approval) and HT2-25 (Rejection).
 
 Per the hackathon decision, delivery is in-app plus a log line, behind a
-pluggable ``Notifier`` interface so an email or SMS channel can be added later
+pluggable `Notifier` interface so an email or SMS channel can be added later
 without changing callers. Each notification is persisted to the inbox
-(``notifications`` table) so the frontend can display it and so there is an
+(`notifications` table) so the frontend can display it and so there is an
 audit trail of decisions communicated to the customer.
 """
-
 from __future__ import annotations
 
 import logging
@@ -55,7 +55,7 @@ def get_notifier(settings: Settings | None = None) -> Notifier:
 
 
 def notify_decision(
-    id_number: str, outcome: str | bool, method: str, attempt_id: str | None = None
+        id_number: str, outcome: str | bool, method: str, attempt_id: str | None = None
 ) -> dict:
     """Compose and send the notification for a decision.
 

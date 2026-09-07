@@ -1,5 +1,5 @@
+# Backend/rica_service/config.py
 """Runtime configuration for the mock RICA service.
-
 *** Enter your Azure Postgres connection details in .env, not here. ***
 Reads DATABASE_URL directly if it's set. Otherwise falls back to building
 one from the postgres_host / postgres_port / postgres_username /
@@ -9,7 +9,6 @@ Falls back to a local SQLite file when neither is set, which keeps
 `uv run uvicorn main:app` usable with zero configuration for quick local
 testing.
 """
-
 from __future__ import annotations
 
 import os

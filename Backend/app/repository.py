@@ -1,10 +1,9 @@
+# Backend/app/repository.py
 """Data-access helpers for selfies, verification attempts and notifications.
-
 Thin functions over :mod:`Backend.app.db` so routers and services never write
 SQL directly. Timestamps are ISO-8601 strings and identifiers are opaque hex
 UUIDs, both chosen so the same statements run on sqlite and Postgres unchanged.
 """
-
 from __future__ import annotations
 
 from typing import Any
@@ -37,13 +36,14 @@ def set_selfie_liveness(selfie_id: str, status: str, score: float, provider: str
 
 
 # -- verification attempts ---------------------------------------------------
+
 def record_attempt(
-    id_number: str,
-    status: str,
-    method: str,
-    reason: str | None = None,
-    provider_status: str | None = None,
-    selfie_id: str | None = None,
+        id_number: str,
+        status: str,
+        method: str,
+        reason: str | None = None,
+        provider_status: str | None = None,
+        selfie_id: str | None = None,
 ) -> dict[str, Any]:
     attempt_id = new_id()
     created_at = utcnow_iso()
@@ -58,7 +58,7 @@ def record_attempt(
 
 
 def list_attempts(
-    id_number: str | None = None, status: str | None = None, limit: int = 50
+        id_number: str | None = None, status: str | None = None, limit: int = 50
 ) -> list[dict[str, Any]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -71,17 +71,15 @@ def list_attempts(
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     params.append(limit)
     return get_db().query(
-        # `where` is built only from fixed literal fragments; all values are
-        # bound as parameters, so this is not an injection vector.
-        f"SELECT * FROM verification_attempts {where} "  # noqa: S608
-        f"ORDER BY created_at DESC LIMIT ?",
+        f"SELECT * FROM verification_attempts {where} ORDER BY created_at DESC LIMIT ?",
         tuple(params),
     )
 
 
 # -- notifications -----------------------------------------------------------
+
 def create_notification(
-    id_number: str, type_: str, channel: str, message: str, attempt_id: str | None = None
+        id_number: str, type_: str, channel: str, message: str, attempt_id: str | None = None
 ) -> dict[str, Any]:
     notif_id = new_id()
     created_at = utcnow_iso()
@@ -99,7 +97,6 @@ def list_notifications(id_number: str | None = None, limit: int = 50) -> list[di
     where = "WHERE id_number = ?" if id_number else ""
     params: tuple[Any, ...] = (id_number, limit) if id_number else (limit,)
     return get_db().query(
-        # `where` is a fixed literal fragment; values are bound as parameters.
-        f"SELECT * FROM notifications {where} ORDER BY created_at DESC LIMIT ?",  # noqa: S608
+        f"SELECT * FROM notifications {where} ORDER BY created_at DESC LIMIT ?",
         params,
     )
