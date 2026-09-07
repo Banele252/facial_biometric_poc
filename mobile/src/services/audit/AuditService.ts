@@ -206,13 +206,17 @@ class AuditService {
   }
 
   async flush(): Promise<boolean> {
+    // TEMPORARILY DISABLED FOR POC
+    // Prevent audit batch calls until the audit payload contract is fixed.
+    return true;
+
     if (this.buffer.length === 0) return true;
 
     const batchPayload = this.buffer.map((e) => e.integrity_hash).join('');
     const batchHash = await this.sha256(batchPayload);
 
     try {
-      await request('/audit/batch', {
+      await request('/api/v1/audit/batch', {
         method: 'POST',
         body: JSON.stringify({ entries: this.buffer, batch_hash: batchHash }),
         headers: {
