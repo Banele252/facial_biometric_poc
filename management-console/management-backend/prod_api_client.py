@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
-from config import get_settings
+from config import get_prod_api_base_url
 
 _SAST = timezone(timedelta(hours=2))
 _TIMEOUT = 10.0
@@ -46,14 +46,20 @@ def _sast_item(item: dict[str, Any]) -> dict[str, Any]:
 
 async def _get(path: str, params: dict[str, Any]) -> Any:
     params = {k: v for k, v in params.items() if v is not None}
-    base_url = get_settings().prod_api_base_url
+    base_url = get_prod_api_base_url()
     try:
         async with httpx.AsyncClient(base_url=base_url, timeout=_TIMEOUT) as client:
             response = await client.get(path, params=params)
         response.raise_for_status()
+        return response.json()
     except httpx.HTTPError as exc:
         raise ProdApiError(f"Prod API request to {path} failed: {exc}") from exc
-    return response.json()
+    except ValueError as exc:
+        # A 2xx response with a non-JSON body - e.g. PROD_API_BASE_URL pointing
+        # at the wrong service and landing on an HTML page instead of the
+        # reports API - should fail the same clean way a bad status does,
+        # not bubble up as an unhandled 500.
+        raise ProdApiError(f"Prod API response from {path} was not valid JSON: {exc}") from exc
 
 
 # --- process_log (audit/process events) --------------------------------

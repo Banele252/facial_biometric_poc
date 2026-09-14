@@ -13,12 +13,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import psycopg
-from config import get_settings
+from config import get_database_url
 from psycopg.rows import dict_row
 
 
 def get_connection() -> psycopg.Connection:
-    return psycopg.connect(get_settings().database_url, row_factory=dict_row)
+    return psycopg.connect(get_database_url(), row_factory=dict_row)
 
 
 def db_conn() -> Iterator[psycopg.Connection]:
