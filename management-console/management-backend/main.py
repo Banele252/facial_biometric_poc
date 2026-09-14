@@ -21,20 +21,9 @@ import os
 from pathlib import Path
 from typing import Annotated, Any
 
+import prod_api_client
 import psycopg
-from analytical_db import (
-    db_conn,
-    fraud_rejections_summary,
-    get_connection,
-    list_fraud_rejections,
-    list_process_logs,
-    list_sim_swap_orders,
-    list_transactions,
-    sim_swap_status_summary,
-    sim_swap_volume_by_day,
-    transaction_status_summary,
-    transaction_volume_by_day,
-)
+from analytical_db import db_conn, get_connection
 from auth import authenticate_user, ensure_users_table
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
@@ -43,6 +32,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pdf_report import build_pdf
 from process_docs_db import ensure_process_docs_table
+from prod_api_client import ProdApiError
 from pydantic import BaseModel, Field
 from report_agent import generate_report_narrative
 from report_data import gather_report_context
@@ -135,9 +125,16 @@ def _analytics_db_error(exc: Exception) -> HTTPException:
     )
 
 
+def _prod_api_error(exc: Exception) -> HTTPException:
+    logger.error("Prod API query failed: %s", exc)
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail="Prod API is currently unavailable",
+    )
+
+
 @analytics_router.get("/audit-logs")
 async def audit_logs(
-    conn: Conn,
     process: str | None = None,
     environment: str | None = None,
     created_from: str | None = None,
@@ -146,8 +143,7 @@ async def audit_logs(
     offset: int = 0,
 ) -> dict[str, Any]:
     try:
-        return list_process_logs(
-            conn,
+        return await prod_api_client.list_process_logs(
             process=process,
             environment=environment,
             created_from=created_from,
@@ -155,13 +151,12 @@ async def audit_logs(
             limit=limit,
             offset=offset,
         )
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
 
 
 @analytics_router.get("/fraud-rejections")
 async def fraud_rejections(
-    conn: Conn,
     stage: str | None = None,
     msisdn: str | None = None,
     created_from: str | None = None,
@@ -170,8 +165,7 @@ async def fraud_rejections(
     offset: int = 0,
 ) -> dict[str, Any]:
     try:
-        return list_fraud_rejections(
-            conn,
+        return await prod_api_client.list_fraud_rejections(
             stage=stage,
             msisdn=msisdn,
             created_from=created_from,
@@ -179,26 +173,26 @@ async def fraud_rejections(
             limit=limit,
             offset=offset,
         )
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
 
 
 @analytics_router.get("/fraud-rejections/summary")
 async def fraud_rejections_summary_route(
-    conn: Conn,
     created_from: str | None = None,
     created_to: str | None = None,
 ) -> dict[str, Any]:
     try:
-        rules = fraud_rejections_summary(conn, created_from=created_from, created_to=created_to)
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+        rules = await prod_api_client.fraud_rejections_summary(
+            created_from=created_from, created_to=created_to
+        )
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
     return {"rules": rules}
 
 
 @analytics_router.get("/sim-swap-orders")
 async def sim_swap_orders(
-    conn: Conn,
     status: str | None = None,
     msisdn: str | None = None,
     created_from: str | None = None,
@@ -207,8 +201,7 @@ async def sim_swap_orders(
     offset: int = 0,
 ) -> dict[str, Any]:
     try:
-        return list_sim_swap_orders(
-            conn,
+        return await prod_api_client.list_sim_swap_orders(
             status=status,
             msisdn=msisdn,
             created_from=created_from,
@@ -216,37 +209,35 @@ async def sim_swap_orders(
             limit=limit,
             offset=offset,
         )
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
 
 
 @analytics_router.get("/sim-swap-orders/status-summary")
 async def sim_swap_orders_status_summary(
-    conn: Conn,
     created_from: str | None = None,
     created_to: str | None = None,
 ) -> dict[str, Any]:
     try:
-        statuses = sim_swap_status_summary(
-            conn, created_from=created_from, created_to=created_to
+        statuses = await prod_api_client.sim_swap_status_summary(
+            created_from=created_from, created_to=created_to
         )
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
     return {"statuses": statuses}
 
 
 @analytics_router.get("/sim-swap-orders/volume-by-day")
-async def sim_swap_orders_volume_by_day(conn: Conn, days: int = 14) -> dict[str, Any]:
+async def sim_swap_orders_volume_by_day(days: int = 14) -> dict[str, Any]:
     try:
-        rows = sim_swap_volume_by_day(conn, days=days)
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+        rows = await prod_api_client.sim_swap_volume_by_day(days=days)
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
     return {"days": rows}
 
 
 @analytics_router.get("/transactions")
 async def transactions(
-    conn: Conn,
     status: str | None = None,
     msisdn: str | None = None,
     transaction_kind: str | None = None,
@@ -256,8 +247,7 @@ async def transactions(
     offset: int = 0,
 ) -> dict[str, Any]:
     try:
-        return list_transactions(
-            conn,
+        return await prod_api_client.list_transactions(
             status=status,
             msisdn=msisdn,
             transaction_kind=transaction_kind,
@@ -266,29 +256,30 @@ async def transactions(
             limit=limit,
             offset=offset,
         )
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
 
 
 @analytics_router.get("/transactions/status-summary")
 async def transactions_status_summary(
-    conn: Conn,
     created_from: str | None = None,
     created_to: str | None = None,
 ) -> dict[str, Any]:
     try:
-        statuses = transaction_status_summary(conn, created_from=created_from, created_to=created_to)
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+        statuses = await prod_api_client.transaction_status_summary(
+            created_from=created_from, created_to=created_to
+        )
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
     return {"statuses": statuses}
 
 
 @analytics_router.get("/transactions/volume-by-day")
-async def transactions_volume_by_day(conn: Conn, days: int = 14) -> dict[str, Any]:
+async def transactions_volume_by_day(days: int = 14) -> dict[str, Any]:
     try:
-        rows = transaction_volume_by_day(conn, days=days)
-    except psycopg.Error as exc:
-        raise _analytics_db_error(exc) from exc
+        rows = await prod_api_client.transaction_volume_by_day(days=days)
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
     return {"days": rows}
 
 
@@ -296,9 +287,12 @@ async def transactions_volume_by_day(conn: Conn, days: int = 14) -> dict[str, An
 async def transaction_report(conn: Conn, transaction_id: str) -> Response:
     """A per-transaction "Trust Platform activity report" PDF - see
     report_data.py for the correlation caveat (transactions has no foreign
-    key into process_log, so this is a best-effort match)."""
+    key into process_log, so this is a best-effort match). `conn` here is
+    only the process_docs (RAG store) connection now."""
     try:
-        context = gather_report_context(conn, transaction_id)
+        context = await gather_report_context(conn, transaction_id)
+    except ProdApiError as exc:
+        raise _prod_api_error(exc) from exc
     except psycopg.Error as exc:
         raise _analytics_db_error(exc) from exc
     if context is None:

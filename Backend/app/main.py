@@ -17,6 +17,7 @@ from Backend.app.db import init_db
 from Backend.app.routers import (
     health,
     notifications,
+    reports,
     selfies,
     validation,
     verification,
@@ -61,6 +62,7 @@ app.include_router(verification.router)
 app.include_router(selfies.router)
 app.include_router(verifications.router)
 app.include_router(notifications.router)
+app.include_router(reports.router)
 # The mock RICA registry ships as its own runnable service, but the
 # infrastructure deploys a single container, so it is mounted here rather than
 # given a second port the platform has nowhere to route.

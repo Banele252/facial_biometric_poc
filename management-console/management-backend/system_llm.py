@@ -4,8 +4,10 @@ Built on the OpenAI Agents SDK. Serves
 management-frontend/src/pages/SystemChatbot.tsx via main.py's /api/v1/chat
 route, which imports ask_system_chatbot() below.
 
-The tools below query analytical_db.py, which reads the real analytics
-Postgres DB (mirrored from production by Backend/analytics_sync).
+The tools below query prod_api_client.py, which reads Backend/app (the real
+production API), except search_process_documentation which still queries the
+process_docs table (RAG store) directly - that table has no prod-API
+equivalent, see process_docs_db.py.
 """
 
 from __future__ import annotations
@@ -22,16 +24,16 @@ from agents import (
     function_tool,
     input_guardrail,
 )
-from analytical_db import (
-    get_connection,
+from analytical_db import get_connection
+from dotenv import load_dotenv
+from embeddings import embed_text
+from process_docs_db import search_process_docs
+from prod_api_client import (
     list_fraud_rejections,
     list_process_logs,
     list_sim_swap_orders,
     list_transactions,
 )
-from dotenv import load_dotenv
-from embeddings import embed_text
-from process_docs_db import search_process_docs
 
 load_dotenv()
 
@@ -46,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 @function_tool
-def get_fraud_rejections(
+async def get_fraud_rejections(
     stage: str | None = None,
     msisdn: str | None = None,
     limit: int = 10,
@@ -59,20 +61,15 @@ def get_fraud_rejections(
         limit: Maximum number of records to return, most recent first.
     """
     try:
-        conn = get_connection()
-        try:
-            return list_fraud_rejections(conn, stage=stage, msisdn=msisdn, limit=min(limit, 50))[
-                "items"
-            ]
-        finally:
-            conn.close()
+        data = await list_fraud_rejections(stage=stage, msisdn=msisdn, limit=min(limit, 50))
+        return data["items"]
     except Exception as exc:
         logger.warning("get_fraud_rejections query failed: %s", exc)
         return []
 
 
 @function_tool
-def get_sim_swap_transactions(
+async def get_sim_swap_transactions(
     msisdn: str | None = None,
     status: str | None = None,
     limit: int = 10,
@@ -85,20 +82,15 @@ def get_sim_swap_transactions(
         limit: Maximum number of records to return, most recent first.
     """
     try:
-        conn = get_connection()
-        try:
-            return list_sim_swap_orders(conn, msisdn=msisdn, status=status, limit=min(limit, 50))[
-                "items"
-            ]
-        finally:
-            conn.close()
+        data = await list_sim_swap_orders(msisdn=msisdn, status=status, limit=min(limit, 50))
+        return data["items"]
     except Exception as exc:
         logger.warning("get_sim_swap_transactions query failed: %s", exc)
         return []
 
 
 @function_tool
-def get_transactions(
+async def get_transactions(
     msisdn: str | None = None,
     status: str | None = None,
     transaction_kind: str | None = None,
@@ -114,24 +106,20 @@ def get_transactions(
         limit: Maximum number of records to return, most recent first.
     """
     try:
-        conn = get_connection()
-        try:
-            return list_transactions(
-                conn,
-                msisdn=msisdn,
-                status=status,
-                transaction_kind=transaction_kind,
-                limit=min(limit, 50),
-            )["items"]
-        finally:
-            conn.close()
+        data = await list_transactions(
+            msisdn=msisdn,
+            status=status,
+            transaction_kind=transaction_kind,
+            limit=min(limit, 50),
+        )
+        return data["items"]
     except Exception as exc:
         logger.warning("get_transactions query failed: %s", exc)
         return []
 
 
 @function_tool
-def get_audit_logs(
+async def get_audit_logs(
     process: str | None = None,
     environment: str | None = None,
     limit: int = 10,
@@ -144,13 +132,10 @@ def get_audit_logs(
         limit: Maximum number of entries to return, most recent first.
     """
     try:
-        conn = get_connection()
-        try:
-            return list_process_logs(
-                conn, process=process, environment=environment, limit=min(limit, 50)
-            )["items"]
-        finally:
-            conn.close()
+        data = await list_process_logs(
+            process=process, environment=environment, limit=min(limit, 50)
+        )
+        return data["items"]
     except Exception as exc:
         logger.warning("get_audit_logs query failed: %s", exc)
         return []

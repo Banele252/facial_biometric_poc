@@ -30,7 +30,7 @@ import time
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from Backend.app import repository
+from Backend.app import reports_repository, repository
 from Backend.app.config import get_settings
 from Backend.app.routers.validation import run_structural_checks
 from Backend.app.services.audit import record_event
@@ -117,6 +117,7 @@ class AttemptRecord(BaseModel):
 
 def _finalise(
     id_number: str,
+    payload: VerificationRequest,
     decision: bool | str,
     method: str,
     reason: str,
@@ -157,6 +158,28 @@ def _finalise(
             "checks": [c.model_dump() for c in (checks or [])],
         },
     )
+
+    # Reporting-table writes. Never allowed to break the journey — same
+    # "auditing must never break the journey" contract as record_event above.
+    try:
+        reports_repository.record_transaction(
+            id_number=id_number,
+            transaction_kind=payload.transaction,
+            status=status_value,
+            reason=reason,
+            msisdn=payload.msisdn,
+            sim_serial=payload.new_sim_number,
+        )
+        if status_value == REJECTED:
+            reports_repository.record_rejection(
+                id_number=id_number,
+                stage=method,
+                reason=reason,
+                msisdn=payload.msisdn,
+                device_id=payload.device_id,
+            )
+    except Exception:
+        logger.exception("Reporting-table write failed for attempt %s", attempt["id"])
 
     return VerificationDecision(
         attempt_id=attempt["id"],
@@ -214,6 +237,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
     if not valid:
         return _finalise(
             id_number,
+            payload,
             decision=False,
             method="structural",
             reason=f"ID failed structural validation: {', '.join(failed)}",
@@ -231,6 +255,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         )
         return _finalise(
             id_number,
+            payload,
             decision=False,
             method="liveness",
             reason="No selfie provided; liveness check is required",
@@ -252,6 +277,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         )
         return _finalise(
             id_number,
+            payload,
             decision=False,
             method="liveness",
             reason=f"Liveness not passed (status={selfie['liveness_status']})",
@@ -313,6 +339,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
         if not matched:
             return _finalise(
                 id_number,
+                payload,
                 decision=REVIEW if unregistered else REJECTED,
                 method="rica",
                 reason=(
@@ -415,6 +442,7 @@ def verify(payload: VerificationRequest) -> VerificationDecision:
             # itself are moot — stop here.
             return _finalise(
                 id_number,
+                payload,
                 decision=match.outcome,
                 method="facematch",
                 reason=match.detail,
@@ -482,6 +510,7 @@ def _fraud_and_swap(
     if fraud.outcome != APPROVED:
         return _finalise(
             id_number,
+            payload,
             decision=fraud.outcome,
             method="fraud",
             reason=fraud.detail,
@@ -512,6 +541,7 @@ def _fraud_and_swap(
         )
         return _finalise(
             id_number,
+            payload,
             decision=APPROVED,
             method="facematch",
             reason=match.detail,
@@ -572,6 +602,7 @@ def _fraud_and_swap(
         )
         return _finalise(
             id_number,
+            payload,
             decision=APPROVED if activation.activated else REVIEW,
             method="sim_swap" if activation.activated else "sim_swap_pending",
             reason=activation.detail,
@@ -584,6 +615,7 @@ def _fraud_and_swap(
 
     return _finalise(
         id_number,
+        payload,
         decision=APPROVED if swap.created else REVIEW,
         method="sim_swap" if swap.created else "facematch",
         reason=swap.detail,
@@ -614,6 +646,7 @@ def _authorise_port(
         )
         return _finalise(
             id_number,
+            payload,
             decision=APPROVED,
             method="facematch",
             reason=match.detail,
@@ -651,6 +684,7 @@ def _authorise_port(
     )
     return _finalise(
         id_number,
+        payload,
         decision=APPROVED if port.created else REVIEW,
         method="number_port",
         reason=port.detail,
@@ -669,6 +703,7 @@ def _fallback(
     if not payload.allow_fallback:
         return _finalise(
             id_number,
+            payload,
             decision=False,
             method="facematch",
             reason="Face match unavailable and fallback disabled",
@@ -678,6 +713,7 @@ def _fallback(
         )
     return _finalise(
         id_number,
+        payload,
         decision=True,
         method="fallback",
         reason=(
