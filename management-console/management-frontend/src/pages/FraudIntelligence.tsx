@@ -6,6 +6,7 @@ import { StatTile } from '../components/ui/StatTile'
 import { Badge } from '../components/ui/Badge'
 import { Table, type TableColumn } from '../components/ui/Table'
 import { Select } from '../components/ui/Input'
+import { RefreshButton } from '../components/ui/RefreshButton'
 import {
   getFraudRejections,
   getFraudRejectionsSummary,
@@ -14,6 +15,9 @@ import {
 } from '../api'
 import { ChartColors } from '../theme/chartColors'
 import { formatDate } from '../utils/date'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
+
+const POLL_INTERVAL_MS = 15_000
 
 export function FraudIntelligence() {
   const [stageFilter, setStageFilter] = useState('all')
@@ -21,10 +25,15 @@ export function FraudIntelligence() {
   const [rejections, setRejections] = useState<FraudRejection[]>([])
   const [summary, setSummary] = useState<FraudRuleSummaryEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshingSummary, setRefreshingSummary] = useState(false)
+  const [refreshingList, setRefreshingList] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const { tick, refresh } = useAutoRefresh(POLL_INTERVAL_MS)
 
   useEffect(() => {
     let ignore = false
+    setRefreshingSummary(true)
     getFraudRejectionsSummary()
       .then((res) => {
         if (!ignore) setSummary(res.rules)
@@ -32,14 +41,17 @@ export function FraudIntelligence() {
       .catch((err) => {
         if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load fraud summary')
       })
+      .finally(() => {
+        if (!ignore) setRefreshingSummary(false)
+      })
     return () => {
       ignore = true
     }
-  }, [])
+  }, [tick])
 
   useEffect(() => {
     let ignore = false
-    setLoading(true)
+    setRefreshingList(true)
     setError(null)
     getFraudRejections({ stage: stageFilter === 'all' ? undefined : stageFilter, limit: 100 })
       .then((res) => {
@@ -49,12 +61,15 @@ export function FraudIntelligence() {
         if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load fraud rejections')
       })
       .finally(() => {
-        if (!ignore) setLoading(false)
+        if (!ignore) {
+          setLoading(false)
+          setRefreshingList(false)
+        }
       })
     return () => {
       ignore = true
     }
-  }, [stageFilter])
+  }, [stageFilter, tick])
 
   const stageTotals = useMemo(() => {
     const totals = new Map<string, number>()
@@ -109,6 +124,7 @@ export function FraudIntelligence() {
             </option>
           ))}
         </Select>
+        <RefreshButton onRefresh={refresh} loading={refreshingSummary || refreshingList} />
       </div>
 
       <Card>

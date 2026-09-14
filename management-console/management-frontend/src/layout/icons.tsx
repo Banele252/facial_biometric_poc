@@ -59,3 +59,14 @@ export function ReportIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function RefreshIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 12a8 8 0 0 1 14-5.3L20 9" />
+      <path d="M20 4v5h-5" />
+      <path d="M20 12a8 8 0 0 1-14 5.3L4 15" />
+      <path d="M4 20v-5h5" />
+    </svg>
+  )
+}

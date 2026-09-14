@@ -6,6 +6,7 @@ import { StatTile } from '../components/ui/StatTile'
 import { Badge, type BadgeTone } from '../components/ui/Badge'
 import { Table, type TableColumn } from '../components/ui/Table'
 import { Select } from '../components/ui/Input'
+import { RefreshButton } from '../components/ui/RefreshButton'
 import { ReportDownloadButton } from '../components/ReportDownloadButton'
 import {
   getTransactions,
@@ -17,6 +18,9 @@ import {
 } from '../api'
 import { ChartColors } from '../theme/chartColors'
 import { formatDate } from '../utils/date'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
+
+const POLL_INTERVAL_MS = 15_000
 
 const STATUS_TONE: Record<string, BadgeTone> = {
   approved: 'approved',
@@ -48,10 +52,15 @@ export function TransactionReport() {
   const [statusSummary, setStatusSummary] = useState<TransactionStatusCount[]>([])
   const [volumeRows, setVolumeRows] = useState<TransactionVolumeRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshingOverview, setRefreshingOverview] = useState(false)
+  const [refreshingList, setRefreshingList] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const { tick, refresh } = useAutoRefresh(POLL_INTERVAL_MS)
 
   useEffect(() => {
     let ignore = false
+    setRefreshingOverview(true)
     Promise.all([getTransactionStatusSummary(), getTransactionVolumeByDay(14)])
       .then(([statusRes, volumeRes]) => {
         if (ignore) return
@@ -61,14 +70,17 @@ export function TransactionReport() {
       .catch((err) => {
         if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load transaction overview')
       })
+      .finally(() => {
+        if (!ignore) setRefreshingOverview(false)
+      })
     return () => {
       ignore = true
     }
-  }, [])
+  }, [tick])
 
   useEffect(() => {
     let ignore = false
-    setLoading(true)
+    setRefreshingList(true)
     setError(null)
     getTransactions({
       status: statusFilter === 'all' ? undefined : statusFilter,
@@ -85,12 +97,15 @@ export function TransactionReport() {
         if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load transactions')
       })
       .finally(() => {
-        if (!ignore) setLoading(false)
+        if (!ignore) {
+          setLoading(false)
+          setRefreshingList(false)
+        }
       })
     return () => {
       ignore = true
     }
-  }, [statusFilter, kindFilter])
+  }, [statusFilter, kindFilter, tick])
 
   const { chartData, statuses } = useMemo(() => {
     const statusSet = Array.from(new Set(volumeRows.map((r) => r.status)))
@@ -175,6 +190,7 @@ export function TransactionReport() {
             </option>
           ))}
         </Select>
+        <RefreshButton onRefresh={refresh} loading={refreshingOverview || refreshingList} />
       </div>
 
       <Card>

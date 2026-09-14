@@ -4,8 +4,12 @@ import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Table, type TableColumn } from '../components/ui/Table'
 import { Input, Select } from '../components/ui/Input'
+import { RefreshButton } from '../components/ui/RefreshButton'
 import { getAuditLogs, type AuditLogEntry } from '../api'
 import { formatDateTime as formatTimestamp } from '../utils/date'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
+
+const POLL_INTERVAL_MS = 15_000
 
 export function AuditLogs() {
   const [search, setSearch] = useState('')
@@ -15,11 +19,14 @@ export function AuditLogs() {
 
   const [logs, setLogs] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const { tick, refresh } = useAutoRefresh(POLL_INTERVAL_MS)
 
   useEffect(() => {
     let ignore = false
-    setLoading(true)
+    setRefreshing(true)
     setError(null)
     getAuditLogs({
       process: process === 'all' ? undefined : process,
@@ -33,12 +40,15 @@ export function AuditLogs() {
         if (!ignore) setError(err instanceof Error ? err.message : 'Failed to load audit logs')
       })
       .finally(() => {
-        if (!ignore) setLoading(false)
+        if (!ignore) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       })
     return () => {
       ignore = true
     }
-  }, [process, environment])
+  }, [process, environment, tick])
 
   // Reflects the currently loaded page of logs, not the full table.
   const processOptions = useMemo(() => Array.from(new Set(logs.map((log) => log.process))), [logs])
@@ -106,6 +116,7 @@ export function AuditLogs() {
             </option>
           ))}
         </Select>
+        <RefreshButton onRefresh={refresh} loading={refreshing} />
       </div>
 
       <Card>
