@@ -15,8 +15,8 @@ connection strings.
 
 ## How it works
 
-- **Timer-triggered**, every 15 minutes (`function_app.py` - NCRONTAB
-  `0 */15 * * * *`).
+- **Timer-triggered**, every minute (`function_app.py` - NCRONTAB
+  `0 * * * * *`).
 - **Tables are discovered dynamically** from the source's `public` schema on
   every run - nothing is hardcoded, so a table added to prod later shows up
   in the mirror with no code change.

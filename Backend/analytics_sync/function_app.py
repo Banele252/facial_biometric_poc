@@ -14,10 +14,10 @@ from sync import run_sync
 
 app = func.FunctionApp()
 
-# NCRONTAB: {second} {minute} {hour} {day} {month} {day-of-week}. Every 15
-# minutes - frequent enough for the console to feel current, infrequent
-# enough that a sync failure isn't urgent. Adjust here if that's wrong.
-_SCHEDULE = "0 */15 * * * *"
+# NCRONTAB: {second} {minute} {hour} {day} {month} {day-of-week}. Every
+# minute - minute-level granularity is reliable on the Consumption plan
+# (sub-minute schedules are not; see README). Adjust here if that's wrong.
+_SCHEDULE = "0 * * * * *"
 
 
 @app.timer_trigger(schedule=_SCHEDULE, arg_name="timer", run_on_startup=False, use_monitor=True)
