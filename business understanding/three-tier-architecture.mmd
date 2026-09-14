@@ -1,0 +1,18 @@
+flowchart LR
+    user["User"] --> presentation
+
+    subgraph presentation["Presentation tier"]
+        ui["Client / UI<br/>(web, mobile, desktop)"]
+    end
+
+    subgraph application["Application tier"]
+        api["API / business logic server"]
+    end
+
+    subgraph dataTier["Data tier"]
+        db[("Database")]
+        svc["External / internal services"]
+    end
+
+    presentation -->|requests| application
+    application -->|reads / writes| dataTier

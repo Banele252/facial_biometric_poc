@@ -1,0 +1,10 @@
+SIM Swap Order Processing (Production)
+
+What it does:
+This is the production version of SIM swap order creation and activation used by the live customer-facing application. It reuses the same eligibility rules described in the SIM Swap Order Creation and SIM Swap Activation documents, but persists every order to the application's real database instead of a temporary in-memory store.
+
+Why it matters:
+By the time a SIM swap order reaches this stage, the customer's physical SIM has already changed. Losing the record of that change would be far worse than never having attempted it in the first place, since the customer would be left with no traceable record of an already-completed action. Persisting orders reliably is what makes this safe to run in production rather than just for testing.
+
+How it works:
+This process shares its core gating logic - only creating an order when identity verification was accepted and the fraud decision was APPROVE, and only activating an order that exists and hasn't already been activated or rejected - with the standalone SIM swap service, but writes and reads its records from the application's proper database tables (sim_swap_orders and active_sims) so nothing is lost if the service restarts.

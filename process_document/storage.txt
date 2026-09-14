@@ -1,0 +1,10 @@
+Selfie Image Storage
+
+What it does:
+This process saves and retrieves the raw bytes of a customer's selfie photo, but only ever hands back an opaque reference to callers - never the actual image data itself.
+
+Why it matters:
+Biometric images like selfies are classified as sensitive personal information, so controlling exactly where and how they are stored - and making sure the raw bytes never leak into logs, API responses, or anywhere else they shouldn't be - is a core data-protection requirement for the whole system.
+
+How it works:
+By default, selfies are stored on local disk, which is suitable for development and testing. When an Azure Blob Storage connection is configured, storage automatically switches to Azure Blob instead - the intended path for a real production deployment. Either way, every caller only ever receives an opaque reference to the stored image, never the image bytes themselves.

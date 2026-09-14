@@ -1,0 +1,10 @@
+Number Port Authorisation
+
+What it does:
+This process authorises moving a customer's phone number to a different network, as an alternative final outcome to a SIM swap, once identity and fraud checks have both been passed.
+
+Why it matters:
+Porting a number away is explicitly treated as more consequential than a SIM swap, since the customer leaves the network entirely rather than simply getting a replacement SIM. Because the stakes are higher, this step is scoped narrowly and deliberately: it only handles the identity authorisation decision, not the actual technical mechanics of moving the number to another network's systems, which happens separately outside this process.
+
+How it works:
+A number port request shares the entire upstream identity chain with a SIM swap - the same structural check, liveness check, RICA check, external verification, face match, and fraud checks all run first. Only the very last step differs: instead of creating a SIM swap order, this process authorises the port. The actual handover to the receiving network is intentionally out of scope here.

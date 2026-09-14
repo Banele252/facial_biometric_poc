@@ -1,0 +1,10 @@
+Operational Health Dashboard
+
+What it does:
+This process pulls together several different signals into one operational health view for the management console: API traffic volume and error rates by service, how verification attempts are breaking down between success and failure, where SIM swap orders are getting stuck, which stages are producing the most rejections, and how up to date the analytics data mirror itself currently is.
+
+Why it matters:
+This satisfies the third original management console request - visibility into "any relevant ops-based info about the system performance." Rather than an operator having to check several different reports separately to understand how healthy the system is right now, this brings the key signals together into a single dashboard-style view.
+
+How it works:
+Each section of the dashboard is queried independently from the mirrored analytics data, and any section is simply skipped if its underlying source table doesn't exist yet in a given environment - since the analytics sync process creates tables dynamically as it discovers them in production, not every environment will have every table populated at every point in time.

@@ -1,0 +1,10 @@
+RICA Registration Check
+
+What it does:
+This process checks whether the ID number and name a customer provides actually match the identity that a given phone number is legally registered to, under South Africa's RICA regulations (the law requiring every SIM to be registered to a verified identity).
+
+Why it matters:
+By law, every South African SIM card must be registered to a specific verified identity. Before allowing a SIM swap or number port to proceed, the system needs to confirm the person making the request is actually the person the number belongs to on record - otherwise anyone could claim any phone number as their own. This check is the regulatory backbone of the whole SIM swap journey.
+
+How it works:
+Given a phone number, a claimed ID number, and a claimed full name, the system looks up the RICA record for that number and checks whether the claimed ID number and name match exactly (name comparison ignores case). The result distinguishes two different situations: no record exists at all for this number, versus a record exists but doesn't match what the customer claimed - the second case is a much stronger sign of attempted fraud than the first. In the current environment this runs against a realistic stand-in for the real government RICA database, built specifically so the SIM swap flow has something genuine to check requests against.

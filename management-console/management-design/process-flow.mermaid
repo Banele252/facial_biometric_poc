@@ -1,0 +1,53 @@
+swimlane-beta TB
+
+subgraph USER["User"]
+    u_start(["Start"])
+    u_request["Request access to application"]
+    u_outcome{"Access outcome?"}
+    u_denied(["Access denied"])
+    u_granted["Access granted"]
+    u_ops["Option A: View Ops Indicator page"]
+    u_fraud["Option B: View Fraud Rules list"]
+    u_txn["Option C: View Transaction info"]
+end
+
+subgraph APPLICATION["Application"]
+    a_receive["Receive access request"]
+    a_auth["Authenticate user"]
+    a_result{"Authentication result?"}
+    a_deny["Deny access"]
+    a_grant["Grant access"]
+    a_ops["Return Ops Indicator data"]
+    a_fraud["Return Fraud Rules from<br/>Fraud Intelligence repo"]
+    a_txn["Return all Transactions<br/>handled by application"]
+end
+
+u_start --> u_request
+u_request -->|access request| a_receive
+a_receive --> a_auth
+a_auth --> a_result
+a_result -->|fail| a_deny
+a_result -->|pass| a_grant
+a_deny -->|denial response| u_outcome
+a_grant -->|grant response| u_outcome
+u_outcome -->|denied| u_denied
+u_outcome -->|granted| u_granted
+u_granted --> u_ops
+u_granted --> u_fraud
+u_granted --> u_txn
+u_ops -->|request ops indicator| a_ops
+u_fraud -->|request fraud rules| a_fraud
+u_txn -->|request transactions| a_txn
+a_ops -->|ops indicator data| u_ops
+a_fraud -->|fraud rules list| u_fraud
+a_txn -->|transaction records| u_txn
+
+classDef userStyle fill:#e0f2fe,stroke:#0369a1,stroke-width:1px
+classDef appStyle fill:#fef3c7,stroke:#b45309,stroke-width:1px
+classDef denyStyle fill:#fee2e2,stroke:#b91c1c,stroke-width:1px
+classDef grantStyle fill:#dcfce7,stroke:#15803d,stroke-width:1px
+
+class u_start,u_request,u_outcome,u_ops,u_fraud,u_txn userStyle
+class a_receive,a_auth,a_result,a_ops,a_fraud,a_txn appStyle
+class u_denied,a_deny denyStyle
+class u_granted,a_grant grantStyle

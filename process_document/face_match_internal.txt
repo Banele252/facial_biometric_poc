@@ -1,0 +1,10 @@
+Face Match (Fallback Path)
+
+What it does:
+This process compares a live selfie photo against the photograph printed on a customer's ID document or passport, to confirm the person taking the selfie is the same person the document belongs to. This is the biometric identity check used specifically in the fallback verification path.
+
+Why it matters:
+Having a genuine document isn't proof enough on its own - someone could be holding somebody else's ID. Matching a live face against the document photo is what proves the actual person present right now is the person the document describes, which is the core promise of identity verification.
+
+How it works:
+Both the live selfie and the document photo are sent to Microsoft Azure's Face API, which detects the face in each image and calculates how likely they are to be the same person, returning both a match decision and a confidence score. This check depends on Azure Face API access being approved for the organisation's account, and is used in the fallback flow when the primary Home Affairs-based verification route isn't being used.

@@ -1,0 +1,10 @@
+ID Number Precheck
+
+What it does:
+This is the customer-facing entry point that runs the South African ID structural validation rules (see the ID Validation document) as a standalone check, and also as the shared first step of the full verification journey.
+
+Why it matters:
+Having one shared definition of "a structurally valid South African ID number" - used both as its own quick check and inside the bigger verification journey - means the rule can never quietly drift out of sync between the two. A customer or an integration can check an ID number's validity on its own, without needing to run the entire verification journey just to find out if the number is even well-formed.
+
+How it works:
+An ID number is submitted and run through the same structural rule checks used at the start of the full verification journey. The result - valid or invalid, with a reason if invalid - is returned directly, without requiring any document photo, selfie, or external provider call.

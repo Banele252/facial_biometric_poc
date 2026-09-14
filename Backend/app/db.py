@@ -109,6 +109,37 @@ _SCHEMA = (
         created_at TEXT NOT NULL
     )
     """,
+    # One row per journey outcome (any status), regardless of which stage
+    # produced it. Unlike verification_attempts, this also covers sim-swap
+    # and number-port specific fields, so the management console can report
+    # on "transactions" without joining across tables. Written from the same
+    # place verification_attempts is (_finalise in routers/verifications.py).
+    """
+    CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        msisdn TEXT,
+        id_number TEXT NOT NULL,
+        sim_serial TEXT,
+        transaction_kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        reason TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
+    # One row per rejected journey outcome, naming the stage that rejected it
+    # (precheck/liveness/rica/facematch/fraud/...). Written alongside
+    # transactions whenever a journey ends in REJECTED.
+    """
+    CREATE TABLE IF NOT EXISTS rejected_requests (
+        id TEXT PRIMARY KEY,
+        id_number TEXT NOT NULL,
+        msisdn TEXT,
+        device_id TEXT,
+        stage TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
 )
 
 

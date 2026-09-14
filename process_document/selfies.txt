@@ -1,0 +1,10 @@
+Selfie Capture and Liveness Check
+
+What it does:
+This process handles two customer-facing steps: capturing and storing a customer's selfie photo, and then running a liveness check against that stored selfie to confirm it shows a real, physically present person rather than a photo of a photo, a screen replay, or some other spoof.
+
+Why it matters:
+Biometric identity checks are only meaningful if the face being checked genuinely belongs to a live person in front of the camera right now. Without a liveness check, someone could hold up a printed photo or a video of another person and potentially pass a face match. This step is what makes the later face-matching checks trustworthy.
+
+How it works:
+A selfie is submitted, decoded, and stored, and the customer is given back an opaque reference rather than the raw image itself. A separate step then runs a liveness check against that stored selfie and returns a pass/fail verdict. Because selfie images are sensitive personal data, the raw image bytes are never returned in a response or written into any log - only the opaque reference and the liveness result are ever exposed.

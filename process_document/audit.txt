@@ -1,0 +1,10 @@
+Verification Journey Audit Trail
+
+What it does:
+This process writes one record for every step of the verification journey to a central process log, so that any decision the system ever made can be reconstructed later from exactly what each individual check returned at the time.
+
+Why it matters:
+The business requirements for this system explicitly mandate that authentication events, verification requests, authorisation decisions, and failed attempts all be recorded. Without this audit trail, there would be no way to answer "why was this customer rejected" after the fact, which matters both for customer disputes and for regulatory and compliance oversight.
+
+How it works:
+As the verification journey runs, each step's result is written to the process log as it happens. Any biometric image fields are redacted before being written, since raw selfie or document images should never end up in a log. This audit writing is designed to never break the customer's actual journey - even if writing the audit record itself somehow fails, the verification journey continues rather than failing the customer's request because of a logging problem.

@@ -1,0 +1,52 @@
+flowchart TB
+    subgraph "Analytics Environment"
+        subgraph "Vnet /28"
+            subgraph "Azure function subnet /29"
+                C@{shape: bolt,label: "Azure function"}
+                J@{shape: bolt,label: "Azure function"}
+            end
+            subgraph "Private Endpoint subnet /29"
+                D@{shape: rect,label: "Private endpoint"} 
+                K@{shape: rect,label: "Private endpoint"} 
+            end
+            
+        end
+        F@{shape: rect,label: "Azure web app"}
+        E@{shape: database,label: "Postgres SQL"}
+        C -.-> D
+        D -.-> E
+        F -.-> K
+        K -.-> J
+        J -.-> D
+    end
+    subgraph "Prod Environment"
+        A@{shape: database,label: "Postgres SQL"}
+        subgraph "Vnet /28"
+        subgraph "Private Endpoint subnet /29"
+            B@{shape: rect,label: "Private endpoint"}
+        end
+        end
+        B -.-> A
+    end 
+
+    subgraph "Source code repository"
+        G@{shape: rect,label: "Container registry"}
+        H@{shape: rect,label: "Git hub repo"}
+        H-->G
+    end 
+    B -.-> C
+    G -.-> F
+
+    classDef func fill:#fef3c7,stroke:#b45309,stroke-width:1.5px,color:#7c2d12
+    classDef endpoint fill:#dbeafe,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a
+    classDef db fill:#dcfce7,stroke:#15803d,stroke-width:1.5px,color:#14532d
+    classDef webapp fill:#ede9fe,stroke:#6d28d9,stroke-width:1.5px,color:#4c1d95
+    classDef registry fill:#cffafe,stroke:#0e7490,stroke-width:1.5px,color:#164e63
+    classDef repo fill:#f3f4f6,stroke:#4b5563,stroke-width:1.5px,color:#1f2937
+
+    class C,J func
+    class D,K,B endpoint
+    class E,A db
+    class F webapp
+    class G registry
+    class H repo

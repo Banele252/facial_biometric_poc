@@ -1,0 +1,10 @@
+SIM Swap Activation
+
+What it does:
+This process takes a SIM swap order that has already been created and switches it to ACTIVATED, recording which SIM was previously in use on that number and which SIM is now active, so the change can be traced and, if necessary, reversed.
+
+Why it matters:
+Creating an order and actually activating a new SIM are two different moments, and treating them separately keeps a safety check in place: an order that doesn't exist, was already activated, or was rejected earlier in the journey can never be silently activated by mistake. Keeping a record of the previous SIM also means the change is auditable after the fact.
+
+How it works:
+Given an order reference, the process first confirms the order exists and is in a state that's actually eligible for activation. If it is, the order is updated to ACTIVATED and the previous SIM serial number is recorded alongside the new one. Any attempt to activate an order that's missing, already activated, or was rejected is refused outright rather than allowed to proceed.

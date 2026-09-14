@@ -1,0 +1,10 @@
+OCR Document Extraction
+
+What it does:
+This process reads a photograph of a customer's South African ID book, ID card, or passport, and pulls out the structured details on it - full name, document number, date of birth, country, and document type - so the rest of the system can work with clean, machine-readable data instead of a picture.
+
+Why it matters:
+A customer cannot be expected to retype every detail on their ID document by hand, and manual data entry would also be slower and more error-prone. Turning the photo into structured data automatically is what makes it possible to compare "what the document says" against "what the customer claims" a moment later, which is a core part of proving someone is who they say they are.
+
+How it works:
+The photographed document is sent to Microsoft Azure's identity-document reading service, which is trained specifically to recognise ID cards and passports and extract their fields. If the service can read the document successfully, the extracted details are handed back to the system. If it cannot - because the photo is blurry, the wrong kind of document, or nothing is detected at all - the process reports that extraction failed along with a plain explanation, rather than guessing at values or crashing the request.

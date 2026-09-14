@@ -1,0 +1,10 @@
+Verification Journey
+
+What it does:
+This is the flagship end-to-end process that runs a complete SIM swap or number port identity verification, in a fixed, agreed order: first a structural check of the ID number, then a liveness check to confirm a real person is present, then a RICA registration check, then external Home Affairs identity verification, then a Home Affairs face match, then fraud checks, and finally the actual transaction - either a SIM swap or a number port authorisation.
+
+Why it matters:
+This is the single most important process in the system - it is what a real customer experiences when they request a SIM swap or number port, and it is what turns all the individual checks described elsewhere into one coherent, trustworthy decision. Running the checks in this specific order reflects business and compliance requirements, and recording every step means a decision can always be explained and reconstructed later, rather than being a black box.
+
+How it works:
+Each step in the journey is run in sequence, and every individual result is written to an audit trail and returned to the caller as a list, so the full reasoning behind an approval or rejection is always visible. The journey is also designed to degrade gracefully rather than fail outright - for example, if the external Home Affairs verification provider is temporarily unavailable, the journey falls back to a lower-confidence approval that is flagged for manual review, instead of rejecting every customer whenever that one provider has an outage. Past verification attempts, including rejected ones, can also be looked up afterwards.

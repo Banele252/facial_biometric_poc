@@ -1,0 +1,10 @@
+Analytics Database Sync
+
+What it does:
+This process automatically copies the entire production database into a separate analytics database every fifteen minutes, so the management console can be built on top of a full, current copy of the data without ever querying the live production database directly.
+
+Why it matters:
+Letting a reporting and management tool query production data directly risks slowing down or interfering with the live customer-facing system. Mirroring the data into a separate analytics database, on a schedule, means the management console gets essentially real-time visibility into everything happening in the system, with zero risk to production performance or stability.
+
+How it works:
+Every table found in production is discovered automatically - nothing is hardcoded, so a brand-new production table shows up in the mirror without any code changes being needed. Most tables are copied using an efficient update-only approach based on a genuine "last updated" timestamp column, so only new or changed rows need to be re-copied each run; tables without a reliable "last updated" column are read in full each time, but written using an insert-or-update approach rather than being wiped and rebuilt, so there is never a moment where the mirrored copy is empty. One known limitation: if a row is permanently deleted from production, it currently stays in the analytics copy indefinitely, since removals aren't yet tracked - considered an acceptable tradeoff for a reporting tool at the current scale.

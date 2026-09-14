@@ -15,8 +15,15 @@ wheels/
 .env.*
 !.env.example
 
+# Azure Functions local secrets
+Backend/analytics_sync/local.settings.json
+Backend/analytics_sync/.python_packages/
+
+# Azurite local storage emulator state (needed to run the Timer trigger locally)
+Backend/analytics_sync/.azurite/
+
 # Runtime data (local sqlite DB and selfie storage)
-data/
+/data/
 
 # Test and lint caches
 .pytest_cache/

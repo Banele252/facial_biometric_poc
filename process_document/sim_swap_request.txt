@@ -1,0 +1,10 @@
+SIM Swap Order Creation
+
+What it does:
+This process creates a SIM swap order, but only once identity verification has been accepted and the fraud check has come back as an outright APPROVE - not a REFER, since a REFER means a human still needs to review the case first.
+
+Why it matters:
+This is the transactional gate between "we're confident about who this customer is and that this doesn't look fraudulent" and "we actually change which SIM card is active on this number." It exists specifically to make sure a swap can never be created automatically for a request that still needs human review, closing the gap between a soft fraud signal and an irreversible account change.
+
+How it works:
+The process receives the outcome of identity verification and the outcome of the fraud decision as plain inputs - it doesn't run those checks itself, it only acts on their results, the same way it would if those checks lived behind a separate API in a full production system. If both are favourable, a new SIM swap order is created and recorded; otherwise, no order is created at all.

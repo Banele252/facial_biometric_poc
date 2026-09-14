@@ -1,0 +1,10 @@
+Fallback Verification Decision
+
+What it does:
+This process makes the final accept-or-reject call for the fallback verification path, by combining the results of the document match check and the face match check into one decision, along with the reasons behind it.
+
+Why it matters:
+Individual checks (document match, face match) only tell you about one piece of the puzzle each. Someone needs to weigh both results together and produce a single, clear outcome that the rest of the system - and a human auditor later - can act on and trust. Centralising this decision also means there is exactly one place that defines what "verified" means in the fallback flow.
+
+How it works:
+If both the document match and the face match succeed, the request is marked ACCEPTED. If either fails, the request is marked REJECTED, with the specific reason recorded. Every decision, whether accepted or rejected, is written to a dedicated audit log with sensitive reference numbers masked, so there is always a traceable record of why a given fallback verification passed or failed - a requirement of the system's trust and audit framework.

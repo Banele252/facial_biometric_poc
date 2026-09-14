@@ -1,0 +1,10 @@
+Home Affairs Face Match (Journey Integration)
+
+What it does:
+This process wraps the external VerifyNow provider's face-match capability for use inside the main verification journey: it sends the customer's stored selfie to VerifyNow to be compared against the photo Home Affairs holds, and interprets the result as Approved, In Review, or Declined.
+
+Why it matters:
+The external provider's own decision is treated as authoritative, but this process adds a second safety net on top of it: even a provider "Approved" result is downgraded to manual review if the confidence score returned is below a configured floor. That protects against edge cases where the provider is technically confident enough to approve but not confident enough for the business's own risk appetite.
+
+How it works:
+The stored selfie is sent to VerifyNow's face-match capability as part of the verification journey. The provider's status is read first; if it says Approved but the accompanying score falls below the configured minimum, the outcome is downgraded to manual review rather than accepted outright. This runs in a sandbox mode by default, specifically so that testing and demonstrations cannot accidentally consume real, paid provider credits.
