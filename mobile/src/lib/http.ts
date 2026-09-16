@@ -82,7 +82,13 @@ export async function storageRemove(
     }
 }
 
-async function getDeviceId(): Promise<string> {
+/** The persisted device identifier, also sent as X-Device-Fingerprint.
+ *
+ * Exported because the verification journey passes it in the request body as
+ * `device_id`: the fraud engine's device-risk rules key off it, and a header
+ * the middleware consumes is not visible to the route handler's payload.
+ */
+export async function getDeviceId(): Promise<string> {
     const existing = await storageGet(DEVICE_ID_KEY);
 
     if (existing) {

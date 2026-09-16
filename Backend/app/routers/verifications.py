@@ -25,6 +25,7 @@ from Backend.app.dependencies.security import (
 )
 from Backend.app.routers.validation import run_structural_checks
 from Backend.app.services.audit import record_event
+from Backend.app.services.audit_service import audit_service
 from Backend.app.services.face_match import run_face_match
 from Backend.app.services.fraud import run_fraud_checks
 from Backend.app.services.notifications import notify_decision
@@ -74,6 +75,11 @@ class VerificationDecision(BaseModel):
     match_score: float | None = None
     mode: str | None = None
     checks: list[CheckResult] = []
+    # The SIM swap order this journey created, when it got that far. The
+    # mobile ReviewScreen shows it to the customer as their reference, so it
+    # has to be a first-class field — it used to be legible only by parsing
+    # it back out of the sim_swap check's detail string.
+    order_id: str | None = None
 
 
 class AttemptRecord(BaseModel):
@@ -108,6 +114,7 @@ def _finalise(
         match_score: float | None = None,
         mode: str | None = None,
         checks: list[CheckResult] | None = None,
+        order_id: str | None = None,
 ) -> VerificationDecision:
     status_value = (APPROVED if decision else REJECTED) if isinstance(decision, bool) else decision
 
@@ -147,6 +154,7 @@ def _finalise(
         match_score=match_score,
         mode=mode,
         checks=checks or [],
+        order_id=order_id,
     )
 
 
@@ -371,7 +379,9 @@ def verify(
                 checks=checks,
             )
 
-        return _fraud_and_swap(payload, id_number, mode, checks, match)
+        return _fraud_and_swap(
+            payload, id_number, mode, checks, match, correlation_id, user_ref
+        )
     except VerifyNowError as exc:
         logger.error("Face match unavailable, considering fallback: %s", exc)
         checks.append(
@@ -392,6 +402,8 @@ def _fraud_and_swap(
         mode: str,
         checks: list[CheckResult],
         match,
+        correlation_id: str = "",
+        user_ref: str = "anonymous",
 ) -> VerificationDecision:
     """Steps 9-11: fraud checks, then create the SIM swap order."""
     fraud = run_fraud_checks(
@@ -417,6 +429,39 @@ def _fraud_and_swap(
             "reasons": list(fraud.reasons),
         },
     )
+
+    # The console's Fraud Intelligence page derives entirely from
+    # FRAUD_DECISION audit events (see console_queries.get_fraud_decisions),
+    # and get_sim_swap_orders enriches each order from the same events. Only
+    # the mobile AuditService was ever expected to raise them and it never
+    # does — FRAUD_DECISION appears in its event union and nowhere else — so
+    # the page had no data source at all and every order fell back to REFER
+    # with a zero risk score. The decision is made here, server-side, so it
+    # is recorded here: an operator's fraud view should not depend on a
+    # handset choosing to report.
+    try:
+        audit_service.log(
+            "FRAUD_DECISION",
+            session_id=correlation_id,
+            device_id=(payload.device_id or "unknown-device").strip(),
+            user_id=user_ref,
+            outcome={
+                APPROVED: "success",
+                REJECTED: "blocked",
+            }.get(fraud.outcome, "pending"),
+            reason=fraud.detail,
+            metadata={
+                "decision": fraud.decision,
+                "risk_score": fraud.risk_score,
+                "reasons": list(fraud.reasons),
+                "identity_ref": id_number,
+                "msisdn": (payload.msisdn or "").strip(),
+            },
+        )
+    except Exception:
+        # Audit is evidential, but a failure to write it must not turn a
+        # completed fraud decision into a 500 for the customer.
+        logger.exception("Failed to record FRAUD_DECISION audit event")
 
     if fraud.outcome != APPROVED:
         return _finalise(
@@ -510,6 +555,7 @@ def _fraud_and_swap(
             match_score=match.score,
             mode=mode,
             checks=checks,
+            order_id=swap.order_id,
         )
 
     return _finalise(
@@ -520,6 +566,7 @@ def _fraud_and_swap(
         selfie_id=payload.selfie_id,
         provider_status=match.provider_status,
         match_score=match.score,
+        order_id=swap.order_id,
         mode=mode,
         checks=checks,
     )

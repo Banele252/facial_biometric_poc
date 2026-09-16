@@ -23,6 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Typography } from '@/components/ui';
 import { apiClient } from '@/lib/apiClient';
+import { getDeviceId } from '@/lib/http';
 import { useAudit } from '@/hooks/useAudit';
 import {
     getStoredIccid,
@@ -459,25 +460,98 @@ export default function ReviewScreen({
             setError(null);
 
             try {
+                // The orchestrator, not initiateSimSwap: it runs the RICA,
+                // Home Affairs face match and fraud checks and then creates
+                // *and activates* the order. initiateSimSwap only inserts a
+                // pending row, which would complete a swap with none of those
+                // gates applied.
                 const res =
                     await apiClient
-                        .initiateSimSwap({
+                        .runVerificationJourney({
                             idNumber:
                             resolvedIdNumber,
+
+                            fullName:
+                            resolvedFullName,
 
                             msisdn:
                             resolvedPhoneNumber,
 
-                            iccid:
+                            newSimNumber:
                             resolvedIccid,
 
                             selfieId:
                             resolvedSelfieId,
+
+                            deviceId:
+                                await getDeviceId(),
                         });
+
+                // A 200 carries the decision, so a refusal arrives here
+                // rather than in catch. Anything other than an approval must
+                // not be shown to the customer as a completed swap.
+                if (res.status !== 'approved') {
+                    const failed =
+                        res.checks?.find(
+                            (c) =>
+                                c.status === 'fail',
+                        );
+
+                    const msg =
+                        failed
+                            ? `${failed.label}: ${failed.detail}`
+                            : res.reason ||
+                            'The SIM swap could not be approved.';
+
+                    setError(msg);
+                    setStage('error');
+
+                    audit.log(
+                        'SWAP_REJECTED',
+                        {
+                            outcome:
+                                res.status ===
+                                'review'
+                                    ? 'pending'
+                                    : 'failure',
+
+                            reason: msg,
+
+                            metadata: {
+                                attemptId:
+                                res.attempt_id,
+
+                                decision:
+                                res.status,
+
+                                method:
+                                res.method,
+
+                                matchScore:
+                                res.match_score,
+
+                                checks:
+                                    res.checks?.map(
+                                        (c) => ({
+                                            name: c.name,
+                                            status: c.status,
+                                        }),
+                                    ),
+
+                                sessionId:
+                                resolvedSessionId,
+
+                                iccidSource: resolvedIccidSource,
+                            },
+                        },
+                    );
+
+                    return;
+                }
 
                 const transactionId =
                     res.order_id ||
-                    res.reference;
+                    res.attempt_id;
 
                 audit.log(
                     'SWAP_REQUESTED',
@@ -488,11 +562,17 @@ export default function ReviewScreen({
                             orderId:
                             res.order_id,
 
-                            reference:
-                            res.reference,
+                            attemptId:
+                            res.attempt_id,
 
                             status:
                             res.status,
+
+                            method:
+                            res.method,
+
+                            matchScore:
+                            res.match_score,
 
                             sessionId:
                             resolvedSessionId,
@@ -507,7 +587,7 @@ export default function ReviewScreen({
                 );
 
                 setReference(
-                    res.reference ||
+                    res.order_id ||
                     null,
                 );
 
@@ -538,6 +618,7 @@ export default function ReviewScreen({
         }, [
             stage,
             resolvedIdNumber,
+            resolvedFullName,
             resolvedPhoneNumber,
             resolvedIccid,
             resolvedSelfieId,

@@ -31,12 +31,6 @@ export interface LivenessResponse {
   detail: string;
 }
 
-export interface FaceMatchResponse {
-  match: boolean;
-  score: number;
-  detail: string;
-}
-
 export type DecisionStatus = 'approved' | 'rejected' | 'review';
 
 export interface CheckResult {
@@ -252,13 +246,15 @@ export function checkLiveness(selfieId: string): Promise<LivenessResponse> {
   return request<LivenessResponse>(`/api/v1/selfies/${encodeURIComponent(selfieId)}/liveness`, { method: 'POST' });
 }
 
-/*  face match  */
-export function faceMatch(selfieId: string, idNumber: string): Promise<FaceMatchResponse> {
-  return request<FaceMatchResponse>('/api/v1/face-match', {
-    method: 'POST',
-    body: JSON.stringify({ selfie_id: selfieId, id_number: idNumber }),
-  });
-}
+/*  face match
+ *
+ *  There is no standalone face-match endpoint. Matching runs inside the
+ *  orchestrated journey at POST /api/v1/verifications (see
+ *  Backend/app/services/face_match.py), which returns the decision with the
+ *  match score on it. A `faceMatch()` helper used to live here pointing at
+ *  /api/v1/face-match, which the API has never served — nothing called it,
+ *  so it was removed rather than repointed.
+ */
 
 /*  verification  */
 export function verifyIdentity(input: VerificationInput): Promise<VerificationDecision> {

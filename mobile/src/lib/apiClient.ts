@@ -243,6 +243,44 @@ export interface IccidResolveResponse {
 }
 
 // -----------------------------------------------------------------------------
+// Verification journey
+// -----------------------------------------------------------------------------
+
+export interface VerificationCheck {
+    name: string;
+    label: string;
+    /** 'pass' | 'fail' | 'review' | 'skipped' */
+    status: string;
+    detail: string;
+    score?: number | null;
+}
+
+export interface VerificationJourneyRequest {
+    idNumber: string;
+    fullName?: string;
+    msisdn?: string;
+    /** The replacement SIM's ICCID. Without it the swap step is skipped. */
+    newSimNumber?: string;
+    selfieId: string;
+    deviceId?: string;
+}
+
+export interface VerificationJourneyResponse {
+    attempt_id: string;
+    id_number: string;
+    /** 'approved' | 'rejected' | 'review' */
+    status: string;
+    method: string;
+    reason: string;
+    provider_status?: string | null;
+    notification_type: string;
+    match_score?: number | null;
+    mode?: string | null;
+    checks: VerificationCheck[];
+    order_id?: string | null;
+}
+
+// -----------------------------------------------------------------------------
 // SIM Swap
 // -----------------------------------------------------------------------------
 
@@ -377,7 +415,40 @@ export const apiClient = {
             },
         ),
 
+    // Step 5 (ReviewScreen):
+    // Run the full identity journey and, if it passes, create AND activate the
+    // SIM swap in one call.
+    //
+    // This is the orchestrator: precheck -> liveness -> RICA -> ID verification
+    // -> Home Affairs face match -> fraud checks -> sim swap -> activation.
+    // `initiateSimSwap` below only inserts an order row — it runs none of those
+    // checks — so calling it from Review would complete a swap with no fraud or
+    // face-match gate and leave the console's Fraud Intelligence page empty.
+    //
+    // `status` is the decision ('approved' | 'rejected' | 'review'), not just
+    // transport success: a 200 can still be a refusal, so callers must branch
+    // on it rather than treating any non-throw as approval.
+    runVerificationJourney: (body: VerificationJourneyRequest) =>
+        apiCall<VerificationJourneyResponse>(
+            '/api/v1/verifications',
+            {
+                method: 'POST',
+                body: {
+                    id_number: body.idNumber,
+                    full_name: body.fullName ?? null,
+                    msisdn: body.msisdn ?? null,
+                    new_sim_number:
+                        body.newSimNumber ?? null,
+                    selfie_id: body.selfieId,
+                    device_id: body.deviceId ?? null,
+                    transaction: 'sim_swap',
+                },
+            },
+        ),
+
     // SIM swap transaction.
+    // Low-level order insert with no decision chain — prefer
+    // runVerificationJourney() for the customer journey.
     initiateSimSwap: (body: SimSwapInitiateRequest) =>
         apiCall<SimSwapInitiateResponse>(
             '/api/v1/sim-swap/initiate',
