@@ -368,11 +368,15 @@ def get_sim_swap_orders(since: datetime) -> list[dict]:
                     or row.get("reference")
                     or ""
                 ),
-                # No stored verification result on the order; a completed or
-                # approved swap implies the biometric gate was passed.
+                # No stored verification result on the order; a swap that got
+                # as far as being created implies the biometric gate was
+                # passed. "activated" is the terminal success state written by
+                # sim_swap.py's activate route — omitting it here reported
+                # every completed swap as a REJECTED verification, which is
+                # the one outcome an operator must not see for a success.
                 "verification": (
                     "ACCEPTED"
-                    if status in ("completed", "approved", "pending")
+                    if status in ("completed", "approved", "pending", "activated")
                     else "REJECTED"
                 ),
                 "fraud_decision": fraud.get("decision", "REFER"),

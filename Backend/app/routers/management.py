@@ -153,7 +153,7 @@ def _load_audit_entries(
 
     Cursor is an opaque encoding of the last (received_at, event_id) seen.
     """
-    from Backend.app.repository import get_audit_entries  # type: ignore
+    from Backend.app.services.console_queries import get_audit_entries
 
     return get_audit_entries(
         session_id=session_id,
@@ -173,7 +173,7 @@ def _load_fraud_decisions(since: datetime) -> list[dict]:
     Expected keys per row: identity_ref, msisdn, decision, risk_score,
     reasons (list[str]), created_at (datetime).
     """
-    from Backend.app.repository import get_fraud_decisions  # type: ignore
+    from Backend.app.services.console_queries import get_fraud_decisions
 
     return get_fraud_decisions(since=since)
 
@@ -184,7 +184,7 @@ def _load_sim_swap_orders(since: datetime) -> list[dict]:
     Expected keys per row: order_id, msisdn, identity_ref, verification,
     fraud_decision, risk_score, status, created_at (datetime).
     """
-    from Backend.app.repository import get_sim_swap_orders  # type: ignore
+    from Backend.app.services.console_queries import get_sim_swap_orders
 
     return get_sim_swap_orders(since=since)
 
@@ -201,6 +201,11 @@ DECISION_TO_OUTCOME = {
 
 STATUS_TO_OUTCOME = {
     "completed": "approved",
+    # The terminal success state for a SIM swap: sim_swap.py's activate route
+    # writes "ACTIVATED" once the new SIM is live. Without it the lookup fell
+    # through to "pending", so the transactions chart counted every finished
+    # swap as still in flight.
+    "activated": "approved",
     "approved": "approved",
     "rejected": "flagged",
     "flagged": "flagged",

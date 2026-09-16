@@ -3,7 +3,7 @@
 import logging
 import os
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
@@ -14,16 +14,19 @@ from Backend.app.config import get_settings
 from Backend.app.db import init_db
 from Backend.app.middleware.zero_trust import ZeroTrustMiddleware, api_key_header, bearer_auth
 from Backend.app.routers import (
-    audit,
-    auth,
-    health,
-    iccid,
-    notifications,
-    selfies,
-    sim_swap,
-    validation,
-    verification,
-    verifications,
+    audit_router,
+    auth_router,
+    chat_router,
+    health_router,
+    iccid_router,
+    management_router,
+    notifications_router,
+    selfies_router,
+    sim_swap_router,
+    stream_router,
+    validation_router,
+    verification_router,
+    verifications_router,
 )
 from Backend.rica_service.main import router as rica_router
 
@@ -122,17 +125,23 @@ if _cors_origins:
 app.add_middleware(ZeroTrustMiddleware)
 
 # Routers
-app.include_router(health)
-app.include_router(auth)
-app.include_router(validation, dependencies=[Depends(bearer_auth)])
-app.include_router(verification, dependencies=[Depends(bearer_auth)])
-app.include_router(selfies, dependencies=[Depends(bearer_auth)])
-app.include_router(verifications, dependencies=[Depends(bearer_auth)])
-app.include_router(notifications, dependencies=[Depends(bearer_auth)])
-app.include_router(iccid, dependencies=[Depends(bearer_auth)])
-app.include_router(sim_swap, dependencies=[Depends(bearer_auth), Depends(api_key_header)])
-app.include_router(audit, dependencies=[Depends(bearer_auth)])
+app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(validation_router, dependencies=[Depends(bearer_auth)])
+app.include_router(verification_router, dependencies=[Depends(bearer_auth)])
+app.include_router(selfies_router, dependencies=[Depends(bearer_auth)])
+app.include_router(verifications_router, dependencies=[Depends(bearer_auth)])
+app.include_router(notifications_router, dependencies=[Depends(bearer_auth)])
+app.include_router(iccid_router, dependencies=[Depends(bearer_auth)])
+app.include_router(sim_swap_router, dependencies=[Depends(bearer_auth), Depends(api_key_header)])
+app.include_router(audit_router, dependencies=[Depends(bearer_auth)])
 app.include_router(rica_router, dependencies=[Depends(bearer_auth)])
+# Management console surface. Read-only by design (see management.py), so it
+# carries the same bearer requirement as the journey routes but never the
+# Tier-1 API key that sim_swap's write operations demand.
+app.include_router(management_router, dependencies=[Depends(bearer_auth)])
+app.include_router(chat_router, dependencies=[Depends(bearer_auth)])
+app.include_router(stream_router, dependencies=[Depends(bearer_auth)])
 
 init_db()
 
@@ -147,8 +156,22 @@ def _mount_frontend() -> None:
         return
     app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
+    # Client-side routes must fall through to index.html, but API paths must
+    # not: returning the SPA shell for an unmatched /api/... path turns a 404
+    # into a 200 full of HTML, which the console then tries to parse as JSON
+    # and reports as a nonsense error. Anything under an API prefix 404s as
+    # JSON instead, so a missing route looks missing.
+    _API_PREFIXES = ("api/", "auth/", "healthz", "readyz", "openapi.json")
+
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str) -> FileResponse:
+        if full_path.startswith(_API_PREFIXES):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No such endpoint: /{full_path}",
+                headers={"X-Error-Code": "ENDPOINT_NOT_FOUND"},
+            )
+
         if full_path:
             candidate = (static_dir / full_path).resolve()
             if candidate.is_file() and candidate.is_relative_to(static_dir.resolve()):
