@@ -48,6 +48,18 @@ class AuditEvent(StrEnum):
     DATA_PURGE_SCHEDULED = "DATA_PURGE_SCHEDULED"
     ERROR_OCCURRED = "ERROR_OCCURRED"
 
+    # Emitted by mobile/src/services/audit/AuditService.ts. Their absence here
+    # was the "audit payload contract" defect: one unknown event_type fails
+    # validation for the whole AuditBatchRequest, so a single journey-completed
+    # event rejected the entire batch with 400 and the buffer never drained.
+    # Keep this enum a superset of the mobile union type.
+    RICA_RECORD_STORED = "RICA_RECORD_STORED"
+    IDENTITY_VERIFICATION_COMPLETED = "IDENTITY_VERIFICATION_COMPLETED"
+    IDENTITY_VERIFICATION_FAILED = "IDENTITY_VERIFICATION_FAILED"
+    SAID_CAPTURE_FAILED = "SAID_CAPTURE_FAILED"
+    ICCID_CAPTURE_FAILED = "ICCID_CAPTURE_FAILED"
+    SIM_SWAP_JOURNEY_COMPLETED = "SIM_SWAP_JOURNEY_COMPLETED"
+
 
 class AuditOutcome(StrEnum):
     """Standardized outcomes for audit events."""
@@ -67,6 +79,10 @@ class AuditLogEntry(BaseModel):
     timestamp: datetime
     session_id: str = Field(..., description="Journey session identifier")
     user_id: str | None = None
+    # The mobile service sends this and the console filters audit logs by it
+    # (management.py's `msisdn` query parameter). Without the field declared,
+    # Pydantic dropped it silently on ingest and the filter matched nothing.
+    msisdn: str | None = None
     device_id: str
     app_version: str | None = None
     os_version: str | None = None

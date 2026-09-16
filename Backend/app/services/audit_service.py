@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 from Backend.app.config import get_settings
@@ -35,29 +36,84 @@ class AuditService:
         data = f"{payload}:{previous_hash or '0' * 64}"
         return hmac.new(_AUDIT_SECRET, data.encode(), hashlib.sha256).hexdigest()
 
+    # Key order and formatting below must match the object literal the device
+    # hashes in mobile/src/services/audit/AuditService.ts `log()`. Two chains
+    # exist on purpose and must not be conflated:
+    #
+    #   DEVICE chain  plain SHA-256, computed on the handset. A device cannot
+    #                 hold the server's HMAC key, so this is the only hash it
+    #                 can produce. It proves the batch arrived as the device
+    #                 wrote it and that the device's own ordering is intact.
+    #                 It is NOT evidential on its own — anyone holding the
+    #                 handset can recompute the whole chain.
+    #
+    #   SERVER chain  HMAC-SHA256 under audit_secret_key, re-chained at ingest
+    #                 in ingest_batch(). This is the evidential record, and the
+    #                 one /api/v1/audit/verify checks.
+    #
+    # Verifying the device's hash with _compute_hash (HMAC) was the defect:
+    # it could never match, so every mobile entry was silently dropped and
+    # the batch then failed its hash check with an empty entry list.
+    _DEVICE_HASH_FIELDS = (
+        "event_type",
+        "timestamp",
+        "session_id",
+        "user_id",
+        "msisdn",
+        "device_id",
+        "app_version",
+        "os_version",
+        "screen",
+        "action",
+        "outcome",
+        "reason",
+        "metadata",
+        "previous_hash",
+    )
+
+    @staticmethod
+    def _js_timestamp(value: Any) -> Any:
+        """Render a datetime the way JavaScript's toISOString() does.
+
+        AuditLogEntry types `timestamp` as datetime, so by the time the entry
+        reaches here Pydantic has already parsed the device's string and the
+        original text is gone. Python's isoformat() would render
+        "+00:00" and six-digit microseconds where the device hashed "Z" and
+        exactly three, producing a different string and so a different hash.
+        """
+        if not isinstance(value, datetime):
+            return value
+
+        utc = value.astimezone(UTC)
+        return f"{utc.strftime('%Y-%m-%dT%H:%M:%S')}.{utc.microsecond // 1000:03d}Z"
+
+    def _device_payload(self, entry: dict[str, Any]) -> str:
+        """Rebuild the exact JSON string the device hashed.
+
+        JSON.stringify omits keys whose value is `undefined` and emits no
+        whitespace, so absent optional fields are dropped rather than encoded
+        as null, and the separators are tight.
+        """
+        previous_hash = entry.get("previous_hash") or "0" * 64
+
+        source = dict(entry)
+        source["previous_hash"] = previous_hash
+        source["timestamp"] = self._js_timestamp(source.get("timestamp"))
+
+        payload = {
+            field: source[field]
+            for field in self._DEVICE_HASH_FIELDS
+            if source.get(field) is not None
+        }
+
+        return json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+
     def _verify_entry_hash(self, entry: dict[str, Any]) -> bool:
-        """Verify the integrity hash of a single audit entry."""
-        payload = json.dumps(
-            {
-                "event_type": entry.get("event_type"),
-                "timestamp": entry.get("timestamp"),
-                "session_id": entry.get("session_id"),
-                "user_id": entry.get("user_id"),
-                "device_id": entry.get("device_id"),
-                "app_version": entry.get("app_version"),
-                "os_version": entry.get("os_version"),
-                "screen": entry.get("screen"),
-                "action": entry.get("action"),
-                "outcome": entry.get("outcome"),
-                "reason": entry.get("reason"),
-                "metadata": entry.get("metadata"),
-                "previous_hash": entry.get("previous_hash"),
-            },
-            sort_keys=True,
-            default=str,
-        )
-        computed = self._compute_hash(payload, entry.get("previous_hash"))
-        return computed == entry.get("integrity_hash")
+        """Verify a mobile entry's device-side SHA-256 hash."""
+        previous_hash = entry.get("previous_hash") or "0" * 64
+        data = f"{self._device_payload(entry)}:{previous_hash}"
+        computed = hashlib.sha256(data.encode()).hexdigest()
+        return hmac.compare_digest(computed, entry.get("integrity_hash") or "")
 
     def log(
             self,
@@ -140,7 +196,19 @@ class AuditService:
         )
         chain_head = row["last_hash"] if row else "0" * 64
         valid_entries: list[dict[str, Any]] = []
-        batch_hashes: list[str] = []
+
+        # Check the batch hash first, over the entries exactly as received.
+        # The device computed it across its whole buffer
+        # (buffer.map(e => e.integrity_hash).join('')), so it has to be
+        # checked against those same device hashes before anything is
+        # dropped or re-chained — comparing it against the server's own
+        # re-chained hashes, as this did, could never match.
+        computed_batch = hashlib.sha256(
+            "".join(entry.get("integrity_hash") or "" for entry in entries).encode()
+        ).hexdigest()
+
+        if not hmac.compare_digest(computed_batch, expected_batch_hash):
+            raise ValueError("Batch hash mismatch — possible tampering")
 
         for entry in entries:
             if not self._verify_entry_hash(entry):
@@ -152,6 +220,7 @@ class AuditService:
                     "timestamp": entry["timestamp"],
                     "session_id": entry["session_id"],
                     "user_id": entry.get("user_id"),
+                    "msisdn": entry.get("msisdn"),
                     "device_id": entry["device_id"],
                     "app_version": entry.get("app_version"),
                     "os_version": entry.get("os_version"),
@@ -166,11 +235,13 @@ class AuditService:
                 default=str,
             )
             backend_hash = self._compute_hash(payload, chain_head)
-            batch_hashes.append(backend_hash)
             valid_entries.append(
                 {
                     **entry,
+                    # The server chain replaces integrity_hash; the device's
+                    # own hash is kept so the two can be reconciled later.
                     "integrity_hash": backend_hash,
+                    "device_integrity_hash": entry.get("integrity_hash"),
                     "previous_hash": chain_head,
                     "source": "mobile",
                     "synced_at": utcnow_iso(),
@@ -178,23 +249,21 @@ class AuditService:
             )
             chain_head = backend_hash
 
-        computed_batch = hashlib.sha256("".join(batch_hashes).encode()).hexdigest()
-        if computed_batch != expected_batch_hash:
-            raise ValueError("Batch hash mismatch — possible tampering")
-
         for entry in valid_entries:
             db.execute(
                 "INSERT INTO audit_logs ("
-                "event_id, event_type, timestamp, session_id, user_id, device_id, "
+                "event_id, event_type, timestamp, session_id, user_id, msisdn, device_id, "
                 "app_version, os_version, screen, action, outcome, reason, "
-                "metadata, integrity_hash, previous_hash, source, synced_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "metadata, integrity_hash, device_integrity_hash, previous_hash, "
+                "source, synced_at"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     entry["event_id"],
                     entry["event_type"],
                     entry["timestamp"],
                     entry["session_id"],
                     entry.get("user_id"),
+                    entry.get("msisdn"),
                     entry["device_id"],
                     entry.get("app_version"),
                     entry.get("os_version"),
@@ -204,6 +273,7 @@ class AuditService:
                     entry.get("reason"),
                     json.dumps(entry.get("metadata") or {}, default=str),
                     entry["integrity_hash"],
+                    entry.get("device_integrity_hash"),
                     entry["previous_hash"],
                     "mobile",
                     entry["synced_at"],

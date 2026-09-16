@@ -26,6 +26,7 @@ from Backend.app.schemas.audit import (
     ChainVerifyResponse,
 )
 from Backend.app.services.audit_service import audit_service
+from Backend.app.services.events import publish
 
 logger = logging.getLogger("audit.router")
 
@@ -87,6 +88,19 @@ async def ingest_batch(
             "audit.batch.ingest.success correlation=%s user=%s accepted=%d rejected=%d",
             correlation_id, user_ref, result["accepted"], result["rejected"],
         )
+
+        # Nudge any attached console to refetch. Summary only — the console
+        # re-reads through the authenticated endpoints rather than trusting
+        # anything carried on the stream.
+        if result["accepted"]:
+            publish(
+                "audit.batch",
+                {
+                    "session_id": x_session_id,
+                    "accepted": result["accepted"],
+                    "chain_head": result.get("new_chain_head"),
+                },
+            )
 
         return BatchIngestResponse(
             status="accepted",

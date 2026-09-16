@@ -206,10 +206,6 @@ class AuditService {
   }
 
   async flush(): Promise<boolean> {
-    // TEMPORARILY DISABLED FOR POC
-    // Prevent audit batch calls until the audit payload contract is fixed.
-    return true;
-
     if (this.buffer.length === 0) return true;
 
     const batchPayload = this.buffer.map((e) => e.integrity_hash).join('');
