@@ -27,11 +27,9 @@ import logging
 import re
 from typing import Annotated, Literal
 
-import pyzbar.pyzbar as pyzbar
 from fastapi import APIRouter, Depends, HTTPException, status
 from PIL import Image, ImageEnhance, UnidentifiedImageError
 from pydantic import BaseModel, Field, model_validator
-from pyzbar.pyzbar import ZBarSymbol
 
 from Backend.app.dependencies.security import (
     get_correlation_id,
@@ -322,12 +320,43 @@ def _preprocess(
     return working
 
 
+def _load_pyzbar():
+    """Import pyzbar on first use, not at module import.
+
+    pyzbar binds the `libzbar0` shared library at import time, so a missing
+    system package used to raise ImportError while `Backend.app.routers` was
+    still being assembled — which took down the whole API, and the test suite
+    with it, over one optional barcode path. The Dockerfile installs libzbar0,
+    so containers are unaffected; a bare checkout on a machine without it can
+    now still serve every other route, and manual ICCID entry keeps working
+    because it never reaches this function.
+    """
+
+    try:
+        import pyzbar.pyzbar as pyzbar
+        from pyzbar.pyzbar import ZBarSymbol
+    except ImportError as exc:
+        logger.error("iccid.barcode.zbar_unavailable error=%s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Barcode scanning is unavailable on this server "
+                "(libzbar is not installed). Enter the ICCID manually."
+            ),
+            headers={"X-Error-Code": "BARCODE_SCAN_UNAVAILABLE"},
+        ) from exc
+
+    return pyzbar, ZBarSymbol
+
+
 def _extract_from_image(
         image: Image.Image,
 ) -> dict | None:
     """
     Attempt ICCID extraction from original and enhanced images.
     """
+
+    pyzbar, ZBarSymbol = _load_pyzbar()
 
     symbols = [
         ZBarSymbol.CODE128,
