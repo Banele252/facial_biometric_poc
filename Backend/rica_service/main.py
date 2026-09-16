@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from Backend.app.db import get_db
+from Backend.rica_service.db import get_db
 from .store import get_by_msisdn, list_records, upsert_record, verify
 
 load_dotenv()
@@ -59,12 +59,12 @@ async def create_or_update_record(payload: RicaRecordRequest) -> dict[str, Any]:
     Returns the stored record so a successful call is immediately visible -
     this is what to check when testing that data was parsed and saved.
     """
-    record = upsert_record({
-        "id_number": payload.id_number,
-        "full_name": payload.full_name,
-        "msisdn": payload.msisdn,
-        "new_sim_number": payload.new_sim_number,
-    })
+    record = upsert_record(
+        id_number=payload.id_number,
+        full_name=payload.full_name,
+        msisdn=payload.msisdn,
+        new_sim_number=payload.new_sim_number,
+    )
     return {"status": "stored", "record": record}
 
 
