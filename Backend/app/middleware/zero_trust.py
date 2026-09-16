@@ -83,6 +83,17 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
         "/auth/token",  # Token endpoint handles its own auth
     }
 
+    # Static assets of the bundled single-page app. PUBLIC_PATHS is an exact
+    # match, so "/" was public while the bundle it loads was not: the shell
+    # rendered and every script, font and image under these prefixes came back
+    # 401, leaving a blank page. These are public files by definition - the
+    # API calls the bundle then makes are still authenticated normally.
+    PUBLIC_PREFIXES = (
+        "/_expo/",      # Expo web export
+        "/assets/",     # fonts and images
+        "/static/",
+    )
+
     # Paths that need a relaxed CSP (Swagger / ReDoc assets)
     DOCS_PATHS = {
         "/docs",
@@ -162,7 +173,11 @@ class ZeroTrustMiddleware(BaseHTTPMiddleware):
         method = request.method
 
         # 1. Skip authentication for public paths and CORS preflight
-        if path in self.PUBLIC_PATHS or method == "OPTIONS":
+        if (
+            path in self.PUBLIC_PATHS
+            or path.startswith(self.PUBLIC_PREFIXES)
+            or method == "OPTIONS"
+        ):
             response = await call_next(request)
             self._add_security_headers(response, path)
             return response
