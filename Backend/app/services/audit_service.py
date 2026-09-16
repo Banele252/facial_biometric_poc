@@ -24,11 +24,29 @@ class AuditService:
         self._init_control_table()
 
     def _init_control_table(self) -> None:
-        """Initialize the audit chain control table with a genesis hash."""
+        """Insert the genesis chain head once, if it is not already there.
+
+        Two bugs lived in this one statement:
+
+        `INSERT OR IGNORE` is SQLite-only. On Postgres it is a syntax error,
+        and because this runs at import time it took the whole application
+        down before it could serve anything.
+
+        It also omitted updated_at, which is NOT NULL. On SQLite the OR IGNORE
+        swallowed that violation, so the genesis row was never actually
+        written — silently. The chain then had no persisted head: every batch
+        started again from the zero hash and the closing UPDATE matched no
+        rows, which quietly made the server chain per-batch rather than
+        continuous.
+
+        ON CONFLICT is understood by Postgres and by SQLite from 3.24, so one
+        statement now covers both, and the row is complete.
+        """
         db = get_db()
         db.execute(
-            "INSERT OR IGNORE INTO audit_chain_control (id, last_hash) VALUES (?, ?)",
-            (1, "0" * 64),
+            "INSERT INTO audit_chain_control (id, last_hash, updated_at) "
+            "VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING",
+            (1, "0" * 64, utcnow_iso()),
         )
 
     def _compute_hash(self, payload: str, previous_hash: str | None = None) -> str:

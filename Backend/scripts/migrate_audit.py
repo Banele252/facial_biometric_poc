@@ -9,7 +9,7 @@ from pathlib import Path
 # Add repo root to path so we can import Backend.app.db
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from Backend.app.db import get_db
+from Backend.app.db import get_db, utcnow_iso
 
 _ZERO64 = "0" * 64
 
@@ -49,7 +49,12 @@ _SCHEMA = (
         updated_at TEXT DEFAULT (datetime('now'))
         )
     """,
-    f"INSERT OR IGNORE INTO audit_chain_control (id, last_hash) VALUES (1, '{_ZERO64}')",
+    # ON CONFLICT rather than INSERT OR IGNORE: the latter is SQLite-only and
+    # is a syntax error on Postgres. updated_at is supplied because relying on
+    # OR IGNORE to swallow a NOT NULL violation is how the genesis row came to
+    # be silently missing in the first place.
+    f"INSERT INTO audit_chain_control (id, last_hash, updated_at) "
+    f"VALUES (1, '{_ZERO64}', '{utcnow_iso()}') ON CONFLICT (id) DO NOTHING",
 )
 
 
