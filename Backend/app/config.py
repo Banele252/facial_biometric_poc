@@ -14,13 +14,34 @@ _DEFAULT_DB_PATH = Path(__file__).parent.parent / "facial_biometric.db"
 
 class Settings(BaseSettings):
     env: str = "development"
-    verify_mode: Literal["production", "sandbox"] = "sandbox"
+    # 'mock' answers provider calls locally (see external_backend._mock_response);
+    # 'sandbox' still calls VerifyNow's hosted sandbox and needs credentials.
+    verify_mode: Literal["production", "sandbox", "mock"] = "sandbox"
 
     @property
     def is_sandbox(self) -> bool:
         return self.verify_mode == "sandbox" or self.env == "development"
 
-    verify_now_configured: bool = False
+    # The provider credentials Backend/external_backend/main.py reads straight
+    # from the environment. They are declared here too so the app can tell
+    # whether a real provider call is even possible.
+    verify_now_api_key: str | None = None
+    verify_base_url: str | None = None
+
+    @property
+    def verify_now_configured(self) -> bool:
+        """True when a real VerifyNow call could be made.
+
+        Derived, not configured. This used to be a plain `bool = False` field,
+        which meant setting VERIFY_NOW_API_KEY and VERIFY_BASE_URL left it
+        False: the journey then took the offline fallback path and never
+        reached the fraud, sim-swap and activation stages, whatever the
+        provider credentials said.
+        """
+        if self.verify_mode == "mock":
+            return True
+        return bool(self.verify_now_api_key and self.verify_base_url)
+
     request_timeout_seconds: int = 30
     sandbox_cooldown_seconds: int = 0
     face_match_min_score: float = 60.0
@@ -61,6 +82,14 @@ class Settings(BaseSettings):
     sandbox_api_key: str | None = None
     production_api_key: str | None = None
     cors_allow_origins: str = ""
+
+    # Sandbox credentials for /auth/token, as a JSON object of
+    # {username: {password, allowed_scopes, default_geo_fence}}.
+    # Declared here rather than read with os.getenv in the router so it
+    # resolves from .env like every other setting — os.getenv only sees the
+    # real process environment, so a value in .env was silently ignored and
+    # auth came up disabled with no indication why.
+    test_users_json: str = ""
 
     # Audit & Compliance
     audit_secret_key: str = "change-me-in-production-use-256-bit-key-min-32-chars-long"

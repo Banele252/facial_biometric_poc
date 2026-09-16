@@ -62,9 +62,14 @@ def verify_identity(
         )
 
     try:
+        # VERIFY_MODE=mock answers provider calls locally (see
+        # external_backend._mock_response). The per-request mode only selects
+        # between the hosted production and sandbox providers, so honour the
+        # global mock setting here or a fully-local run can never succeed.
+        effective_mode = "mock" if settings.verify_mode == "mock" else payload.mode
         result = verify_said(
             id_number=payload.id_number.strip(),
-            mode=payload.mode,
+            mode=effective_mode,
             timeout=settings.request_timeout_seconds,
         )
         logger.info(

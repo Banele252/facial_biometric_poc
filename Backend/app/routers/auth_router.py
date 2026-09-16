@@ -24,8 +24,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _load_test_users() -> dict:
-    """Load test users from TEST_USERS_JSON environment variable."""
-    test_users_json = os.getenv("TEST_USERS_JSON")
+    """Load test users from the TEST_USERS_JSON setting (env or .env)."""
+    test_users_json = security_settings.test_users_json or os.getenv("TEST_USERS_JSON")
     if not test_users_json:
         logger.warning("TEST_USERS_JSON not set. Auth endpoint will be unavailable.")
         return {}

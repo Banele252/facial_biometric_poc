@@ -47,8 +47,56 @@ def _base_url() -> str:
     return base_url.rstrip("/")
 
 
+def _mock_response(endpoint: str, payload: dict) -> dict:
+    """A deterministic stand-in for VerifyNow, shaped like the real body.
+
+    VERIFY_MODE=mock exists because 'sandbox' is still VerifyNow's *hosted*
+    sandbox: it needs credentials and network egress, so without a key the
+    journey stopped at the fallback branch and never reached the fraud,
+    sim-swap and activation steps. Same reasoning, and the same config-driven
+    shape, as MockLiveness in Backend/app/services/liveness.py, which exists
+    because Azure AI Face is not available in this subscription.
+
+    Responses go through the normal parsing in services/face_match.py rather
+    than short-circuiting it, so the mock exercises the real decision logic.
+    """
+    if endpoint == FACEMATCH_ENDPOINT:
+        return {
+            "success": True,
+            "results": {
+                "face_match": {
+                    "status": "Approved",
+                    "score": 92.0,
+                },
+            },
+            "request_id": "mock-facematch",
+        }
+
+    if endpoint == VERIFY_ENDPOINT:
+        return {
+            "success": True,
+            "results": {"said_verification": {"status": "Approved"}},
+            "request_id": "mock-verify",
+        }
+
+    if endpoint == PASSIVE_LIVENESS_ENDPOINT:
+        return {
+            "success": True,
+            "results": {"passive_liveness": {"status": "Approved", "score": 0.95}},
+            "request_id": "mock-liveness",
+        }
+
+    if endpoint == MY_CREDITS_ENDPOINT:
+        return {"success": True, "credits": 9999}
+
+    raise VerifyNowError(f"No mock response defined for {endpoint}")
+
+
 def _post(endpoint: str, payload: dict, mode: str, timeout: float) -> dict:
     """POST a JSON payload to VerifyNow and return the decoded body."""
+    if mode == "mock":
+        return _mock_response(endpoint, payload)
+
     try:
         resp = requests.post(
             url=f"{_base_url()}{endpoint}",
