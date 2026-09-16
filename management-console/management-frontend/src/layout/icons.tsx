@@ -50,6 +50,16 @@ export function ChatbotIcon(props: IconProps) {
   )
 }
 
+export function BusinessRulesIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M15 3v4h4" />
+      <path d="m9 14 2 2 4-4" />
+    </svg>
+  )
+}
+
 export function ReportIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { DashboardLayout } from './layout/DashboardLayout'
 import { RequireAuth } from './layout/RequireAuth'
 import { AuditLogs } from './pages/AuditLogs'
+import { BusinessRules } from './pages/BusinessRules'
 import { FraudIntelligence } from './pages/FraudIntelligence'
 import { TransactionReport } from './pages/TransactionReport'
 import { SystemChatbot } from './pages/SystemChatbot'
@@ -33,6 +34,7 @@ export default function App() {
       <Route path="/audit-logs" element={<Protected><AuditLogs /></Protected>} />
       <Route path="/fraud-intelligence" element={<Protected><FraudIntelligence /></Protected>} />
       <Route path="/transactions" element={<Protected><TransactionReport /></Protected>} />
+      <Route path="/business-rules" element={<Protected><BusinessRules /></Protected>} />
       <Route path="/chatbot" element={<Protected><SystemChatbot /></Protected>} />
       <Route path="*" element={<Protected><NotFound /></Protected>} />
     </Routes>

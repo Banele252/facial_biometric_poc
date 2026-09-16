@@ -36,6 +36,7 @@ from analytical_db import (
     transaction_volume_by_day,
 )
 from auth import authenticate_user, ensure_users_table
+from business_rules import business_rules_summary
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -191,6 +192,15 @@ async def fraud_rejections_summary_route(
 ) -> dict[str, Any]:
     try:
         rules = fraud_rejections_summary(conn, created_from=created_from, created_to=created_to)
+    except psycopg.Error as exc:
+        raise _analytics_db_error(exc) from exc
+    return {"rules": rules}
+
+
+@analytics_router.get("/business-rules")
+async def business_rules(conn: Conn) -> dict[str, Any]:
+    try:
+        rules = business_rules_summary(conn)
     except psycopg.Error as exc:
         raise _analytics_db_error(exc) from exc
     return {"rules": rules}

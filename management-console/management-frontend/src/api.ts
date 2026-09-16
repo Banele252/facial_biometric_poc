@@ -3,6 +3,7 @@
 // Endpoints:
 //   POST /api/v1/chat                                   System Chatbot — Fraud Assistant agent
 //   GET  /api/v1/analytics/audit-logs                   process_log rows
+//   GET  /api/v1/analytics/business-rules                 rule catalog with process_log counts
 //   GET  /api/v1/analytics/fraud-rejections              rejected_requests rows
 //   GET  /api/v1/analytics/fraud-rejections/summary      rejection counts by stage/reason
 //   GET  /api/v1/analytics/sim-swap-orders               sim_swap_orders rows
@@ -71,6 +72,20 @@ export function getAuditLogs(
   filters: { process?: string; environment?: string; limit?: number; offset?: number } = {},
 ): Promise<PaginatedResponse<AuditLogEntry>> {
   return request(`/api/v1/analytics/audit-logs${buildQuery(filters)}`)
+}
+
+// --- Business rules -------------------------------------------------------
+
+export interface BusinessRule {
+  code: string
+  name: string
+  description: string
+  is_active: boolean
+  validation_count: number
+}
+
+export function getBusinessRules(): Promise<{ rules: BusinessRule[] }> {
+  return request('/api/v1/analytics/business-rules')
 }
 
 // --- Fraud rejections (rejected_requests) -------------------------------
