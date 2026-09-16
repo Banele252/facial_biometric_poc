@@ -74,20 +74,38 @@ def _resolve_audit_table() -> tuple[str | None, set[str]]:
 
     _resolved = True
 
+    # sqlite_master and PRAGMA are SQLite-only. Against the deployed Postgres
+    # both raise, the failure was swallowed, and the console's audit and fraud
+    # views were empty no matter how many batches the app had posted - while
+    # the transactions page, which reads sim_swap_orders directly, worked.
+    # That difference is the tell, and it only ever showed up when deployed.
+    is_postgres = getattr(get_db(), "_is_postgres", False)
+
     try:
-        tables = _rows(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
+        if is_postgres:
+            tables = _rows(
+                "SELECT table_name AS name FROM information_schema.tables "
+                "WHERE table_schema = 'public'"
+            )
+        else:
+            tables = _rows("SELECT name FROM sqlite_master WHERE type='table'")
     except Exception:  # noqa: BLE001
         logger.exception("Could not list tables -- console will show empty data")
         return None, set()
 
     for table in (row["name"] for row in tables):
         try:
-            columns = {
-                row["name"]
-                for row in _rows(f"PRAGMA table_info({table})")
-            }
+            if is_postgres:
+                columns = {
+                    row["name"]
+                    for row in _rows(
+                        "SELECT column_name AS name FROM information_schema.columns "
+                        "WHERE table_name = ?",
+                        (table,),
+                    )
+                }
+            else:
+                columns = {row["name"] for row in _rows(f"PRAGMA table_info({table})")}
         except Exception:  # noqa: BLE001
             continue
 
