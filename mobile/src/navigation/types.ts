@@ -18,6 +18,13 @@ export interface NavigationParams {
     phoneNumber?: string;
     fullName?: string;
     photoUrl?: string;
+    // ScanSimScreen sends these and FaceCheckScreen declares them; they were
+    // missing here, so the navigator had nothing to forward. `sessionId` is
+    // sent to the liveness endpoint, which rejects an empty one.
+    sessionId?: string;
+    selfieId?: string;
+    iccid?: string;
+    iccidSource?: 'manual' | 'barcode';
   };
   ScanSimScreen: {
     idNumber?: string;
@@ -26,6 +33,8 @@ export interface NavigationParams {
     photoUrl?: string;
     sessionId?: string;
     selfieId?: string;
+    iccid?: string;
+    iccidSource?: 'manual' | 'barcode';
   };
   ReviewScreen: {
     idNumber?: string;
@@ -35,6 +44,7 @@ export interface NavigationParams {
     sessionId?: string;
     selfieId?: string;
     iccid?: string;
+    iccidSource?: 'manual' | 'barcode';
     matchScore?: number;
     matchConfidence?: string;
     reason?: string;

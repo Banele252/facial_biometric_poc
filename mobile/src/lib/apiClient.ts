@@ -31,6 +31,13 @@ type FastApiValidationItem = {
     type?: string;
 };
 
+/** One entry of an RFC 7807 problem's `errors` array. */
+type ProblemValidationError = {
+    loc?: Array<string | number>;
+    msg?: string;
+    type?: string;
+};
+
 function extractApiMessage(data: unknown): string | null {
     if (!data) {
         return null;
@@ -52,6 +59,33 @@ function extractApiMessage(data: unknown): string | null {
 
     if (typeof body.detail === 'string') {
         return body.detail;
+    }
+
+    // A platform validation failure carries the offending fields in
+    // `errors`, and its `detail` is the constant "One or more fields failed
+    // validation." - true of every 422 and useless on its own. Naming the
+    // fields is the difference between a bug report and a guess.
+    if (Array.isArray(body.errors) && body.errors.length > 0) {
+        const fields = (body.errors as ProblemValidationError[])
+            .map((item) => {
+                const field = Array.isArray(item.loc)
+                    ? item.loc
+                        .filter((part) => part !== 'body')
+                        .join('.')
+                    : '';
+
+                const message =
+                    item.msg ?? 'is invalid';
+
+                return field
+                    ? `${field}: ${message}`
+                    : message;
+            })
+            .join('\n');
+
+        if (fields) {
+            return fields;
+        }
     }
 
     // The platform answers errors as RFC 7807 problem details, where the

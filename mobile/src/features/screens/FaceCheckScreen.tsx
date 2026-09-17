@@ -159,6 +159,18 @@ export default function FaceCheckScreen({
         );
       }
 
+      // Checked here rather than left to the server: the liveness endpoint
+      // requires a non-empty session_id and rejects the request with a
+      // generic validation error that names no field. Minting a replacement
+      // would be worse - the session id is what ties this capture to the
+      // rest of the journey's audit trail, so a different one is not the
+      // same evidence.
+      if (!sessionId.trim()) {
+        throw new Error(
+            'Your verification session is missing. Please start the journey again.',
+        );
+      }
+
       audit.log('LIVENESS_INITIATED', {
         outcome: 'pending',
         metadata: {

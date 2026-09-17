@@ -56,6 +56,18 @@ export default function AppNavigator() {
         phoneNumber: p?.phoneNumber,
         fullName: p?.fullName,
         photoUrl: p?.photoUrl,
+        // ScanSimScreen sends all four of these and FaceCheckScreen declares
+        // them, but the navigator dropped them here, so the screen fell back
+        // to its prop defaults. `sessionId` then reached the liveness
+        // endpoint as an empty string - which the PoC backend accepted and
+        // the platform rejects, surfacing as "Verification failed" on the
+        // face-check screen with nothing naming the field. `iccid` and
+        // `iccidSource` were lost the same way and had to be recovered from
+        // storage further down the journey.
+        sessionId: p?.sessionId,
+        selfieId: p?.selfieId,
+        iccid: p?.iccid,
+        iccidSource: p?.iccidSource,
       };
     }
 
@@ -69,6 +81,8 @@ export default function AppNavigator() {
         photoUrl: p?.photoUrl,
         sessionId: p?.sessionId,
         selfieId: p?.selfieId,
+        iccid: p?.iccid,
+        iccidSource: p?.iccidSource,
       };
     }
 
@@ -83,6 +97,7 @@ export default function AppNavigator() {
         sessionId: p?.sessionId,
         selfieId: p?.selfieId,
         iccid: p?.iccid,
+        iccidSource: p?.iccidSource,
         matchScore: p?.matchScore,
         matchConfidence: p?.matchConfidence,
         reason: p?.reason,
