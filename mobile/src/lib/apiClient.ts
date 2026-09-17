@@ -54,6 +54,13 @@ function extractApiMessage(data: unknown): string | null {
         return body.detail;
     }
 
+    // The platform answers errors as RFC 7807 problem details, where the
+    // human-readable summary is `title`. Without this every 4xx read as
+    // "Request failed with status N".
+    if (typeof body.title === 'string') {
+        return body.title;
+    }
+
     if (Array.isArray(body.detail)) {
         return (body.detail as FastApiValidationItem[])
             .map((item) => {
@@ -83,6 +90,7 @@ async function apiCall<T>(
     options?: {
         method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
         body?: unknown;
+        headers?: Record<string, string>;
     },
 ): Promise<T> {
     try {
@@ -90,11 +98,12 @@ async function apiCall<T>(
             url: endpoint,
             method: options?.method ?? 'GET',
             data: options?.body,
-            headers: options?.body
-                ? {
-                    'Content-Type': 'application/json',
-                }
-                : undefined,
+            headers: {
+                ...(options?.body
+                    ? { 'Content-Type': 'application/json' }
+                    : {}),
+                ...(options?.headers ?? {}),
+            },
         });
 
         return response.data;
@@ -226,6 +235,20 @@ export interface LivenessResponse {
     detail: string;
 }
 
+export interface FaceMatchRequest {
+    selfieId: string;
+    idNumber: string;
+}
+
+export interface FaceMatchResponse {
+    selfie_id: string;
+    matched: boolean;
+    status: string;
+    score: number;
+    provider: string;
+    detail: string;
+}
+
 // -----------------------------------------------------------------------------
 // ICCID
 // -----------------------------------------------------------------------------
@@ -259,10 +282,17 @@ export interface VerificationJourneyRequest {
     idNumber: string;
     fullName?: string;
     msisdn?: string;
-    /** The replacement SIM's ICCID. Without it the swap step is skipped. */
+    /** The replacement SIM's ICCID. */
     newSimNumber?: string;
     selfieId: string;
-    deviceId?: string;
+    /** Device and consent evidence the rule packs score. */
+    deviceFingerprint: string;
+    devicePlatform: DevicePlatform;
+    deviceAttested?: boolean;
+    deviceCompromised?: boolean;
+    consentTextVersion: string;
+    consentCapturedAt: string;
+    idempotencyKey: string;
 }
 
 export interface VerificationJourneyResponse {
@@ -278,17 +308,49 @@ export interface VerificationJourneyResponse {
     mode?: string | null;
     checks: VerificationCheck[];
     order_id?: string | null;
+    reference?: string | null;
 }
+
+/**
+ * The platform's order status, mapped to the decision the journey shows.
+ *
+ * `pending_verification` is an acceptance, not a completed swap: the order
+ * passed every gate and is queued for fulfilment. The PoC's orchestrator
+ * activated the swap in the same call, so the review screen treated its
+ * success as final - this build must not claim more than the platform did.
+ */
+const DECISION_BY_ORDER_STATUS: Record<string, 'approved' | 'review' | 'rejected'> = {
+    pending_verification: 'approved',
+    in_review: 'review',
+    denied: 'rejected',
+};
 
 // -----------------------------------------------------------------------------
 // SIM Swap
 // -----------------------------------------------------------------------------
+
+export type DevicePlatform = 'android' | 'ios' | 'web';
 
 export interface SimSwapInitiateRequest {
     idNumber: string;
     msisdn: string;
     iccid: string;
     selfieId?: string | null;
+
+    /** At least 16 characters; the platform rejects anything shorter. */
+    deviceFingerprint: string;
+    devicePlatform: DevicePlatform;
+    /** Play Integrity / DeviceCheck attestation. Unattested orders are
+     *  referred for review by DT.PLATFORM.003 rather than accepted. */
+    deviceAttested?: boolean;
+    deviceCompromised?: boolean;
+
+    /** The consent text the customer actually agreed to, and when. */
+    consentTextVersion: string;
+    consentCapturedAt: string;
+
+    /** Client-generated, stable across retries of the same request. */
+    idempotencyKey: string;
 }
 
 export interface SimSwapInitiateResponse {
@@ -304,10 +366,11 @@ export interface SimSwapInitiateResponse {
 
 export const apiClient = {
     // Step 2:
-    // Validate RSA ID locally/backend rules only.
+    // Local RSA ID rules plus, when the identity provider is configured, the
+    // authoritative Home Affairs record.
     validateId: (body: ValidateIdRequest) =>
         apiCall<ValidateIdResponse>(
-            '/api/v1/validate-id',
+            '/v1/validate-id',
             {
                 method: 'POST',
                 body: {
@@ -316,16 +379,16 @@ export const apiClient = {
             },
         ),
 
-    // Legacy/direct verification API.
-    // Current VerifyDetailsScreen should not call this.
+    // Legacy alias. The platform has one validation endpoint and it takes no
+    // `mode` - the provider is chosen by server configuration, not by the
+    // handset.
     verifyIdentity: (body: VerifyIdentityRequest) =>
         apiCall<VerifyIdentityResponse>(
-            '/api/v1/validate-id',
+            '/v1/validate-id',
             {
                 method: 'POST',
                 body: {
                     id_number: body.idNumber,
-                    mode: body.mode ?? 'sandbox',
                 },
             },
         ),
@@ -334,7 +397,7 @@ export const apiClient = {
     // Store ID + MSISDN for later RICA/SIM swap processing.
     createRicaRecord: (body: CreateRicaRecordRequest) =>
         apiCall<CreateRicaRecordResponse>(
-            '/api/v1/rica/records',
+            '/v1/rica/records',
             {
                 method: 'POST',
                 body: {
@@ -348,10 +411,11 @@ export const apiClient = {
         ),
 
     // Step 3:
-    // Resolve a replacement SIM ICCID from either manual input or a barcode image.
+    // Resolve a replacement SIM ICCID from either manual input or a barcode
+    // image. The platform requires exactly one of the two.
     resolveIccid: (body: IccidResolveRequest) =>
         apiCall<IccidResolveResponse>(
-            '/api/v1/iccid/extract',
+            '/v1/iccid/extract',
             {
                 method: 'POST',
                 body: {
@@ -368,7 +432,7 @@ export const apiClient = {
     // Backward-compatible image-only alias.
     extractIccidFromImage: (body: { imageBase64: string }) =>
         apiCall<IccidResolveResponse>(
-            '/api/v1/iccid/extract',
+            '/v1/iccid/extract',
             {
                 method: 'POST',
                 body: {
@@ -378,17 +442,10 @@ export const apiClient = {
         ),
 
     // Step 4:
-    // Camera capture -> image -> /selfies.
-    //
-    // Backend contract:
-    //
-    // {
-    //   "id_number": "...",
-    //   "image": "data:image/jpeg;base64,..."
-    // }
+    // Camera capture -> image -> /v1/selfies.
     captureSelfie: (body: SelfieCaptureRequest) =>
         apiCall<SelfieCaptureResponse>(
-            '/api/v1/selfies',
+            '/v1/selfies',
             {
                 method: 'POST',
                 body: {
@@ -399,11 +456,10 @@ export const apiClient = {
         ),
 
     // Step 4:
-    // Liveness check against the selfie reference
-    // returned by captureSelfie().
+    // Liveness check against the selfie reference returned by captureSelfie().
     checkLiveness: (body: LivenessRequest) =>
         apiCall<LivenessResponse>(
-            `/api/v1/selfies/${encodeURIComponent(body.selfieId)}/liveness`,
+            `/v1/selfies/${encodeURIComponent(body.selfieId)}/liveness`,
             {
                 method: 'POST',
                 body: {
@@ -415,43 +471,38 @@ export const apiClient = {
             },
         ),
 
-    // Step 5 (ReviewScreen):
-    // Run the full identity journey and, if it passes, create AND activate the
-    // SIM swap in one call.
-    //
-    // This is the orchestrator: precheck -> liveness -> RICA -> ID verification
-    // -> Home Affairs face match -> fraud checks -> sim swap -> activation.
-    // `initiateSimSwap` below only inserts an order row — it runs none of those
-    // checks — so calling it from Review would complete a swap with no fraud or
-    // face-match gate and leave the console's Fraud Intelligence page empty.
-    //
-    // `status` is the decision ('approved' | 'rejected' | 'review'), not just
-    // transport success: a 200 can still be a refusal, so callers must branch
-    // on it rather than treating any non-throw as approval.
-    runVerificationJourney: (body: VerificationJourneyRequest) =>
-        apiCall<VerificationJourneyResponse>(
-            '/api/v1/verifications',
+    // Step 5:
+    // Compare the captured selfie against the Home Affairs reference photo.
+    // This is a separate call on the platform; the PoC folded it into its
+    // `/verifications` orchestrator.
+    matchFace: (body: FaceMatchRequest) =>
+        apiCall<FaceMatchResponse>(
+            `/v1/selfies/${encodeURIComponent(body.selfieId)}/match`,
             {
                 method: 'POST',
                 body: {
                     id_number: body.idNumber,
-                    full_name: body.fullName ?? null,
-                    msisdn: body.msisdn ?? null,
-                    new_sim_number:
-                        body.newSimNumber ?? null,
-                    selfie_id: body.selfieId,
-                    device_id: body.deviceId ?? null,
-                    transaction: 'sim_swap',
                 },
             },
         ),
 
-    // SIM swap transaction.
-    // Low-level order insert with no decision chain — prefer
-    // runVerificationJourney() for the customer journey.
+    // Step 5 (ReviewScreen):
+    // Raise the SIM swap.
+    //
+    // This is not the thin order insert the PoC's endpoint of the same name
+    // was. The platform's service runs the identity precheck and the signed
+    // rule packs (za.fic-rica.identity, za.icasa.sim-swap and the OpCo pack),
+    // persists the order, and extends the tenant's audit chain. The returned
+    // `status` is the decision, so a 202 can still be a refusal.
+    //
+    // The consent and device evidence is required: the platform defaults deny
+    // outright without consent, and the packs score the device signals. The
+    // Idempotency-Key is the caller's, because raising a swap is not safe to
+    // repeat - retrying with the same key returns the same order rather than
+    // creating a second one.
     initiateSimSwap: (body: SimSwapInitiateRequest) =>
         apiCall<SimSwapInitiateResponse>(
-            '/api/v1/sim-swap/initiate',
+            '/v1/sim-swap/initiate',
             {
                 method: 'POST',
                 body: {
@@ -460,7 +511,183 @@ export const apiClient = {
                     iccid: body.iccid,
                     selfie_id:
                         body.selfieId ?? null,
+                    consent: {
+                        granted: true,
+                        text_version:
+                        body.consentTextVersion,
+                        captured_at:
+                        body.consentCapturedAt,
+                    },
+                    device: {
+                        fingerprint:
+                        body.deviceFingerprint,
+                        platform:
+                        body.devicePlatform,
+                        attested:
+                            body.deviceAttested ?? false,
+                        rooted_or_jailbroken:
+                            body.deviceCompromised ?? false,
+                    },
+                    channel: 'app',
+                },
+                headers: {
+                    'Idempotency-Key':
+                    body.idempotencyKey,
                 },
             },
         ),
+
+    // Step 5 (ReviewScreen):
+    // The decision chain, as the platform composes it.
+    //
+    // The PoC had one server-side orchestrator at POST /api/v1/verifications
+    // that ran every check and returned a single decision. The platform has
+    // no such endpoint: face match is its own call, and the fraud and
+    // regulatory rules run inside the SIM swap service. This runs the two
+    // remaining steps in order and reports them in the shape the review
+    // screen already consumes, so a refusal at either point is a decision the
+    // caller can branch on rather than an exception.
+    runVerificationJourney: async (
+        body: VerificationJourneyRequest,
+    ): Promise<VerificationJourneyResponse> => {
+        const checks: VerificationCheck[] = [];
+
+        let match: FaceMatchResponse;
+
+        try {
+            match = await apiClient.matchFace({
+                selfieId: body.selfieId,
+                idNumber: body.idNumber,
+            });
+        } catch (err: unknown) {
+            const status =
+                err instanceof ApiClientError
+                    ? err.status
+                    : 0;
+
+            // 409: no Home Affairs reference photo was retained, because the
+            // identity provider is not configured or returned none.
+            // 503: no face-match provider at all.
+            //
+            // Either way the biometric gate did not run, which is not the
+            // same as it passing. Raising the swap anyway would put an order
+            // through with the one check that makes it a *biometric* trust
+            // decision silently absent, so the journey stops here and says
+            // so - it does not fall through to the order.
+            if (status === 409 || status === 503) {
+                const detail =
+                    err instanceof Error
+                        ? err.message
+                        : 'Face verification is unavailable.';
+
+                return {
+                    attempt_id: body.selfieId,
+                    id_number: body.idNumber,
+                    status: 'review',
+                    method: 'unavailable',
+                    reason: detail,
+                    provider_status: null,
+                    notification_type: 'sim_swap_review',
+                    match_score: null,
+                    mode: null,
+                    checks: [
+                        {
+                            name: 'face_match',
+                            label: 'Face match',
+                            status: 'skipped',
+                            detail,
+                            score: null,
+                        },
+                    ],
+                    order_id: null,
+                };
+            }
+
+            throw err;
+        }
+
+        checks.push({
+            name: 'face_match',
+            label: 'Face match',
+            status: match.matched
+                ? 'pass'
+                : 'fail',
+            detail: match.detail,
+            score: match.score,
+        });
+
+        if (!match.matched) {
+            return {
+                attempt_id: body.selfieId,
+                id_number: body.idNumber,
+                status: 'rejected',
+                method: match.provider,
+                reason: match.detail,
+                provider_status: match.status,
+                notification_type: 'sim_swap_rejected',
+                match_score: match.score,
+                mode: null,
+                checks,
+                order_id: null,
+            };
+        }
+
+        if (!body.msisdn || !body.newSimNumber) {
+            // Guarded rather than defaulted: a swap raised without the
+            // customer's own number or the replacement SIM would be an order
+            // against the wrong line.
+            throw new Error(
+                'Mobile number and replacement SIM are required to raise a SIM swap.',
+            );
+        }
+
+        const order = await apiClient.initiateSimSwap({
+            idNumber: body.idNumber,
+            msisdn: body.msisdn,
+            iccid: body.newSimNumber,
+            selfieId: body.selfieId,
+            deviceFingerprint: body.deviceFingerprint,
+            devicePlatform: body.devicePlatform,
+            deviceAttested: body.deviceAttested,
+            deviceCompromised: body.deviceCompromised,
+            consentTextVersion: body.consentTextVersion,
+            consentCapturedAt: body.consentCapturedAt,
+            idempotencyKey: body.idempotencyKey,
+        });
+
+        const decision =
+            DECISION_BY_ORDER_STATUS[order.status] ??
+            'review';
+
+        checks.push({
+            name: 'sim_swap_decision',
+            label: 'Fraud and regulatory checks',
+            status:
+                decision === 'approved'
+                    ? 'pass'
+                    : decision === 'review'
+                        ? 'review'
+                        : 'fail',
+            detail: order.message,
+            score: null,
+        });
+
+        return {
+            attempt_id: order.order_id,
+            id_number: body.idNumber,
+            status: decision,
+            method: match.provider,
+            reason: order.message,
+            provider_status: order.status,
+            notification_type:
+                decision === 'approved'
+                    ? 'sim_swap_accepted'
+                    : 'sim_swap_rejected',
+            match_score: match.score,
+            mode: null,
+            checks,
+            order_id: order.order_id,
+            reference: order.reference,
+        };
+    },
 };

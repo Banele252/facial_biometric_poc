@@ -20,6 +20,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/theme';
 import { useAudit } from '@/hooks/useAudit';
+import { CONSENT_TEXT_VERSION, storeConsent } from '@/lib/journeyState';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -93,9 +94,20 @@ export default function ConsentScreen({ navigate, goBack }: Props) {
       return;
     }
 
+    const capturedAt = new Date().toISOString();
+
+    // Persisted, not just logged: the platform requires the consent version
+    // and the moment it was captured on the SIM swap request itself, and
+    // denies the order outright without them. Reconstructing either at
+    // submit time would record a consent the customer never gave.
+    void storeConsent(CONSENT_TEXT_VERSION, capturedAt);
+
     audit.log('CONSENT_GRANTED', {
       outcome: 'success',
-      metadata: { timestamp: new Date().toISOString() }
+      metadata: {
+        timestamp: capturedAt,
+        textVersion: CONSENT_TEXT_VERSION,
+      },
     });
 
     setPhase('busy');

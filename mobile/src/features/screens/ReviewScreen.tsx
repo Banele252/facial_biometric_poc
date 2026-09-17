@@ -5,6 +5,7 @@ import {
     useCallback,
     useMemo,
     useEffect,
+    useRef,
 } from 'react';
 
 import {
@@ -26,9 +27,11 @@ import { apiClient } from '@/lib/apiClient';
 import { getDeviceId } from '@/lib/http';
 import { useAudit } from '@/hooks/useAudit';
 import {
+    getStoredConsent,
     getStoredIccid,
     type IccidSource,
 } from '@/lib/journeyState';
+import * as Crypto from 'expo-crypto';
 
 interface Props {
     idNumber?: string;
@@ -88,6 +91,11 @@ export default function ReviewScreen({
                                      }: Props) {
     const audit =
         useAudit('ReviewScreen');
+
+    // One key per confirmation attempt, held across retries. A fresh key on
+    // every press would make each retry a new SIM swap order.
+    const idempotencyKeyRef =
+        useRef<string | null>(null);
 
     const [stage, setStage] =
         useState<SubmitStage>(
@@ -459,12 +467,27 @@ export default function ReviewScreen({
             setStage('submitting');
             setError(null);
 
+            // The consent the customer actually gave, read back from where
+            // ConsentScreen recorded it. The platform denies the order
+            // without it, and manufacturing one here would be worse than the
+            // refusal.
+            const consent = await getStoredConsent();
+
+            if (!consent) {
+                setError(
+                    'Your consent was not recorded. Please start the journey again.',
+                );
+                setStage('error');
+                return;
+            }
+
             try {
-                // The orchestrator, not initiateSimSwap: it runs the RICA,
-                // Home Affairs face match and fraud checks and then creates
-                // *and activates* the order. initiateSimSwap only inserts a
-                // pending row, which would complete a swap with none of those
-                // gates applied.
+                // The platform's decision chain: face match against the Home
+                // Affairs reference photo, then the SIM swap service, which
+                // runs the signed rule packs and persists the order. The PoC
+                // had a single `/verifications` orchestrator that also
+                // activated the swap; this one accepts it for fulfilment, so
+                // the screen must not describe it as completed.
                 const res =
                     await apiClient
                         .runVerificationJourney({
@@ -483,8 +506,36 @@ export default function ReviewScreen({
                             selfieId:
                             resolvedSelfieId,
 
-                            deviceId:
+                            deviceFingerprint:
                                 await getDeviceId(),
+
+                            devicePlatform:
+                                Platform.OS === 'ios'
+                                    ? 'ios'
+                                    : Platform.OS === 'android'
+                                        ? 'android'
+                                        : 'web',
+
+                            // No Play Integrity or DeviceCheck attestation in
+                            // this build, so it is reported as unattested
+                            // rather than claimed. DT.PLATFORM.003 refers such
+                            // an order for review, which is the correct
+                            // outcome for evidence we do not have.
+                            deviceAttested: false,
+
+                            consentTextVersion:
+                            consent.textVersion,
+
+                            consentCapturedAt:
+                            consent.capturedAt,
+
+                            // Stable for this confirmation, so the retry
+                            // after a dropped response returns the same order
+                            // instead of raising a second swap.
+                            idempotencyKey:
+                                idempotencyKeyRef.current ??
+                                (idempotencyKeyRef.current =
+                                    `review-${Crypto.randomUUID()}`),
                         });
 
                 // A 200 carries the decision, so a refusal arrives here

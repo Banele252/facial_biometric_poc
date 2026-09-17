@@ -12,13 +12,12 @@ import { Platform } from 'react-native';
 const API_BASE_URL =
     process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
-const GEO_FENCE =
-    process.env.EXPO_PUBLIC_GEO_FENCE ?? 'ZA-jnb';
-
-const POC_API_KEY =
-    process.env.EXPO_PUBLIC_API_KEY ?? '';
-
-export const ACCESS_TOKEN_KEY = 'biometric.accessToken';
+// Digital Trust platform tokens. The service token authenticates the app
+// itself and is only ever used to obtain the user token; every journey call
+// carries the user token.
+export const ACCESS_TOKEN_KEY = 'dt.userAccessToken';
+export const SERVICE_TOKEN_KEY = 'dt.serviceAccessToken';
+export const USER_REFRESH_TOKEN_KEY = 'dt.userRefreshToken';
 const DEVICE_ID_KEY = 'mtn.deviceId';
 
 // ---------- web-safe storage helpers ----------
@@ -115,73 +114,70 @@ export async function getDeviceId(): Promise<string> {
 
 export const http = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 10_000,
+    // The API runs on Container Apps with minReplicas 0, so the first request
+    // after an idle period pays a cold start of roughly 15s. At the previous
+    // 10s this surfaced as "Network Error" on the very first call - the token
+    // bootstrap - and the journey then continued without a token, so the next
+    // screen failed again with "Missing or invalid Authorization header".
+    // The real failure was a timeout, and neither message said so.
+    timeout: 45_000,
     headers: {
         Accept: 'application/json',
     },
 });
 
+/** Routes that mint a token, which must never be sent an existing one. */
+function isAuthRoute(url: string): boolean {
+    return url.startsWith('/v1/auth/');
+}
+
+/** Routes authenticated by the service token rather than the user token. */
+function isServiceRoute(url: string): boolean {
+    return url === '/v1/auth/user/login';
+}
+
 http.interceptors.request.use(
     async (
         config: InternalAxiosRequestConfig,
     ) => {
-        const token =
-            await storageGet(ACCESS_TOKEN_KEY);
-
-        const deviceId =
-            await getDeviceId();
-
         const url =
             config.url ?? '';
-
-        const isTokenRequest =
-            url === '/auth/token' ||
-            url.endsWith('/auth/token');
 
         config.headers.set(
             'X-Correlation-Id',
             `mobile-${Crypto.randomUUID()}`,
         );
 
-        config.headers.set(
-            'X-Device-Fingerprint',
-            deviceId,
-        );
+        // The platform authenticates on the bearer token alone. The PoC's
+        // X-API-Key, X-Geo-Fence, X-Device-Fingerprint and X-Request-Nonce
+        // headers were read by ZeroTrustMiddleware, which does not exist
+        // here - sending them would suggest a guard that is not running. The
+        // device identity the platform does act on travels in the request
+        // body as `device.fingerprint`, where the rule packs can score it.
+        if (isServiceRoute(url)) {
+            const serviceToken =
+                await storageGet(SERVICE_TOKEN_KEY);
 
-        config.headers.set(
-            'X-Geo-Fence',
-            GEO_FENCE,
-        );
+            if (serviceToken) {
+                config.headers.set(
+                    'Authorization',
+                    `Bearer ${serviceToken}`,
+                );
+            }
 
-        const method =
-            (config.method ?? 'get')
-                .toLowerCase();
-
-        if (
-            ['post', 'put', 'patch', 'delete']
-                .includes(method)
-        ) {
-            config.headers.set(
-                'X-Request-Nonce',
-                Crypto.randomUUID(),
-            );
+            return config;
         }
 
-        // Never send an old JWT while obtaining a new one.
-        if (token && !isTokenRequest) {
-            config.headers.set(
-                'Authorization',
-                `Bearer ${token}`,
-            );
-        }
+        if (!isAuthRoute(url)) {
+            const token =
+                await storageGet(ACCESS_TOKEN_KEY);
 
-        // Local / sandbox PoC only.
-        // Tier-1 routes such as RICA and SIM Swap require X-API-Key.
-        if (POC_API_KEY && !isTokenRequest) {
-            config.headers.set(
-                'X-API-Key',
-                POC_API_KEY,
-            );
+            if (token) {
+                config.headers.set(
+                    'Authorization',
+                    `Bearer ${token}`,
+                );
+            }
         }
 
         return config;

@@ -92,6 +92,15 @@ async function generateUUID(): Promise<string> {
   ].join('-');
 }
 
+/**
+ * Where the device chain is shipped, when anywhere.
+ *
+ * Empty by default because the platform serves no device-audit ingest. Set
+ * EXPO_PUBLIC_AUDIT_INGEST_PATH to re-enable it against a backend that does.
+ */
+const AUDIT_INGEST_PATH =
+    process.env.EXPO_PUBLIC_AUDIT_INGEST_PATH ?? '';
+
 class AuditService {
   private buffer: AuditLogEntry[] = [];
   private lastHash = '0'.repeat(64);
@@ -205,14 +214,29 @@ class AuditService {
     this.flushTimer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
   }
 
+  /**
+   * Ship the device-side chain to the platform, if it accepts one.
+   *
+   * The PoC backend had an ingest at `/api/v1/audit/batch` that re-chained
+   * these entries server-side. The Digital Trust platform has no equivalent:
+   * `/v1/audit/*` is read-only, over the chain the platform writes itself
+   * from the decisions it makes. Pointing the flush at it would retry a 404
+   * every 30 seconds and eventually discard the buffer.
+   *
+   * So the chain stays on the device unless an ingest is configured. The
+   * entries are still hashed and persisted, so nothing is lost and a future
+   * ingest can accept the backlog - the buffer is deliberately not cleared
+   * when there is nowhere to send it.
+   */
   async flush(): Promise<boolean> {
     if (this.buffer.length === 0) return true;
+    if (!AUDIT_INGEST_PATH) return false;
 
     const batchPayload = this.buffer.map((e) => e.integrity_hash).join('');
     const batchHash = await this.sha256(batchPayload);
 
     try {
-      await request('/api/v1/audit/batch', {
+      await request(AUDIT_INGEST_PATH, {
         method: 'POST',
         body: JSON.stringify({ entries: this.buffer, batch_hash: batchHash }),
         headers: {

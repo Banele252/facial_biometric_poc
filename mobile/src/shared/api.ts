@@ -87,19 +87,49 @@ export interface NotificationRecord {
 }
 
 /*  SIM swap  */
+export interface SwapConsent {
+  granted: true;
+  text_version: string;
+  captured_at: string;
+}
+
+export interface SwapDevice {
+  fingerprint: string;
+  platform: 'android' | 'ios' | 'web';
+  attested?: boolean;
+  rooted_or_jailbroken?: boolean;
+}
+
 export interface InitiateSwapRequest {
   id_number: string;
   msisdn: string;
   iccid: string;
   selfie_id?: string;
-  device_id?: string;
+  /** Required: the platform denies the order without recorded consent, and
+   *  the rule packs score the device signals. */
+  consent: SwapConsent;
+  device: SwapDevice;
+  channel?: 'app' | 'ussd' | 'store' | 'call_centre';
+  /** Client-generated and stable across retries: a SIM swap is not safe to
+   *  repeat, so the server must be able to recognise the same request. */
+  idempotency_key: string;
 }
 
 export interface InitiateSwapResponse {
   order_id: string;
-  status: 'pending' | 'approved' | 'rejected';
+  /** The platform's order status, not a transport result. */
+  status: 'pending_verification' | 'in_review' | 'denied';
   reference: string;
   message: string;
+}
+
+export interface FaceMatchResponse {
+  selfie_id: string;
+  matched: boolean;
+  status: string;
+  score: number;
+  provider: string;
+  detail: string;
 }
 
 export interface CreateOrderRequest {
@@ -173,8 +203,11 @@ export async function request<T>(
     path: string,
     init: RequestInit = {},
 ): Promise<T> {
-  if (!path.startsWith('/api/') && !path.startsWith('/auth/')) {
-    throw new Error(`API path must start with "/api/" or "/auth/": ${path}`);
+  // The platform serves everything under /v1. The PoC's /api/v1 prefix is
+  // still accepted so a configured audit ingest can point at an older
+  // backend, but nothing in this app targets it by default.
+  if (!path.startsWith('/v1/') && !path.startsWith('/api/')) {
+    throw new Error(`API path must start with "/v1/" or "/api/": ${path}`);
   }
 
   try {
@@ -228,7 +261,7 @@ export async function getDeviceId(): Promise<string> {
 
 /*  identity  */
 export function validateId(idNumber: string): Promise<ValidationResponse> {
-  return request<ValidationResponse>('/api/v1/validate-id', {
+  return request<ValidationResponse>('/v1/validate-id', {
     method: 'POST',
     body: JSON.stringify({ id_number: idNumber }),
   });
@@ -236,77 +269,63 @@ export function validateId(idNumber: string): Promise<ValidationResponse> {
 
 /*  selfies  */
 export function captureSelfie(idNumber: string, image: string): Promise<SelfieResponse> {
-  return request<SelfieResponse>('/api/v1/selfies', {
+  return request<SelfieResponse>('/v1/selfies', {
     method: 'POST',
     body: JSON.stringify({ id_number: idNumber, image }),
   });
 }
 
-export function checkLiveness(selfieId: string): Promise<LivenessResponse> {
-  return request<LivenessResponse>(`/api/v1/selfies/${encodeURIComponent(selfieId)}/liveness`, { method: 'POST' });
+export function checkLiveness(selfieId: string, sessionId: string): Promise<LivenessResponse> {
+  return request<LivenessResponse>(`/v1/selfies/${encodeURIComponent(selfieId)}/liveness`, {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId }),
+  });
 }
 
 /*  face match
  *
- *  There is no standalone face-match endpoint. Matching runs inside the
- *  orchestrated journey at POST /api/v1/verifications (see
- *  Backend/app/services/face_match.py), which returns the decision with the
- *  match score on it. A `faceMatch()` helper used to live here pointing at
- *  /api/v1/face-match, which the API has never served — nothing called it,
- *  so it was removed rather than repointed.
+ *  Unlike the PoC, the platform serves this as its own endpoint rather than
+ *  folding it into an orchestrator. `apiClient.matchFace` is what the journey
+ *  uses; this layer is kept only for the hooks that still import from it.
  */
-
-/*  verification  */
-export function verifyIdentity(input: VerificationInput): Promise<VerificationDecision> {
-  return request<VerificationDecision>('/api/v1/verifications', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
-}
-
-export function getHistory(idNumber: string): Promise<AttemptRecord[]> {
-  return request<AttemptRecord[]>('/api/v1/verifications/history', {
+export function faceMatch(selfieId: string, idNumber: string): Promise<FaceMatchResponse> {
+  return request<FaceMatchResponse>(`/v1/selfies/${encodeURIComponent(selfieId)}/match`, {
     method: 'POST',
     body: JSON.stringify({ id_number: idNumber }),
-    headers: { 'Content-Type': 'application/json' },
   });
 }
 
-/*  notifications  */
-export function getNotifications(idNumber: string): Promise<NotificationRecord[]> {
-  return request<NotificationRecord[]>('/api/v1/notifications', {
-    method: 'POST',
-    body: JSON.stringify({ id_number: idNumber }),
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+/*  verification
+ *
+ *  The PoC's POST /api/v1/verifications ran every check and returned one
+ *  decision, and /verifications/history and /notifications read its records.
+ *  The platform composes that journey from `/v1/selfies/{id}/match` and
+ *  `/v1/sim-swap/initiate`, and keeps its evidence in the tenant audit chain
+ *  at `/v1/audit/*` rather than in per-attempt tables. Those three helpers
+ *  had no endpoint to point at and nothing called them, so they are gone
+ *  rather than left to 404 - `apiClient.runVerificationJourney` is the
+ *  replacement for the first, and the console reads the audit chain for the
+ *  other two.
+ */
 
 /*  SIM swap  */
 export function initiateSimSwap(payload: InitiateSwapRequest): Promise<InitiateSwapResponse> {
-  return request<InitiateSwapResponse>('/api/v1/sim-swap/initiate', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
+  const { idempotency_key: idempotencyKey, ...body } = payload;
 
-export function createSimSwapOrder(payload: CreateOrderRequest): Promise<SimSwapOrder> {
-  return request<SimSwapOrder>('/api/v1/sim-swap/create', {
+  return request<InitiateSwapResponse>('/v1/sim-swap/initiate', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ channel: 'app', ...body }),
+    headers: { 'Idempotency-Key': idempotencyKey },
   });
 }
 
 export function getSimSwapOrder(orderId: string): Promise<SimSwapOrder> {
-  return request<SimSwapOrder>(`/api/v1/sim-swap/${encodeURIComponent(orderId)}`, { method: 'GET' });
-}
-
-export function activateSimSwapOrder(orderId: string): Promise<SimSwapOrder> {
-  return request<SimSwapOrder>(`/api/v1/sim-swap/${encodeURIComponent(orderId)}/activate`, { method: 'POST' });
+  return request<SimSwapOrder>(`/v1/sim-swap/orders/${encodeURIComponent(orderId)}`, { method: 'GET' });
 }
 
 /*  ICCID  */
 export function resolveIccid(payload: IccidResolveRequest): Promise<IccidResolveResponse> {
-  return request<IccidResolveResponse>('/api/v1/iccid/extract', {
+  return request<IccidResolveResponse>('/v1/iccid/extract', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
