@@ -1,38 +1,74 @@
 {
   "expo": {
-    "name": "Facial Biometric POC",
+    "name": "Biometric Trust",
     "slug": "facial-biometric-poc",
+    "owner": "stols-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FBF7EE"
-    },
-    "assetBundlePatterns": ["**/*"],
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.facialbiometricpoc"
+      "bundleIdentifier": "com.mtn.facialbiometricpoc",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.yourcompany.facialbiometricpoc"
+      "package": "com.mtn.facialbiometricpoc",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "name": "Facial Biometric POC",
-      "shortName": "Biometric POC",
-      "display": "standalone",
-      "themeColor": "#FFCB05",
-      "backgroundColor": "#FFFDF9",
-      "scope": "/",
-      "startUrl": "/",
-      "orientation": "portrait"
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Biometric Trust to access your camera for identity verification."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Biometric Trust to access your photos for ID document upload."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFCC00",
+          "imageWidth": 200
+        }
+      ],
+      "expo-secure-store",
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25",
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "54dc7812-629d-4d80-aa33-3798110ca223"
+      }
     }
   }
 }

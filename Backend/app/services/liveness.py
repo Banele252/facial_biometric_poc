@@ -1,17 +1,16 @@
+# Backend/app/services/liveness.py
 """Liveness detection — HT2-12 (Perform Liveness Check).
-
 The CARB uses Azure AI Face liveness detection, but the Cognitive Services
 provider is not available in the hackathon subscription. To keep the end-to-end
-flow demonstrable, the default is a dependency-free heuristic ``MockLiveness``
-provider; an ``AzureFaceLiveness`` placeholder documents where the real
-provider slots in. Selection is config-driven (``LIVENESS_PROVIDER``).
+flow demonstrable, the default is a dependency-free heuristic `MockLiveness`
+provider; an `AzureFaceLiveness` placeholder documents where the real
+provider slots in. Selection is config-driven (`LIVENESS_PROVIDER`).
 
 The mock is deterministic for a given image so the behaviour is testable: it
 rejects payloads that are too small to be a real capture and scores larger
 images by their byte diversity (a solid-colour or degenerate image scores low,
 a genuine photo scores high). It is a plausibility gate, not real biometrics.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass

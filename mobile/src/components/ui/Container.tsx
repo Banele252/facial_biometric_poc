@@ -1,18 +1,64 @@
 import React from 'react';
-import { View, ViewProps, StyleSheet } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  StyleProp,
+  ViewStyle,
+  ScrollView,
+  ScrollViewProps,
+  useWindowDimensions,
+} from 'react-native';
 
-interface Props extends ViewProps {
-    children?: React.ReactNode;
+interface Props {
+  children?: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  scroll?: boolean;
+  scrollViewProps?: Omit<ScrollViewProps, 'children' | 'contentContainerStyle' | 'style'>;
 }
 
-export const Container: React.FC<Props> = ({ children, style, ...props }) => {
+const MAX_CONTENT_WIDTH = 428;
+
+export const Container: React.FC<Props> = ({
+  children,
+  style,
+  scroll = true,
+  scrollViewProps,
+}) => {
+  const { width } = useWindowDimensions();
+  const horizontalPadding = width < 360 ? 16 : 24;
+
+  const layoutStyle: StyleProp<ViewStyle> = [
+    styles.container,
+    { paddingHorizontal: horizontalPadding },
+  ];
+
+  if (!scroll) {
+    return (
+      <View style={[layoutStyle, styles.flexFill, style]}>
+        {children}
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.container, style]} {...props}>
-      {children}
-    </View>
+    <ScrollView
+      style={styles.scrollShell}
+      contentContainerStyle={styles.grow}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      bounces
+      {...scrollViewProps}
+    >
+      <View style={[layoutStyle, style]}>
+        {children}
+      </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, maxWidth: 428, width: '100%', alignSelf: 'center', paddingHorizontal: 24 },
+  scrollShell: { flex: 1, width: '100%' },
+  container: { maxWidth: MAX_CONTENT_WIDTH, width: '100%', alignSelf: 'center' },
+  flexFill: { flex: 1 },
+  grow: { flexGrow: 1 },
 });

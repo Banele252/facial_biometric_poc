@@ -1,14 +1,27 @@
-import { useState, useCallback } from 'react';
-
-// ── TEMP MOCK FLAG ─────────────────────────────────────────────
-// Set to false when the real endpoint is ready.
-const USE_MOCK = true;
-// ───────────────────────────────────────────────────────────────
+import { useCallback, useState } from 'react';
+import { Platform } from 'react-native';
+import * as Crypto from 'expo-crypto';
+import { initiateSimSwap, type SwapConsent } from '@/shared/api';
 
 interface SimSwapPayload {
-  fullName: string;
+  idNumber: string;
   msisdn: string;
   iccid: string;
+  selfieId?: string;
+  /** The device identifier, at least 16 characters. */
+  deviceId: string;
+  /** Read back from where ConsentScreen recorded it - never synthesised
+   *  here, because the platform stores it as evidence of what the customer
+   *  agreed to and when. */
+  consent: SwapConsent;
+  /** Play Integrity / DeviceCheck attestation, when the build has it. */
+  deviceAttested?: boolean;
+}
+
+function devicePlatform(): 'android' | 'ios' | 'web' {
+  if (Platform.OS === 'ios') return 'ios';
+  if (Platform.OS === 'android') return 'android';
+  return 'web';
 }
 
 export function useSimSwapOrder() {
@@ -19,31 +32,36 @@ export function useSimSwapOrder() {
     setStatus('loading');
     setServerMessage('');
 
-    if (USE_MOCK) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      console.log('[MOCK] sim-swap/initiate 200 OK', payload);
-      setStatus('success');
-      return true;
-    }
-
     try {
-      const base = process.env.EXPO_PUBLIC_API_BASE_URL ?? '';
-      const response = await fetch(`${base}/api/v1/sim-swap/initiate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      const result = await initiateSimSwap({
+        id_number: payload.idNumber,
+        msisdn: payload.msisdn,
+        iccid: payload.iccid,
+        selfie_id: payload.selfieId,
+        consent: payload.consent,
+        device: {
+          fingerprint: payload.deviceId,
+          platform: devicePlatform(),
+          attested: payload.deviceAttested ?? false,
+        },
+        idempotency_key: `swap-${Crypto.randomUUID()}`,
       });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || `Request failed (${response.status})`);
+      setServerMessage(result.message);
+
+      // The status is the decision, not the transport result: `in_review` and
+      // `denied` both arrive as a successful response, and neither is an
+      // accepted swap.
+      if (result.status !== 'pending_verification') {
+        setStatus('error');
+        return false;
       }
 
       setStatus('success');
       return true;
-    } catch (error: any) {
+    } catch (error) {
       setStatus('error');
-      setServerMessage(error.message || 'Failed to initiate SIM swap.');
+      setServerMessage(error instanceof Error ? error.message : 'Failed to initiate SIM swap.');
       return false;
     }
   }, []);

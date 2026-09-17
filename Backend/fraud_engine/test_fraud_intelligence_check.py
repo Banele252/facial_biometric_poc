@@ -1,90 +1,80 @@
-from datetime import UTC, datetime, timedelta
+# Backend/fraud_engine/test_risk_assessment.py
+from __future__ import annotations
 
-from Backend.fraud_engine.fraud_intelligence_check import (
-    FraudRiskLevel,
-    InMemoryVelocityStore,
-    Watchlist,
-    assess_fraud_intelligence,
-)
-
-NOW = datetime(2026, 7, 27, 12, 0, 0, tzinfo=UTC)
+from Backend.fraud_engine.device_risk_check import DeviceRiskLevel, DeviceRiskResult
+from Backend.fraud_engine.fraud_intelligence_check import FraudIntelligenceResult, FraudRiskLevel
+from Backend.fraud_engine.risk_assessment import OverallRiskBand, calculate_risk_score
 
 
-def test_single_attempt_is_low_risk():
-    result = assess_fraud_intelligence(
-        "9001015011082",
-        "27821234567",
-        "device-1",
-        InMemoryVelocityStore(),
-        Watchlist(),
-        now=NOW,
+def make_device_risk(level: DeviceRiskLevel, reasons: list[str] | None = None) -> DeviceRiskResult:
+    return DeviceRiskResult(
+        risk_level=level,
+        attempt_count_in_window=1,
+        distinct_identities_in_window=1,
+        reasons=reasons or [],
     )
-    assert result.risk_level == FraudRiskLevel.LOW
-    assert result.watchlist_hit is False
-    assert result.velocity_count_in_window == 1
 
 
-def test_watchlist_hit_is_high_risk():
-    watchlist = Watchlist({"27821234567"})
-    result = assess_fraud_intelligence(
-        "9001015011082",
-        "27821234567",
-        "device-1",
-        InMemoryVelocityStore(),
-        watchlist,
-        now=NOW,
+def make_fraud_intel(
+        level: FraudRiskLevel,
+        reasons: list[str] | None = None,
+        watchlist_hit: bool = False
+) -> FraudIntelligenceResult:
+    return FraudIntelligenceResult(
+        risk_level=level,
+        velocity_count_in_window=1,
+        watchlist_hit=watchlist_hit,
+        triggered_indicators=[],
+        reasons=reasons or [],
     )
-    assert result.risk_level == FraudRiskLevel.HIGH
-    assert result.watchlist_hit is True
-    assert "watchlist" in result.reasons[0].lower()
 
 
-def test_high_velocity_msisdn_is_medium_risk():
-    store = InMemoryVelocityStore()
-    for _ in range(3):
-        result = assess_fraud_intelligence(
-            "9001015011082",
-            "27821234567",
-            "device-1",
-            store,
-            Watchlist(),
-            now=NOW,
-            max_attempts_per_msisdn=2,
-        )
-    assert result.velocity_count_in_window == 3
-    assert result.risk_level == FraudRiskLevel.MEDIUM
-
-
-def test_missing_fields_trigger_indicators():
-    result = assess_fraud_intelligence(
-        "",
-        "27821234567",
-        "device-1",
-        InMemoryVelocityStore(),
-        Watchlist(),
-        now=NOW,
+def test_both_low_gives_low_band_zero_score():
+    result = calculate_risk_score(
+        make_device_risk(DeviceRiskLevel.LOW),
+        make_fraud_intel(FraudRiskLevel.LOW)
     )
-    assert "missing_identity_reference" in result.triggered_indicators
-    assert result.risk_level == FraudRiskLevel.MEDIUM
+    # 0 * 0.5 + 0 * 0.5 = 0
+    assert result.score == 0.0
+    assert result.band == OverallRiskBand.LOW
+    assert result.contributing_factors == []
 
 
-def test_velocity_outside_window_not_counted():
-    store = InMemoryVelocityStore()
-    assess_fraud_intelligence(
-        "id-a",
-        "27821234567",
-        "device-1",
-        store,
-        Watchlist(),
-        now=NOW - timedelta(hours=48),
+def test_both_high_gives_high_band_max_score():
+    result = calculate_risk_score(
+        make_device_risk(DeviceRiskLevel.HIGH),
+        make_fraud_intel(FraudRiskLevel.HIGH)
     )
-    result = assess_fraud_intelligence(
-        "id-a",
-        "27821234567",
-        "device-1",
-        store,
-        Watchlist(),
-        now=NOW,
-        velocity_window_hours=24,
+    # 100 * 0.5 + 100 * 0.5 = 100
+    assert result.score == 100.0
+    assert result.band == OverallRiskBand.HIGH
+
+
+def test_one_medium_one_low_stays_in_low_band():
+    result = calculate_risk_score(
+        make_device_risk(DeviceRiskLevel.MEDIUM),
+        make_fraud_intel(FraudRiskLevel.LOW)
     )
-    assert result.velocity_count_in_window == 1
+    # 50 * 0.5 + 0 * 0.5 = 25 (Below MEDIUM_BAND_THRESHOLD of 34)
+    assert result.score == 25.0
+    assert result.band == OverallRiskBand.LOW
+
+
+def test_one_high_one_low_crosses_into_medium_band():
+    result = calculate_risk_score(
+        make_device_risk(DeviceRiskLevel.HIGH),
+        make_fraud_intel(FraudRiskLevel.LOW)
+    )
+    # 100 * 0.5 + 0 * 0.5 = 50 (Between 34 and 67)
+    assert result.score == 50.0
+    assert result.band == OverallRiskBand.MEDIUM
+
+
+def test_contributing_factors_are_combined():
+    result = calculate_risk_score(
+        make_device_risk(DeviceRiskLevel.MEDIUM, reasons=["device reason"]),
+        make_fraud_intel(FraudRiskLevel.MEDIUM, reasons=["fraud reason"]),
+    )
+    assert "device reason" in result.contributing_factors
+    assert "fraud reason" in result.contributing_factors
+    assert len(result.contributing_factors) == 2

@@ -27,7 +27,7 @@ revision.
 Requires [uv](https://docs.astral.sh/uv/) and Node 22.
 
 ```bash
-cp .env.example .env      # then fill in the VerifyNow values
+cp .env.local .env      # then fill in the VerifyNow values
 uv sync
 
 # API on :8000 with autoreload

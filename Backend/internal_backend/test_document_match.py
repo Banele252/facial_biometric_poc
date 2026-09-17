@@ -1,3 +1,6 @@
+# test_document_match.py
+from __future__ import annotations
+
 from datetime import date
 
 from document_match import DocumentType, match_user_input_to_document

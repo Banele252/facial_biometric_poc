@@ -1,3 +1,4 @@
+# Backend/internal_backend/document_match.py
 """
 User Input Match Against Document.
 
@@ -14,7 +15,6 @@ This module contains no external calls - it is pure comparison logic against
 whatever ocr_validator.extract_id_fields() returned, so it's fully unit
 testable without Azure credentials.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -37,7 +37,7 @@ class DocumentMatchResult:
     id_number_match: bool | None  # None when not applicable (foreign ID holders)
     name_match: bool
     name_similarity: float
-    reasons: list = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
 
 
 def _normalize(text: str | None) -> str:
@@ -56,17 +56,17 @@ def _name_similarity(name_a: str, name_b: str) -> float:
 
 
 def match_user_input_to_document(
-    document_type: DocumentType,
-    user_id_number: str | None,
-    user_full_name: str,
-    ocr_result: OCRResult,
-    name_similarity_threshold: float = DEFAULT_NAME_SIMILARITY_THRESHOLD,
+        document_type: DocumentType,
+        user_id_number: str | None,
+        user_full_name: str,
+        ocr_result: OCRResult,
+        name_similarity_threshold: float = DEFAULT_NAME_SIMILARITY_THRESHOLD,
 ) -> DocumentMatchResult:
     """
     Compare what the customer typed in against what OCR extracted from their
     ID/passport photo.
     """
-    reasons = []
+    reasons: list[str] = []
 
     if not ocr_result.success:
         return DocumentMatchResult(

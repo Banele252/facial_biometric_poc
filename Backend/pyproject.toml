@@ -1,0 +1,42 @@
+[project]
+name = "facial-biometric-poc"
+version = "0.1.0"
+description = "Facial biometric authentication PoC — identity validation and verification"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv>=0.9.9",
+    "fastapi[standard]>=0.141.1",
+    "python-multipart>=0.0.32",
+    "requests>=2.34.2",
+    "uvicorn[standard]>=0.52.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.10.0",
+    "PyJWT[crypto]>=2.10.0",
+    "redis>=6.4.0",
+    "azure-ai-documentintelligence>=1.0.0",
+    "azure-ai-vision-face>=1.0.0b2",
+    "azure-core>=1.30.0",
+    "psycopg[binary]>=3.3.4",
+    "pyzbar>=0.1.2",
+    "pillow>=12.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.16.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "frontend", "Documents"]
+
+[tool.ruff.lint]
+ignore = ["N999"]

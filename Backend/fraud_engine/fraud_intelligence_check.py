@@ -1,31 +1,12 @@
+# Backend/fraud_engine/fraud_intelligence_check.py
 """
 Fraud Intelligence Checks.
-
-"As the fraud engine, I want to evaluate velocity checks, watchlists and
-fraud indicators so that high-risk requests are detected."
-
-Three independent signals, each producing its own flag so the caller (Risk
-Assessment) can see exactly which check tripped:
-
-    - Velocity: how many SIM Swap attempts has this MSISDN made recently,
-      regardless of device. Complements device_risk_check.py's per-device
-      view with a per-subscriber-number view.
-    - Watchlist: does the identity reference, MSISDN, or device ID appear
-      on a known-fraud watchlist.
-    - Indicators: a small set of named heuristic fraud indicators.
-
-Open product question (raised, not yet answered, in the UC015 notes):
-"What other fraud checks do we want for the POC besides the device check?"
-This module implements velocity + a static watchlist + a couple of
-placeholder indicators as a starting answer - confirm scope with the fraud
-team before treating this as final.
-
-Storage for velocity/watchlist is in-memory - same POC caveat as
-device_risk_check.py.
+Evaluates velocity checks, watchlists, and fraud indicators for a given
+SIM swap request.
 """
-
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -33,6 +14,8 @@ from typing import Protocol
 
 DEFAULT_VELOCITY_WINDOW_HOURS = 24
 DEFAULT_MAX_ATTEMPTS_PER_MSISDN = 2
+
+logger = logging.getLogger(__name__)
 
 
 class FraudRiskLevel(StrEnum):
@@ -46,35 +29,30 @@ class FraudIntelligenceResult:
     risk_level: FraudRiskLevel
     velocity_count_in_window: int
     watchlist_hit: bool
-    triggered_indicators: list = field(default_factory=list)
-    reasons: list = field(default_factory=list)
+    triggered_indicators: list[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
 
 
 class VelocityStore(Protocol):
-    def record_attempt(self, msisdn: str, timestamp: datetime) -> None:
-        pass
-
-    def get_attempts_since(self, msisdn: str, since: datetime) -> list:
-        pass
+    def record_attempt(self, msisdn: str, timestamp: datetime) -> None: ...
+    def get_attempts_since(self, msisdn: str, since: datetime) -> list[datetime]: ...
 
 
 class InMemoryVelocityStore:
     """POC-only store. Data does not survive a process restart."""
-
     def __init__(self) -> None:
-        self._attempts: dict[str, list] = {}
+        self._attempts: dict[str, list[datetime]] = {}
 
     def record_attempt(self, msisdn: str, timestamp: datetime) -> None:
         self._attempts.setdefault(msisdn, []).append(timestamp)
 
-    def get_attempts_since(self, msisdn: str, since: datetime) -> list:
+    def get_attempts_since(self, msisdn: str, since: datetime) -> list[datetime]:
         return [t for t in self._attempts.get(msisdn, []) if t >= since]
 
 
 class Watchlist:
     """Static in-memory watchlist of known-risky identifiers. POC only."""
-
-    def __init__(self, entries: set | None = None) -> None:
+    def __init__(self, entries: set[str] | None = None) -> None:
         self._entries = {e.strip().lower() for e in (entries or set())}
 
     def add(self, entry: str) -> None:
@@ -84,12 +62,7 @@ class Watchlist:
         return any(c and c.strip().lower() in self._entries for c in candidates)
 
 
-def _check_indicators(identity_reference: str, msisdn: str, device_id: str) -> list:
-    """
-    Placeholder fraud indicators for the POC. Each is a cheap, self-contained
-    heuristic - extend this list as the fraud team defines more checks
-    (UC015 notes: scope not yet finalized).
-    """
+def _check_indicators(identity_reference: str, msisdn: str, device_id: str) -> list[str]:
     indicators = []
     if not msisdn:
         indicators.append("missing_msisdn")
@@ -101,25 +74,25 @@ def _check_indicators(identity_reference: str, msisdn: str, device_id: str) -> l
 
 
 def assess_fraud_intelligence(
-    identity_reference: str,
-    msisdn: str,
-    device_id: str,
-    velocity_store: VelocityStore,
-    watchlist: Watchlist,
-    now: datetime | None = None,
-    velocity_window_hours: int = DEFAULT_VELOCITY_WINDOW_HOURS,
-    max_attempts_per_msisdn: int = DEFAULT_MAX_ATTEMPTS_PER_MSISDN,
+        identity_reference: str,
+        msisdn: str,
+        device_id: str,
+        velocity_store: VelocityStore,
+        watchlist: Watchlist,
+        now: datetime | None = None,
+        velocity_window_hours: int = DEFAULT_VELOCITY_WINDOW_HOURS,
+        max_attempts_per_msisdn: int = DEFAULT_MAX_ATTEMPTS_PER_MSISDN,
 ) -> FraudIntelligenceResult:
     now = now or datetime.now(UTC)
-
     velocity_store.record_attempt(msisdn, now)
+
     since = now - timedelta(hours=velocity_window_hours)
     velocity_count = len(velocity_store.get_attempts_since(msisdn, since))
 
     watchlist_hit = watchlist.contains(identity_reference, msisdn, device_id)
     triggered_indicators = _check_indicators(identity_reference, msisdn, device_id)
 
-    reasons = []
+    reasons: list[str] = []
     risk_level = FraudRiskLevel.LOW
 
     if watchlist_hit:

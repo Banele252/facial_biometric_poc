@@ -1,95 +1,70 @@
-# Bulding a validation rule script
-# Objective: To build a validation script based on the rules listed on the subtask: HT2-27
+# Backend/internal_backend/id_validation.py
+"""
+Validation rules for South African ID numbers (HT2-27).
+Each rule is called defensively because some assume a well-formed 13-digit
+numeric string and raise on shorter or non-numeric input.
+"""
 
 
-class id_validation:
+class IdValidation:
     def __init__(self, id: str):
         self.id = id
         self.id_list = list(id)
 
     def is_id_length_valid(self) -> bool:
-        """
-        validate the lenght of an id
-
-        Args:
-            self.id_list: The ID number is a list, where each digit represents an element in the list
-
-        Returns:
-
-            True if the digit length is 13 else fales.
-        """
-        if len(self.id_list) == 13:
-            return True
-        else:
-            return False
+        """Validate the length of an ID (must be exactly 13 digits)."""
+        return len(self.id_list) == 13
 
     def is_id_numeric(self) -> bool:
         return self.id.isnumeric()
 
     def is_first_six_digit_valid_month(self) -> bool:
-        yy = int(self.id[:2])
-        mm = int(self.id[2:4])
-        dd = int(self.id[4:6])
-        if (yy >= 1 and yy <= 99) and (mm >= 1 and mm <= 12) and (dd >= 1 and dd <= 31):
-            return True
-        else:
+        """Check that YYMMDD is a plausible date of birth."""
+        try:
+            yy = int(self.id[:2])
+            mm = int(self.id[2:4])
+            dd = int(self.id[4:6])
+            return (1 <= yy <= 99) and (1 <= mm <= 12) and (1 <= dd <= 31)
+        except (ValueError, IndexError):
             return False
 
     def is_11th_digit_zero_or_one(self) -> bool:
+        """11th digit: 0 = female, 1 = male (citizenship/sex digit)."""
         try:
             eleventh_digit = self.id[10]
-            if eleventh_digit == "0" or eleventh_digit == "1":
-                return True
-            else:
-                return False
-        except:
+            return eleventh_digit in ("0", "1")
+        except IndexError:
             return False
 
     def is_12th_digit_zero_or_one(self) -> bool:
+        """12th digit: historical SA ID digit (now typically 8 or 0)."""
         try:
-            twelenth_digit = self.id[11]
-            if twelenth_digit == "8" or twelenth_digit == "9":
-                return True
-            else:
-                return False
+            twelfth_digit = self.id[11]
+            return twelfth_digit in ("8", "9", "0", "1")
         except IndexError:
             return False
 
     def is_valid_luhn(self) -> bool:
-        """
-        Validate a number string using the Luhn algorithm.
-
-        Args:
-            number: The ID number as a string (may contain spaces or dashes).
-
-        Returns:
-            True if the number passes the Luhn checksum, False otherwise.
-        """
-
+        """Validate the ID number using the Luhn checksum algorithm."""
         try:
             digits = [int(d) for d in self.id]
             total = 0
-
-            # Process digits from right to left; double every second digit
             for i, digit in enumerate(reversed(digits)):
                 if i % 2 == 1:
                     digit *= 2
                     if digit > 9:
                         digit -= 9
                 total += digit
-
             return total % 10 == 0
-        except:
+        except (ValueError, IndexError):
             return False
 
-    def senati_excutor(self):
-        pass
 
-
-# id_validator = id_validation(id='')
-# print(id_validator.is_valid_luhn())
-# print(id_validator.is_11th_digit_zero_or_one())
-# print(id_validator.is_12th_digit_zero_or_one())
-# print(id_validator.is_id_numeric())
-# print(id_validator.is_id_length_valid())
-# print(id_validator.is_id_length_valid())
+# Smoke test
+if __name__ == "__main__":
+    id_validator = IdValidation(id="9001015011082")
+    print(f"Luhn: {id_validator.is_valid_luhn()}")
+    print(f"11th digit: {id_validator.is_11th_digit_zero_or_one()}")
+    print(f"12th digit: {id_validator.is_12th_digit_zero_or_one()}")
+    print(f"Numeric: {id_validator.is_id_numeric()}")
+    print(f"Length: {id_validator.is_id_length_valid()}")

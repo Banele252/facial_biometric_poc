@@ -1,3 +1,4 @@
+# Backend/app/services/storage.py
 """Selfie storage — HT2-11 (Capture Selfie) backing.
 
 Biometric images are sensitive personal information under the CARB, so this
@@ -6,7 +7,6 @@ here logs image content. The default stores to a local directory (self-contained
 for the hackathon). Setting AZURE_STORAGE_CONNECTION_STRING switches to Azure
 Blob, matching the target architecture, via a lazily imported optional package.
 """
-
 from __future__ import annotations
 
 import base64
@@ -41,7 +41,7 @@ class StoredSelfie:
 
 
 def decode_image(data: str) -> tuple[bytes, str]:
-    """Decode a base64 image payload (optionally a ``data:`` URL).
+    """Decode a base64 image payload (optionally a `data:` URL).
 
     Returns the raw bytes and a sniffed content type. Raises StorageError for
     empty input, invalid base64, or bytes that are not a supported image.
@@ -55,15 +55,20 @@ def decode_image(data: str) -> tuple[bytes, str]:
         header, _, payload = payload.partition(",")
         if "base64" not in header or not payload:
             raise StorageError("Unsupported data URL; expected base64 image")
-
-    try:
-        raw = base64.b64decode(payload, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise StorageError("Image is not valid base64") from exc
+        try:
+            raw = base64.b64decode(payload, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise StorageError("Image is not valid base64") from exc
+    else:
+        try:
+            raw = base64.b64decode(payload, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise StorageError("Image is not valid base64") from exc
 
     content_type = _sniff_content_type(raw)
     if content_type is None:
         raise StorageError("Payload is not a supported image (jpeg, png, webp)")
+
     return raw, content_type
 
 
@@ -103,7 +108,7 @@ class LocalSelfieStorage(SelfieStorage):
     def load(self, reference: str) -> bytes:
         if not reference.startswith("file://"):
             raise StorageError("Reference is not a local file")
-        return Path(reference[len("file://") :]).read_bytes()
+        return Path(reference[len("file://"):]).read_bytes()
 
 
 class AzureBlobSelfieStorage(SelfieStorage):
@@ -141,7 +146,7 @@ class AzureBlobSelfieStorage(SelfieStorage):
 
     def load(self, reference: str) -> bytes:
         # blob://<container>/<blob name...>
-        without_scheme = reference[len("blob://") :]
+        without_scheme = reference[len("blob://"):]
         container, _, blob_name = without_scheme.partition("/")
         client = self._service.get_blob_client(container, blob_name)
         return client.download_blob().readall()

@@ -1,3 +1,4 @@
+# Backend/fraud_engine/test_device_risk_check.py
 from datetime import UTC, datetime, timedelta
 
 from Backend.fraud_engine.device_risk_check import (
@@ -49,7 +50,6 @@ def test_attempts_outside_window_are_not_counted():
     store = InMemoryDeviceAttemptStore()
     old_attempt_time = NOW - timedelta(days=10)
     assess_device_risk("device-1", "id-a", store, now=old_attempt_time)
-
     result = assess_device_risk("device-1", "id-b", store, now=NOW, window_days=7)
     assert result.attempt_count_in_window == 1
     assert result.distinct_identities_in_window == 1

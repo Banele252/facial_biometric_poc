@@ -6,8 +6,8 @@ import { Typography, Button } from '@/components/ui';
 import { Colors } from '@/theme';
 
 interface Props {
-    onCapture: (dataUrl: string) => void;
-    loading: boolean;
+  onCapture: (dataUrl: string) => void;
+  loading: boolean;
 }
 
 export default function SelfieCapture({ onCapture, loading }: Props) {
@@ -80,12 +80,13 @@ export default function SelfieCapture({ onCapture, loading }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { width: '100%', alignItems: 'center', gap: 12 },
-  text: { textAlign: 'center' },
+  container: { width: '100%', alignItems: 'center' },
+  text: { textAlign: 'center', marginBottom: 12 },
   placeholder: {
     width: 280, height: 280, borderRadius: 140,
     backgroundColor: '#F0F0EC', justifyContent: 'center', alignItems: 'center',
     borderWidth: 2, borderColor: Colors.border, borderStyle: 'dashed',
+    marginBottom: 12,
   },
   cameraContainer: { width: '100%', height: 400, borderRadius: 20, overflow: 'hidden' },
   camera: { flex: 1 },

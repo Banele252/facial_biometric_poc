@@ -1,3 +1,6 @@
+# test_fallback_verification_decision.py
+from __future__ import annotations
+
 from document_match import DocumentMatchResult
 from face_match import FaceMatchResult
 from fallback_verification_decision import DecisionStatus, evaluate_fallback_verification

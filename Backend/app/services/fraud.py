@@ -1,24 +1,16 @@
+# Backend/app/services/fraud.py
 """Fraud checks — CARB journey step 9 (Fraud Intelligence Checks).
-
 Composes the four checks the fraud engine provides into the one call the
-journey needs:
-
-    device risk  ─┐
-                  ├─► risk score ─► decision (APPROVE / REFER / REJECT)
-    fraud intel  ─┘
-
 The engine's own policy is preserved: a watchlist hit is the only hard
 rejection. Volume-based risk lands on REFER, because a risky-looking device
 should not by itself turn away a genuine customer — that judgement belongs to
-a human. See ``fraud_engine/decisioning.py``.
-
+a human. See `fraud_engine/decisioning.py`.
 Both stores are in-memory and do not survive a restart, so velocity and
 repeat-device signals only span the life of the process. That is the engine's
 own POC limitation, carried over rather than papered over: persisting them
 means giving the fraud engine its own tables, which is a decision for whoever
 takes this past the POC.
 """
-
 from __future__ import annotations
 
 import logging
@@ -67,7 +59,6 @@ class FraudOutcome:
 
 def reset_stores() -> None:
     """Clear the in-process fraud history.
-
     Velocity and repeat-device signals are cumulative by design, so the stores
     deliberately persist across requests. Tests need each case to start from a
     clean slate, otherwise earlier cases push later ones over the thresholds.
@@ -99,10 +90,9 @@ def run_fraud_checks(identity_reference: str, msisdn: str, device_id: str) -> Fr
     )
     risk = calculate_risk_score(device_risk=device, fraud_intelligence=intel)
     result = decide(risk_result=risk, fraud_intelligence=intel)
-
     outcome = _DECISION_MAP.get(result.decision, REVIEW)
-    reasons = tuple(str(r) for r in result.reasons)
 
+    reasons = tuple(str(r) for r in result.reasons)
     if outcome == APPROVED:
         detail = f"No fraud indicators (risk score {result.risk_score:.0f})"
     elif outcome == REJECTED:
@@ -121,6 +111,7 @@ def run_fraud_checks(identity_reference: str, msisdn: str, device_id: str) -> Fr
         device.risk_level,
         intel.watchlist_hit,
     )
+
     return FraudOutcome(
         outcome=outcome,
         decision=str(result.decision),

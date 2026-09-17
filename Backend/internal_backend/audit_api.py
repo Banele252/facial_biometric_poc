@@ -1,3 +1,5 @@
+# Backend/internal_backend/audit_api.py
+from __future__ import annotations
 from typing import Any
 
 from audit import AuditDB
@@ -14,11 +16,9 @@ app = FastAPI(
 class AuditLogRequest(BaseModel):
     """
     Request body for creating an audit log record.
-
     `process` is required (used both as its own column and inside the JSON payload).
     `extra` holds any additional fields you want stored in the JSON payload.
     """
-
     process: str = Field(..., description="Name of the process being logged, e.g. 'invoice_import'")
     extra: dict[str, Any] | None = Field(
         default_factory=dict,
@@ -41,12 +41,10 @@ def health_check():
 def create_audit_log(request: AuditLogRequest):
     """
     Write a single audit log record.
-
     The full request body (process + extra fields) is stored as the JSON payload,
     while `process` is also stored in its own column for fast filtering.
     """
     input_data = {"process": request.process, **request.extra}
-
     try:
         with AuditDB(input_data=input_data) as db:
             db.insert_record()
@@ -55,5 +53,4 @@ def create_audit_log(request: AuditLogRequest):
             status_code=500,
             detail=f"Failed to write audit log: {exc}",
         ) from exc
-
     return AuditLogResponse(status="success", detail="Audit record inserted")

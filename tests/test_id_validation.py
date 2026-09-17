@@ -7,7 +7,7 @@ deliberately not asserting what the rules *should* do — see the PR notes on
 
 import pytest
 
-from Backend.internal_backend.id_validation import id_validation
+from Backend.internal_backend.id_validation import IdValidation as id_validation
 
 # 13 digits, Luhn-valid, citizenship digit 0, 12th digit 8.
 VALID_ID = "9001015001083"
@@ -46,10 +46,17 @@ class TestDateOfBirth:
     def test_implausible_dates_fail(self, value):
         assert id_validation(id=value).is_first_six_digit_valid_month() is False
 
-    def test_non_numeric_raises(self):
-        """Documents current behaviour: the rule raises rather than returning False."""
-        with pytest.raises(ValueError):
-            id_validation(id="abcdef5001083").is_first_six_digit_valid_month()
+    def test_non_numeric_returns_false(self):
+        """Non-numeric input is refused, not raised on.
+
+        This rule used to let ValueError escape, and this test locked that in.
+        IdValidation now catches (ValueError, IndexError) and returns False —
+        see the module docstring, which states the rules are called
+        defensively because some assume a well-formed 13-digit numeric string.
+        Returning False is the intended behaviour, so the characterisation is
+        updated to match rather than the rule reverted.
+        """
+        assert id_validation(id="abcdef5001083").is_first_six_digit_valid_month() is False
 
 
 class TestCitizenshipDigit:
@@ -67,13 +74,20 @@ class TestCitizenshipDigit:
 
 
 class TestTwelfthDigit:
-    @pytest.mark.parametrize("digit", ["8", "9"])
-    def test_eight_or_nine_passes(self, digit):
+    # The rule now accepts 8, 9, 0 and 1 — its docstring reads "historical SA
+    # ID digit (now typically 8 or 0)". It previously accepted only 8 and 9,
+    # and this class locked that in, so a legitimate ID with a 0 here was
+    # rejected. The method name still says "zero_or_one" while the rule is
+    # broader than that; that naming is the open question the module's PR
+    # notes flag, and is deliberately not resolved here.
+    @pytest.mark.parametrize("digit", ["8", "9", "0", "1"])
+    def test_accepted_digits_pass(self, digit):
         value = VALID_ID[:11] + digit + VALID_ID[12:]
         assert id_validation(id=value).is_12th_digit_zero_or_one() is True
 
-    def test_other_digit_fails(self):
-        value = VALID_ID[:11] + "0" + VALID_ID[12:]
+    @pytest.mark.parametrize("digit", ["5", "7"])
+    def test_other_digit_fails(self, digit):
+        value = VALID_ID[:11] + digit + VALID_ID[12:]
         assert id_validation(id=value).is_12th_digit_zero_or_one() is False
 
 

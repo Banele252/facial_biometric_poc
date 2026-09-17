@@ -1,6 +1,6 @@
+# Backend/internal_backend/ocr_validator.py
 """
 OCR Validation.
-
 "As the system, I want to extract identity information from the ID document
 (or passport) so that customer details can be validated."
 
@@ -9,15 +9,14 @@ structured fields (name, document number, date of birth, document type, etc.)
 out of a scanned/photographed SA ID or passport.
 
 Requires the following environment variables (see .env):
-    AZURE_DOC_INTELLIGENCE_ENDPOINT
-    AZURE_DOC_INTELLIGENCE_KEY
+  AZURE_DOC_INTELLIGENCE_ENDPOINT
+  AZURE_DOC_INTELLIGENCE_KEY
 
 NOTE: this module makes a real call out to Azure. It has not been tested
 against a live Azure resource - the field-extraction logic has been
 structured so it can be unit tested independently by mocking
 `_analyze_document`.
 """
-
 from __future__ import annotations
 
 import os
@@ -98,7 +97,6 @@ def _field_value(fields: dict, name: str):
 
 def _coerce_date(value) -> date | None:
     """Normalise a Document Intelligence date field to a `date`.
-
     `value_date` already gives a real date object. The fallback path only
     matters when Azure could not type the field and we are left with the raw
     text off the document, which is rarely ISO-formatted - so the common
@@ -109,7 +107,6 @@ def _coerce_date(value) -> date | None:
         return value.date()
     if isinstance(value, date):
         return value
-
     text = str(value).strip()
     if not text:
         return None
@@ -124,7 +121,6 @@ def _coerce_date(value) -> date | None:
 def extract_id_fields(document_bytes: bytes) -> OCRResult:
     """
     Extract identity fields from a photographed/scanned SA ID or passport.
-
     Returns an OCRResult. On failure, success=False and `error` explains why
     (e.g. no document detected, unreadable image, Azure call failed) rather
     than raising, so callers (like the API layer) can turn this straight into
@@ -153,7 +149,6 @@ def extract_id_fields(document_bytes: bytes) -> OCRResult:
     country_region, cr_conf = _field_value(fields, "CountryRegion")
 
     dob = _coerce_date(dob_raw) if dob_raw else None
-
     full_name = " ".join(part for part in [first_name, last_name] if part) or None
 
     return OCRResult(

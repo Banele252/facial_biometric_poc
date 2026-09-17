@@ -268,17 +268,27 @@ class TestHistoryAndNotifications:
         client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
         client.post("/api/v1/verifications", json={"id_number": VALID_ID})
 
-        all_history = client.get(f"/api/v1/verifications/history?id_number={VALID_ID}").json()
+        # These reads are POST, not GET, and take the ID in the body: the
+        # handler's docstring explains that a South African ID number in a
+        # query string would end up in access and proxy logs.
+        all_history = client.post(
+            "/api/v1/verifications/history", json={"id_number": VALID_ID}
+        ).json()
         assert len(all_history) == 2
 
-        rejected = client.get(
-            f"/api/v1/verifications/history?id_number={VALID_ID}&status=rejected"
+        rejected = client.post(
+            "/api/v1/verifications/history",
+            json={"id_number": VALID_ID, "status": "rejected"},
         ).json()
         assert len(rejected) == 1
         assert rejected[0]["status"] == "rejected"
 
     def test_invalid_history_status_filter_rejected(self, client):
-        assert client.get("/api/v1/verifications/history?status=maybe").status_code == 422
+        resp = client.post(
+            "/api/v1/verifications/history",
+            json={"id_number": VALID_ID, "status": "maybe"},
+        )
+        assert resp.status_code == 422
 
     def test_notifications_inbox(self, client, monkeypatch):
         monkeypatch.delenv("VERIFY_NOW_API_KEY", raising=False)
@@ -287,7 +297,9 @@ class TestHistoryAndNotifications:
 
         selfie_id = _pass_liveness(client)
         client.post("/api/v1/verifications", json={"id_number": VALID_ID, "selfie_id": selfie_id})
-        notifications = client.get(f"/api/v1/notifications?id_number={VALID_ID}").json()
+        notifications = client.post(
+            "/api/v1/notifications", json={"id_number": VALID_ID}
+        ).json()
         assert len(notifications) == 1
         assert notifications[0]["type"] == "approval"
         assert notifications[0]["channel"] == "inapp"

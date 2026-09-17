@@ -1,3 +1,4 @@
+# Backend/external_backend/main.py
 """VerifyNow client.
 
 Previously this module read environment variables and built request headers at
@@ -5,9 +6,7 @@ import time, which made it impossible to import from a long-running service or
 a test without the environment already populated. The request logic is
 unchanged — it is now behind functions that resolve configuration when called.
 """
-
 import os
-
 import requests
 from dotenv import load_dotenv
 
@@ -27,6 +26,7 @@ class VerifyNowError(RuntimeError):
 
 
 def _headers(mode: str = "production") -> dict[str, str]:
+    """Build request headers for VerifyNow API calls."""
     headers = {
         "x-api-key": os.getenv("VERIFY_NOW_API_KEY", ""),
         "Content-Type": "application/json",
@@ -40,14 +40,63 @@ def _headers(mode: str = "production") -> dict[str, str]:
 
 
 def _base_url() -> str:
+    """Resolve the VerifyNow base URL from environment."""
     base_url = os.getenv("VERIFY_BASE_URL")
     if not base_url:
         raise VerifyNowError("VERIFY_BASE_URL is not configured")
     return base_url.rstrip("/")
 
 
+def _mock_response(endpoint: str, payload: dict) -> dict:
+    """A deterministic stand-in for VerifyNow, shaped like the real body.
+
+    VERIFY_MODE=mock exists because 'sandbox' is still VerifyNow's *hosted*
+    sandbox: it needs credentials and network egress, so without a key the
+    journey stopped at the fallback branch and never reached the fraud,
+    sim-swap and activation steps. Same reasoning, and the same config-driven
+    shape, as MockLiveness in Backend/app/services/liveness.py, which exists
+    because Azure AI Face is not available in this subscription.
+
+    Responses go through the normal parsing in services/face_match.py rather
+    than short-circuiting it, so the mock exercises the real decision logic.
+    """
+    if endpoint == FACEMATCH_ENDPOINT:
+        return {
+            "success": True,
+            "results": {
+                "face_match": {
+                    "status": "Approved",
+                    "score": 92.0,
+                },
+            },
+            "request_id": "mock-facematch",
+        }
+
+    if endpoint == VERIFY_ENDPOINT:
+        return {
+            "success": True,
+            "results": {"said_verification": {"status": "Approved"}},
+            "request_id": "mock-verify",
+        }
+
+    if endpoint == PASSIVE_LIVENESS_ENDPOINT:
+        return {
+            "success": True,
+            "results": {"passive_liveness": {"status": "Approved", "score": 0.95}},
+            "request_id": "mock-liveness",
+        }
+
+    if endpoint == MY_CREDITS_ENDPOINT:
+        return {"success": True, "credits": 9999}
+
+    raise VerifyNowError(f"No mock response defined for {endpoint}")
+
+
 def _post(endpoint: str, payload: dict, mode: str, timeout: float) -> dict:
     """POST a JSON payload to VerifyNow and return the decoded body."""
+    if mode == "mock":
+        return _mock_response(endpoint, payload)
+
     try:
         resp = requests.post(
             url=f"{_base_url()}{endpoint}",
@@ -86,15 +135,15 @@ def verify_said(id_number: str, mode: str = "production", timeout: float = 15.0)
 
 
 def face_match(
-    id_number: str,
-    selfie_image_base64: str,
-    mode: str = "sandbox",
-    timeout: float = 30.0,
+        id_number: str,
+        selfie_image_base64: str,
+        mode: str = "sandbox",
+        timeout: float = 30.0,
 ) -> dict:
     """Match a selfie against the Home Affairs ID photo for the given ID number.
 
     Returns the raw provider body. The decision lives at
-    ``results.face_match.status`` with a 0-100 ``score`` beside it.
+    results.face_match.status with a 0-100 score beside it.
     """
     return _post(
         FACEMATCH_ENDPOINT,
@@ -139,8 +188,10 @@ def get_credits(timeout: float = 15.0) -> dict:
 
 
 def main() -> None:
+    """Smoke test: verify a known-good sandbox ID."""
     load_dotenv(override=True)
-    print(verify_said(id_number=""))
+    # Use a valid test ID number for sandbox testing
+    print(verify_said(id_number="9001015800086", mode="sandbox"))
 
 
 if __name__ == "__main__":
